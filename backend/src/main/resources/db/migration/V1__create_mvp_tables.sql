@@ -1,9 +1,29 @@
--- MySQL 8.4 / InnoDB / utf8mb4。仅编写，尚未执行。
--- 业务依据：docs/requirements/requirements.md（当前 V1.5）；设计：docs/design/数据库表结构.md。
--- 共 27 张业务表；关联由应用层校验，不建立数据库外键。
--- 本脚本只包含结构定义，不创建数据库、账号、演示数据或 Flyway 历史表。
--- MySQL DDL 会隐式提交，不用 START TRANSACTION 包装建表以冒充整体原子性。
--- 业务 DML 回滚约定见设计第 6 章；人工结构回退在 ../rollback/，不得加入迁移扫描目录。
+-- MySQL 8.4 / InnoDB / utf8mb4；当前 V1.5 MVP 的 27 张业务表。
+-- 业务与字段依据：docs/requirements/requirements.md、docs/design/数据库表结构.md。
+-- 不创建数据库、账号、演示数据或 Flyway 历史表；不建立外键。
+-- DDL 会隐式提交，ROLLBACK 不能撤销建表；使用异常处理器执行结构补偿。
+-- 只登记本次成功创建的表，失败时逆序删除这些表并 RESIGNAL 原错误，保留原有重名表。
+-- 补偿不是事务原子性保证：进程中断、连接断开或 DROP 权限不足时仍须人工核查残留。
+-- 初始化专用过程名保留给 V1；失败可能遗留过程，人工核查并 repair 后重试会先清理此过程。
+
+DROP PROCEDURE IF EXISTS initialize_mvp_v1;
+DELIMITER $$
+CREATE PROCEDURE initialize_mvp_v1()
+BEGIN
+    DECLARE created_tables TEXT DEFAULT '';
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        IF created_tables <> '' THEN
+            -- 表名来自下面固定字面量，按创建逆序拼接，不能接收外部输入。
+            SET @mvp_v1_rollback_sql = CONCAT('DROP TABLE ', created_tables);
+            PREPARE mvp_v1_rollback FROM @mvp_v1_rollback_sql;
+            EXECUTE mvp_v1_rollback;
+            DEALLOCATE PREPARE mvp_v1_rollback;
+            SET @mvp_v1_rollback_sql = NULL;
+        END IF;
+        RESIGNAL;
+    END;
 
 -- 用户账号表：统一保存买家、创作者和管理员账号，以及认证资格、暂停业务标记。
 CREATE TABLE user_account (
@@ -29,6 +49,7 @@ CREATE TABLE user_account (
     CONSTRAINT ck_user_certification CHECK (certification_status IN ('NONE', 'PENDING', 'APPROVED', 'REJECTED')),
     CONSTRAINT ck_user_nickname CHECK (CHAR_LENGTH(nickname) BETWEEN 2 AND 8)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='统一账号与业务资格';
+SET created_tables = CONCAT('`user_account`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 收货地址表：保存用户地址及默认地址设置，订单另存地址快照。
 CREATE TABLE shipping_address (
@@ -49,6 +70,7 @@ CREATE TABLE shipping_address (
     KEY idx_address_user (user_id, id),
     CONSTRAINT ck_address_default CHECK (is_default IN (0, 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户收货地址，订单另存不可变快照';
+SET created_tables = CONCAT('`shipping_address`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 邮箱验证码表：保存注册和找回密码共用的最新验证码摘要、发送状态及有效期。
 CREATE TABLE email_verification_code (
@@ -67,6 +89,7 @@ CREATE TABLE email_verification_code (
     KEY idx_email_code_expiry (expires_at, id),
     CONSTRAINT ck_email_code_send_status CHECK (send_status IN ('SENDING', 'SENT', 'FAILED', 'UNKNOWN'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='注册和找回共用的最新邮箱验证码';
+SET created_tables = CONCAT('`email_verification_code`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 创作者认证申请表：保存历次入驻材料、收款资料及审核结果。
 CREATE TABLE creator_application (
@@ -99,6 +122,7 @@ CREATE TABLE creator_application (
     CONSTRAINT ck_application_material CHECK (CHAR_LENGTH(real_name) BETWEEN 2 AND 20 AND experience_years <= 70 AND CHAR_LENGTH(introduction) BETWEEN 50 AND 500),
     CONSTRAINT ck_application_works CHECK (JSON_TYPE(original_works) = 'ARRAY' AND JSON_LENGTH(original_works) BETWEEN 3 AND 5)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='创作者认证申请及历次材料';
+SET created_tables = CONCAT('`creator_application`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 认证申请主品类关联表：记录每份认证申请选择的一级主品类。
 CREATE TABLE creator_application_category (
@@ -110,6 +134,7 @@ CREATE TABLE creator_application_category (
     UNIQUE KEY uk_application_category (application_id, category_id),
     KEY idx_application_category_category (category_id, application_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='每份申请的1至3个一级主品类';
+SET created_tables = CONCAT('`creator_application_category`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 作品品类表：维护两级手工品类、显示顺序及启停状态。
 CREATE TABLE category (
@@ -124,6 +149,7 @@ CREATE TABLE category (
     KEY idx_category_parent_enabled_sort (parent_id, enabled, sort_order, id),
     CONSTRAINT ck_category_enabled CHECK (enabled IN (0, 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='两级手工品类，停用保留历史引用';
+SET created_tables = CONCAT('`category`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 文件资源表：保存私有 OSS 文件的对象键、上传人、大小及可用状态。
 CREATE TABLE file_asset (
@@ -142,6 +168,7 @@ CREATE TABLE file_asset (
     CONSTRAINT ck_file_status CHECK (upload_status IN ('UPLOADING', 'AVAILABLE', 'CLEANUP_PENDING', 'DELETED')),
     CONSTRAINT ck_file_size CHECK (byte_size > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='私有OSS文件元数据，业务字段保存文件引用';
+SET created_tables = CONCAT('`file_asset`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 作品表：保存展示内容、审核状态、现货销售与接受定制开关，以及单件现货状态。
 CREATE TABLE work (
@@ -184,6 +211,7 @@ CREATE TABLE work (
     CONSTRAINT ck_work_duration CHECK (custom_reference_days IS NULL OR custom_reference_days BETWEEN 3 AND 180),
     CONSTRAINT ck_work_images CHECK (JSON_TYPE(main_image_ids) = 'ARRAY' AND JSON_LENGTH(main_image_ids) <= 9 AND JSON_TYPE(specification_image_ids) = 'ARRAY')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='作品展示、独立交易开关与单件现货状态';
+SET created_tables = CONCAT('`work`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 作品互动表：保存用户对作品的点赞和收藏关系。
 CREATE TABLE work_reaction (
@@ -198,6 +226,7 @@ CREATE TABLE work_reaction (
     KEY idx_reaction_user_list (user_id, reaction_type, created_at, id),
     CONSTRAINT ck_reaction_type CHECK (reaction_type IN ('LIKE', 'FAVORITE'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='作品点赞与收藏，可取消';
+SET created_tables = CONCAT('`work_reaction`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 作品评论表：保存公开图文评论，并分别记录用户删除与管理员隐藏状态。
 CREATE TABLE work_comment (
@@ -216,6 +245,7 @@ CREATE TABLE work_comment (
     CONSTRAINT ck_comment_status CHECK (moderation_status IN ('VISIBLE', 'HIDDEN')),
     CONSTRAINT ck_comment_images CHECK (JSON_TYPE(image_ids) = 'ARRAY' AND JSON_LENGTH(image_ids) <= 3)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='作品图文评论，用户删除与管理员隐藏独立';
+SET created_tables = CONCAT('`work_comment`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 创作者关注表：保存用户与被关注创作者之间的关注关系。
 CREATE TABLE creator_follow (
@@ -228,6 +258,7 @@ CREATE TABLE creator_follow (
     KEY idx_follow_user_list (follower_id, created_at, id),
     KEY idx_follow_creator (creator_id, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='关注关系，不产生陌生人私聊权限';
+SET created_tables = CONCAT('`creator_follow`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 定制需求表：保存买家公开或定向发布的需求内容、唯一受邀者及业务状态。
 CREATE TABLE custom_request (
@@ -263,6 +294,7 @@ CREATE TABLE custom_request (
     CONSTRAINT ck_request_budget CHECK ((budget_min IS NULL OR budget_min BETWEEN 50.00 AND 50000.00) AND (budget_max IS NULL OR budget_max BETWEEN 50.00 AND 50000.00) AND (budget_min IS NULL OR budget_max IS NULL OR budget_max >= budget_min)),
     CONSTRAINT ck_request_images CHECK (JSON_TYPE(reference_image_ids) = 'ARRAY' AND JSON_LENGTH(reference_image_ids) <= 9)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='公开或单人定向定制需求，发布后正文锁定';
+SET created_tables = CONCAT('`custom_request`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 定制报价表：保存创作者报价方案、金额、工期，以及撤回、重报和定标历史。
 CREATE TABLE quote (
@@ -292,6 +324,7 @@ CREATE TABLE quote (
     CONSTRAINT ck_quote_invalid_reason CHECK (invalid_reason IS NULL OR invalid_reason IN ('WITHDRAWN', 'TIMEOUT', 'REQUEST_CLOSED')),
     CONSTRAINT ck_quote_images CHECK (JSON_TYPE(image_ids) = 'ARRAY' AND JSON_LENGTH(image_ids) <= 5)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='报价及撤回重报历史，实际有效性还需检查截止时间';
+SET created_tables = CONCAT('`quote`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 交易订单表：统一保存现货与定制订单、交易快照、履约状态及成品公开授权。
 CREATE TABLE trade_order (
@@ -346,6 +379,7 @@ CREATE TABLE trade_order (
     CONSTRAINT ck_order_snapshots CHECK (JSON_TYPE(agreement_snapshot) = 'OBJECT' AND JSON_TYPE(address_snapshot) = 'OBJECT'),
     CONSTRAINT ck_order_publication_status CHECK (publication_consent_status IN ('NONE', 'PENDING', 'APPROVED', 'REJECTED') AND (order_type = 'CUSTOM' OR publication_consent_status = 'NONE'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='现货与定制统一订单及不可变交易快照';
+SET created_tables = CONCAT('`trade_order`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 订单制作节点表：保存定制订单固定五个节点的参考计划、处理顺序及当前状态。
 CREATE TABLE order_progress_node (
@@ -365,6 +399,7 @@ CREATE TABLE order_progress_node (
     CONSTRAINT ck_node_status CHECK (status IN ('NOT_STARTED', 'UNLOCKED', 'CHECKED', 'SKIPPED')),
     CONSTRAINT ck_node_skip CHECK (status <> 'SKIPPED' OR node_code = 'SAMPLE')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='仅定制订单的固定五个制作节点';
+SET created_tables = CONCAT('`order_progress_node`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 制作进度记录表：追加保存节点首次打卡、跳过及后续图文补充。
 CREATE TABLE order_progress_record (
@@ -385,6 +420,7 @@ CREATE TABLE order_progress_record (
     CONSTRAINT ck_progress_checkin CHECK (record_type <> 'CHECKIN' OR (CHAR_LENGTH(content) BETWEEN 5 AND 500 AND JSON_LENGTH(image_ids) BETWEEN 1 AND 6)),
     CONSTRAINT ck_progress_skip CHECK (record_type <> 'SKIP' OR (CHAR_LENGTH(content) BETWEEN 10 AND 500 AND skip_reason IS NOT NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='制作打卡、跳过和不可覆盖的图文补充';
+SET created_tables = CONCAT('`order_progress_record`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 退款申请表：保存全额退款申请、售后前订单状态、退回核查及处理结果。
 CREATE TABLE refund_application (
@@ -419,6 +455,7 @@ CREATE TABLE refund_application (
     CONSTRAINT ck_refund_return CHECK (return_required IS NULL OR return_required IN (0, 1)),
     CONSTRAINT ck_refund_images CHECK (JSON_TYPE(image_ids) = 'ARRAY' AND JSON_LENGTH(image_ids) <= 3)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='全额退款申请、售后前状态及退回核查';
+SET created_tables = CONCAT('`refund_application`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 退款补充证据表：保存买卖双方为退款申请追加的说明和图片证据。
 CREATE TABLE refund_evidence (
@@ -433,6 +470,7 @@ CREATE TABLE refund_evidence (
     CONSTRAINT ck_refund_evidence_images CHECK (JSON_TYPE(image_ids) = 'ARRAY'),
     CONSTRAINT ck_refund_evidence_content CHECK (CHAR_LENGTH(TRIM(COALESCE(content, ''))) > 0 OR JSON_LENGTH(image_ids) > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='买卖双方追加的售后说明与证据';
+SET created_tables = CONCAT('`refund_evidence`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 资金流水表：追加保存模拟支付、全额退款和结算的金额、结果及幂等标识。
 CREATE TABLE fund_flow (
@@ -458,6 +496,7 @@ CREATE TABLE fund_flow (
     CONSTRAINT ck_flow_amount CHECK (amount > 0),
     CONSTRAINT ck_flow_refund_source CHECK ((flow_type = 'REFUND' AND refund_application_id IS NOT NULL) OR (flow_type <> 'REFUND' AND refund_application_id IS NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='模拟支付、全额退款和结算只读流水';
+SET created_tables = CONCAT('`fund_flow`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 订单结算表：保存支付金额、已审核收款账户快照及待结算、已结算或已取消状态。
 CREATE TABLE order_settlement (
@@ -479,6 +518,7 @@ CREATE TABLE order_settlement (
     CONSTRAINT ck_settlement_amount CHECK (paid_amount > 0),
     CONSTRAINT ck_settlement_payee CHECK (JSON_TYPE(payee_snapshot) = 'OBJECT')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='无抽成的模拟结算和已审核账户快照';
+SET created_tables = CONCAT('`order_settlement`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 订单评价表：保存买家每单一次的评分、图文评价及管理员治理状态。
 CREATE TABLE order_review (
@@ -499,6 +539,7 @@ CREATE TABLE order_review (
     CONSTRAINT ck_review_status CHECK (moderation_status IN ('VISIBLE', 'HIDDEN', 'DELETED')),
     CONSTRAINT ck_review_images CHECK (JSON_TYPE(image_ids) = 'ARRAY' AND JSON_LENGTH(image_ids) <= 3)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='买家每单一次评价及公开口碑治理状态';
+SET created_tables = CONCAT('`order_review`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 业务会话表：保存需求或订单双方的一对一会话、归档状态及已读游标。
 CREATE TABLE conversation (
@@ -525,6 +566,7 @@ CREATE TABLE conversation (
     CONSTRAINT ck_conversation_cursors CHECK (buyer_read_seq <= last_message_seq AND creator_read_seq <= last_message_seq),
     CONSTRAINT ck_conversation_archive CHECK (archive_reason IS NULL OR archive_reason IN ('REQUEST_CLOSED', 'REQUEST_EXPIRED', 'LOST'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='需求与订单一对一会话，终态订单仍可沟通';
+SET created_tables = CONCAT('`conversation`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 会话消息表：保存文字、图片、会话内序号、发送幂等标识及可选制作节点引用。
 CREATE TABLE chat_message (
@@ -545,6 +587,7 @@ CREATE TABLE chat_message (
     CONSTRAINT ck_message_images CHECK (JSON_TYPE(image_ids) = 'ARRAY' AND JSON_LENGTH(image_ids) <= 3),
     CONSTRAINT ck_message_content CHECK (CHAR_LENGTH(TRIM(COALESCE(content, ''))) > 0 OR JSON_LENGTH(image_ids) > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='持久化聊天消息和可选节点引用';
+SET created_tables = CONCAT('`chat_message`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 系统通知表：保存业务事件通知、接收人、跳转引用及已读状态。
 CREATE TABLE system_notification (
@@ -563,6 +606,7 @@ CREATE TABLE system_notification (
     KEY idx_notification_unread (recipient_id, read_at, id),
     CONSTRAINT ck_notification_reference CHECK (JSON_TYPE(business_reference) = 'OBJECT')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='不可回复的持久化系统通知';
+SET created_tables = CONCAT('`system_notification`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 内容举报表：保存作品、评论、评价及创作者主页的举报和当前处理结论。
 CREATE TABLE report (
@@ -591,6 +635,7 @@ CREATE TABLE report (
     CONSTRAINT ck_report_images CHECK (JSON_TYPE(image_ids) = 'ARRAY'),
     CONSTRAINT ck_report_content CHECK (CHAR_LENGTH(TRIM(COALESCE(description, ''))) > 0 OR JSON_LENGTH(image_ids) > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='人工举报及当前结论，重复处理中举报合并补充';
+SET created_tables = CONCAT('`report`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 举报补充证据表：追加保存举报补证和针对处置结果提出的异议。
 CREATE TABLE report_evidence (
@@ -607,6 +652,7 @@ CREATE TABLE report_evidence (
     CONSTRAINT ck_report_evidence_images CHECK (JSON_TYPE(image_ids) = 'ARRAY'),
     CONSTRAINT ck_report_evidence_content CHECK (CHAR_LENGTH(TRIM(COALESCE(content, ''))) > 0 OR JSON_LENGTH(image_ids) > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='举报补证与处置异议，不覆盖初始证据';
+SET created_tables = CONCAT('`report_evidence`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
 
 -- 业务操作日志表：追加保存重要操作、审核与治理依据，以及必要的历史快照。
 CREATE TABLE operation_log (
@@ -629,3 +675,9 @@ CREATE TABLE operation_log (
     CONSTRAINT ck_operation_result CHECK (result IN ('SUCCESS', 'FAILED')),
     CONSTRAINT ck_operation_detail CHECK (JSON_TYPE(detail) = 'OBJECT')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='重要业务动作、审核和历史快照，只追加';
+SET created_tables = CONCAT('`operation_log`', IF(created_tables = '', '', CONCAT(', ', created_tables)));
+
+END$$
+DELIMITER ;
+CALL initialize_mvp_v1();
+DROP PROCEDURE initialize_mvp_v1;

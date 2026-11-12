@@ -2,13 +2,9 @@ package com.handcraft.platform;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
-import org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration;
 
-@SpringBootApplication(exclude = {
-        DataSourceAutoConfiguration.class,
-        FlywayAutoConfiguration.class
-})
+/** 应用入口；数据源与 Flyway 随启动配置完成初始化。 */
+@SpringBootApplication
 public class HandcraftPlatformApplication {
 
     public static void main(String[] args) {

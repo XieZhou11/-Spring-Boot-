@@ -1,0 +1,9 @@
+/* 最小全局样式；具体主题和组件样式在页面开发时补充。 */
+html,
+body {
+  margin: 0;
+}
+
+* {
+  box-sizing: border-box;
+}

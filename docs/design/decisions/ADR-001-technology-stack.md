@@ -22,7 +22,7 @@
 | 构建 | Maven 3.9.15、Maven Wrapper 3.3.4（only-script） | 使用官方 Wrapper，支持 Windows 命令行复现构建 |
 | 数据访问 | MyBatis-Plus 3.5.18，使用 Spring Boot 4 专用 starter | 普通增删改查使用框架；复杂列表、统计、行锁及条件更新使用明确的参数化 SQL |
 | 数据库 | MySQL 8.4 LTS、InnoDB、utf8mb4 | 保存交易、内容、消息和审计数据，提供本地事务、行锁及唯一约束 |
-| 数据库迁移 | Boot 4 Flyway starter，包含 MySQL 支持模块 | 结构随迁移演进，依赖版本服从 Boot 管理；尚未执行数据库迁移 |
+| 数据库迁移 | Boot 4 Flyway starter，包含 MySQL 支持模块 | 结构随迁移演进，依赖版本服从 Boot 管理；已验证并执行 V1 数据库迁移，业务事务待验证 |
 | 登录与权限 | Spring Security、Tomcat 原生内存 HttpSession、BCrypt | Cookie 携带会话编号，单机管理登录；应用重启后重新登录，无需额外会话存储组件 |
 | 验证码与限流 | MySQL 验证码及账号记录、JDK 单机内存计数 | 验证码摘要、有效期及消费/发送状态保存数据库；聊天短期限流按账号与会话在内存原子处理 |
 | 实时通信 | Spring WebSocket、浏览器原生 WebSocket、JSON 事件 | 每个登录页面实例共享一条连接，承载聊天、系统通知和未读同步；同一账号可以有多端连接 |
@@ -54,7 +54,7 @@
 
 ### 4.1 登录与资格
 
-登录使用 Tomcat 原生内存 HttpSession，不引入 Spring Session 或额外会话存储服务。不可预测的 Session ID 通过 HttpOnly Cookie 携带。开发时 Vite 代理 HTTP 和 WebSocket 请求，浏览器按同源方式访问；配置可信 Origin、Cookie 属性和 CSRF 防护。适用 HTTPS 的环境启用 Secure Cookie。会话登记与短期限流只服务单机；应用重启清空登录态，用户重新登录，数据库中的业务和消息记录保留。
+登录使用 Tomcat 原生内存 HttpSession，不引入 Spring Session 或额外会话存储服务。不可预测的 Session ID 通过 HttpOnly Cookie 携带。按用户指定，开发时前端 HTTP 请求直接访问后端，由 Spring Security CORS 配置可信 Origin、允许 Cookie 并保留 CSRF 防护，Vite 不配置代理。前后端主机名须一致以满足本地 SameSite Cookie；WebSocket 尚未接入，握手 Origin 和业务鉴权随消息任务验证。适用 HTTPS 的环境启用 Secure Cookie。会话登记与短期限流只服务单机；应用重启清空登录态，用户重新登录，数据库中的业务和消息记录保留。
 
 7 天有效期按登录签发时刻保存截止时间并校验，Cookie 和容器空闲超时配置不能把它缩短为默认 30 分钟，也不能因滑动续期无限延长。退出使对应 Session 失效并关闭关联连接；维护本机账号与登录 Session 的登记，密码重置后将该账号所有旧 Session 失效并断开旧连接。HTTP 请求及 WebSocket 业务操作均检查登录有效性，不只在握手时认证。
 
@@ -116,6 +116,6 @@ MySQL 官方 8.4 手册此次请求返回 HTTP 403，未核验具体补丁；部
 
 本机使用 JDK 21.0.11；官方 Maven Wrapper 固定 3.9.15；系统 Node 为 21，验证时使用校验过 SHA-256 的临时官方 Node 24.22.2/npm 11.19.1，不修改系统安装或 PATH。网络检查使用本机已有代理，设置仅放在临时工具环境，未写入仓库。
 
-实际通过：后端依赖构建、npm 锁文件安装、前端类型检查、ESLint、生产构建，以及开发/预览页面的 Vue 挂载和空白内容检查。CI 配置已建立，未在远端执行。骨架安装时曾提示开发工具链依赖告警，审计详情请求未成功，不能将离线审计空结果解释为零漏洞。
+实际通过：后端依赖构建、npm 锁文件安装、前端类型检查、ESLint、生产构建，以及开发/预览页面的 Vue 挂载和空白内容检查。该段为首次骨架初始化验证；当前工作树未包含 CI 文件，未执行远端 CI。骨架安装时曾提示开发工具链依赖告警，审计详情请求未成功，不能将离线审计空结果解释为零漏洞。
 
 当前[数据库表结构](../数据库表结构.md)按 V1.5 编写，原 V1.3 草稿不再使用。新聊天从[当前需求](../../requirements/requirements.md)、数据库设计、本文件与两个工程 README 开始；接口字段及错误码、权限和状态实现、页面细节按具体业务功能维护。真实 MySQL 迁移、索引效果及事务并发在后续数据库集成与相关功能中验证。

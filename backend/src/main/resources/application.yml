@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: handcraft-platform
+  # 后端配置统一在本文件显式维护，不加载额外本地配置。
+  datasource:
+    url: jdbc:mysql://localhost:3306/handcraft_trade_platform?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    username: root
+    password: '123456'
+    hikari:
+      # 使用固定偏移，不依赖数据库服务器是否安装命名时区表。
+      connection-init-sql: SET time_zone = '+08:00'
+  flyway:
+    locations: classpath:db/migration
+    # 拒绝自动接管已有表的数据库，也不允许通过 clean 清空数据库。
+    baseline-on-migrate: false
+    clean-disabled: true
+  jackson:
+    time-zone: Asia/Shanghai
+
+server:
+  port: 8080
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        # 本地联调前后端须统一使用 localhost 或统一使用 127.0.0.1。
+        same-site: lax
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+app:
+  cors:
+    # 精确列出可携带 Session Cookie 的前端来源，不使用通配符。
+    allowed-origins: http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173

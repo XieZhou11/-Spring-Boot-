@@ -23,14 +23,15 @@ test-results/
 logs/
 *.log
 
+# 后端测试仅供本地使用，不纳入提交；目录占位文件不再使用。
+/backend/src/test/java/
+.gitkeep
+
 # Local secrets; only sanitized examples may be committed
 .env
 .env.*
 !.env.example
 !.env.*.example
-application-local.yml
-application-local.yaml
-application-local.properties
 
 # Runtime data
 /var/

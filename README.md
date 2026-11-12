@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-项目已建立前后端框架骨架及基础检查配置。前端是空白 Vue 应用；后端已有启动入口、公共响应与异常处理，尚无业务实现。数据库设计及 Flyway 建表 SQL 已编写、未执行，数据库与外部服务尚未接入；工程现状见前后端 README。当前不涉及部署。
+前后端基础框架已接通：后端包含公共响应、异常处理、MySQL/Flyway、MyBatis-Plus 及 CORS/安全配置；前端包含常用目录、Router、Pinia 和 Axios，页面仍为空白，尚无业务实现。本地开发库已完成 27 表迁移；SMTP、OSS 未接入，当前不涉及部署。启动及验证入口见前后端 README。
 
 用户已指定后续需求与开发统一以 [V1.5 MVP 版需求规格说明书](docs/requirements/requirements.md)为依据，正文文档状态保留“待审核”。[V1.5 中文文件名副本](docs/requirements/archive/手工定制作品分享与交易平台需求规格说明书_V1.5_MVP版.md)与当前正文逐字节一致，每次修改同步更新。[V1.4 MVP 版](docs/requirements/archive/手工定制作品分享与交易平台需求规格说明书_V1.4_MVP版.md)和[修订版归档](docs/requirements/archive/手工定制作品分享与交易平台需求规格说明书_修订版.md)保留为历史资料，展示版本更替，不再同步覆盖。新[数据库表结构](docs/design/数据库表结构.md)已按当前范围编写，待审核；原型基于 V1.3，待适配。独立的[后续功能清单](docs/requirements/archive/手工定制作品分享与交易平台后续功能清单.md)不属于当前验收范围。
 
@@ -23,9 +23,8 @@
 ├── README.md                  # 项目入口
 ├── .editorconfig              # 文本格式约定
 ├── .gitignore                 # 本地配置与生成物忽略规则
-├── backend/                   # Spring Boot 骨架、公共层与未执行的 Flyway SQL
-├── frontend/                  # Vue / TypeScript / Vite 最小骨架
-├── .github/workflows/ci.yml    # 框架检查，不含部署
+├── backend/                   # Spring Boot、公共层、数据库迁移与跨域配置
+├── frontend/                  # Vue / TypeScript / Vite 目录、路由及请求封装
 └── docs/                      # 统一文档入口
     ├── requirements/          # 当前需求与历史归档
     ├── prototypes/            # 原型说明和原始图片
@@ -34,7 +33,7 @@
     └── testing/               # 任务或功能点的简短测试结果
 ```
 
-已按用户授权初始化框架。后端保留尚无业务实现的三层目录，资源包含待审核的数据库迁移；前端仅保留 Vue 必需入口和空白根组件。
+已按用户授权补齐框架：后端启动时连接 MySQL 并自动执行 Flyway；前端保留空白首页，后续业务组件与状态按任务增加。数据库设计仍为草稿，执行迁移不等于需求或设计已全部批准。
 
 采用按需创建目录的方式，不预建独立脚本、部署、接口契约或根测试目录。接口约定随设计与实现任务维护，必要测试代码在对应工程内组织。
 
@@ -42,9 +41,9 @@
 
 - 技术与版本见 [ADR-001](docs/design/decisions/ADR-001-technology-stack.md)；本轮按用户已确认的选型搭建，保留不使用 Redis、原生 HttpSession 与阿里云 OSS 的约定。
 - JDK 21、Maven Wrapper 3.9.15；前端 Node 24.22.2、npm 11.19.1。系统 Node 21 不满足前端要求，需切换 Node 24。
-- 精确依赖在 `backend/pom.xml`、`frontend/package.json` 和生成的锁文件中维护。后续按业务任务补充应用配置、数据库集成及功能实现。
-- 当前只有框架构建检查，业务集成尚未验证；基础 CI 尚未在远端运行。
-- 本地密钥、个人资料、上传文件、日志和构建产物不进入版本库；可提交不含真实凭据的配置样例。
+- 精确依赖在 `backend/pom.xml`、`frontend/package.json` 和生成的锁文件中维护。基础数据源及联调配置已完成，业务集成与外部服务按后续任务实现。
+- 框架检查、MySQL 8.4 迁移/失败补偿及浏览器跨域联调已验证，业务集成尚未验证；当前工作树未包含 CI 文件，未执行远端 CI。
+- 个人资料、上传文件、日志和构建产物不进入版本库；用户已指定后端配置及开发数据库凭据统一在 `application.yml` 中显式填写，不再使用 local 配置或样例文件。
 
 ## 安装与检查
 
@@ -55,7 +54,7 @@ npm ci
 npm run dev
 ```
 
-页面为空白。质量检查使用 `npm run lint`、`npm run build`（包含类型检查）。详细目录和版本说明见 [前端 README](frontend/README.md)。
+页面为空白，默认访问 `http://localhost:5173`；前端直连 `http://localhost:8080/api`，跨域由后端处理。质量检查使用 `npm run lint`、`npm run build`（包含类型检查）。详细目录和版本说明见 [前端 README](frontend/README.md)。
 
 后端在 `backend/` 下执行：
 
@@ -63,7 +62,7 @@ npm run dev
 .\mvnw.cmd -B -ntp verify
 ```
 
-macOS/Linux 使用 `sh ./mvnw -B -ntp verify`。当前检查公共框架，不代表业务或数据库集成通过；应用暂排除数据源及 Flyway 自动配置。依赖与启动说明见 [后端 README](backend/README.md)。需要网络代理时仅配置个人工具环境，不向仓库写入代理或凭据。
+macOS/Linux 使用 `sh ./mvnw -B -ntp verify`。启动使用 `./mvnw.cmd spring-boot:run`，工作目录为 `backend/`；默认连接 `localhost:3306/handcraft_trade_platform`、用户 `root`。账号密码、端口和跨域来源均在 `backend/src/main/resources/application.yml` 中显式维护；数据库须事先存在。后端测试源码仅供本地使用并已被 Git 忽略，新检出的仓库没有测试类，构建通过不代表业务测试通过。验证边界及联调接口见 [后端 README](backend/README.md)。需要网络代理时仅配置个人工具环境，不向仓库写入代理或凭据。
 
 接口组织约定见 [设计说明](docs/design/README.md)，测试结果的记录方式见 [测试说明](docs/testing/README.md)。
 
