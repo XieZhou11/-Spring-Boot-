@@ -1,5 +1,6 @@
 # Local editor and operating system files
 .idea/
+.openidea/
 *.iml
 .vscode/*.local.json
 .DS_Store
