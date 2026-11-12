@@ -1,0 +1,35 @@
+# Local editor and operating system files
+.idea/
+*.iml
+.vscode/*.local.json
+.DS_Store
+Thumbs.db
+
+# Build outputs and dependencies
+target/
+node_modules/
+dist/
+coverage/
+.vite/
+*.tsbuildinfo
+__pycache__/
+*.pyc
+.venv/
+
+# Test outputs and logs
+playwright-report/
+test-results/
+logs/
+*.log
+
+# Local secrets; only sanitized examples may be committed
+.env
+.env.*
+!.env.example
+!.env.*.example
+application-local.yml
+application-local.yaml
+application-local.properties
+
+# Runtime data
+/var/
