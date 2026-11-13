@@ -11,7 +11,7 @@ const router = useRouter()
 const leaving = ref(false)
 const errorMessage = ref('')
 
-/** 本页仅确认本人会话及退出；作品发现随对应功能开发。 */
+/** 本页提供本人会话及个人中心入口；作品发现随对应功能开发。 */
 async function signOut() {
   if (leaving.value) return
   leaving.value = true
@@ -52,6 +52,19 @@ async function signOut() {
         <p class="member-email">
           {{ auth.session.email }}
         </p>
+        <nav
+          class="member-account-links"
+          aria-label="我的账号"
+        >
+          <RouterLink
+            class="button-primary"
+            to="/account/profile"
+          >个人资料</RouterLink>
+          <RouterLink
+            class="button-secondary"
+            to="/account/addresses"
+          >收货地址</RouterLink>
+        </nav>
         <RouterLink
           class="text-link"
           to="/forgot-password"

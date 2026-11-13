@@ -586,6 +586,16 @@ h2 {
 .text-link {
   font-size: 12px;
 }
+.member-account-links {
+  display: flex;
+  gap: 12px;
+  margin: 22px 0;
+  flex-wrap: wrap;
+}
+.member-account-links .button-primary {
+  padding: 0 22px;
+  font-size: 12px;
+}
 .member-welcome .form-alert {
   margin-top: 16px;
 }

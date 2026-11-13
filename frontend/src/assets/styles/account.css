@@ -1,0 +1,146 @@
+/* 个人中心沿用纸色与深绿，用细线、留白和印章建立安静的手作感。 */
+.account-shell {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  width: min(1180px, calc(100% - 112px));
+  margin: 18px auto 44px;
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--paper);
+  box-shadow: 0 12px 45px #344e3910;
+}
+.account-back { font-size: 12px; color: #78836d; }
+.account-back span { margin-left: 15px; }
+.account-sidebar { padding: 43px 25px; background: #e9ecdf; position: relative; }
+.account-sidebar .eyebrow { font-family: Georgia, serif; font-size: 10px; letter-spacing: 2px; }
+.account-sidebar h2 { margin: 13px 0 32px; font-family: var(--serif); font-size: 26px; font-weight: 500; }
+.account-sidebar nav { display: grid; gap: 8px; }
+.account-sidebar nav a { display: flex; align-items: center; gap: 13px; padding: 15px 12px; border-radius: 5px; font-size: 13px; }
+.account-sidebar nav a.active { background: var(--green); color: var(--paper); }
+.account-sidebar nav a:not(.active):hover { background: #dfe5d5; }
+.account-sidebar nav span { font-family: Georgia, serif; font-size: 11px; opacity: .6; }
+.account-sidebar nav i { font-style: normal; margin-left: auto; opacity: .7; }
+.sidebar-note { margin: 64px 12px 20px; font-family: var(--serif); font-size: 16px; line-height: 2; color: #8b947d; }
+.sidebar-stitch { color: #a7b094; font-size: 70px; font-family: Georgia, serif; margin: 20px 12px; }
+.account-content { min-width: 0; padding: 40px 50px 45px; }
+.account-heading { display: flex; align-items: center; gap: 20px; justify-content: space-between; padding-bottom: 28px; border-bottom: 1px solid #e9e9df; margin-bottom: 27px; }
+.account-heading .eyebrow { font-family: Georgia, serif; color: #969c8a; letter-spacing: 1.6px; font-size: 9px; }
+.account-heading h1 { font-family: var(--serif); font-size: 29px; letter-spacing: 2px; font-weight: 500; margin: 12px 0 10px; }
+.account-heading p:last-child { font-size: 12px; line-height: 1.8; color: #8d9484; }
+.account-mark { color: #ad7754; border: 1px solid #ba8b66; border-radius: 5px; font-family: var(--serif); font-size: 29px; line-height: 44px; width: 42px; text-align: center; transform: rotate(-8deg); opacity: .65; flex-shrink: 0; }
+.account-loading { padding: 60px 0; color: var(--muted); font-size: 13px; }
+.account-load-error { display: grid; justify-items: start; gap: 18px; }
+.avatar-section { display: flex; align-items: center; gap: 25px; padding: 5px 0 30px; }
+.profile-avatar { width: 94px; height: 94px; flex: 0 0 94px; display: grid; place-items: center; border-radius: 50%; background: #e3e8d8; border: 5px solid #f5f5eb; outline: 1px solid #dce2d2; overflow: hidden; }
+.profile-avatar span { font-family: var(--serif); font-size: 40px; color: #6a7e5a; }
+.profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.avatar-copy { min-width: 0; }
+.avatar-selected-preview { margin: 0 0 0 auto; flex: 0 0 auto; text-align: center; }
+.avatar-selected-preview img { display: block; width: 65px; height: 65px; object-fit: cover; border: 1px dashed #b6c4a6; padding: 4px; border-radius: 5px; }
+.avatar-selected-preview figcaption { color: #929a85; font-size: 9px; margin-top: 7px; }
+.avatar-copy h2 { font-size: 14px; font-weight: 500; margin-bottom: 9px; }
+.avatar-copy > p { font-size: 11px; color: var(--muted); line-height: 1.7; }
+.avatar-upload { margin-top: 12px; min-height: 32px; padding: 7px 13px; cursor: pointer; }
+.avatar-upload:focus-within { outline: 2px solid var(--green); outline-offset: 3px; }
+.avatar-upload.is-disabled { opacity: .6; cursor: wait; }
+.avatar-copy .avatar-feedback { margin-top: 8px; color: var(--green); }
+.avatar-copy .field-error { color: var(--error); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.profile-form { border-top: 1px solid #e9e9df; padding-top: 23px; display: grid; gap: 21px; }
+.section-caption { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 1px; }
+.section-caption > span { font-family: var(--serif); font-size: 17px; }
+.section-caption small { font-family: Georgia, serif; font-size: 8px; letter-spacing: 1.4px; color: #a0a68f; }
+.account-field { min-width: 0; }
+.account-field > label, .region-fieldset legend { display: block; font-size: 12px; font-weight: 500; margin-bottom: 9px; }
+.account-field > input, .account-field > textarea { display: block; width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 5px; background: #fcfcf6; color: #2d4438; font: inherit; font-size: 13px; line-height: 1.6; outline: none; }
+.account-field > textarea { resize: vertical; min-height: 113px; }
+.account-field > input:focus, .account-field > textarea:focus { border-color: #66816c; box-shadow: 0 0 0 3px #49694f0d; }
+.account-field > input[readonly] { background: #f0f1e9; color: #8a917e; }
+.account-field.has-error > input, .account-field.has-error > textarea, .account-field.has-error .el-input__wrapper { border-color: #c98170; box-shadow: 0 0 0 1px #c98170; }
+.account-form-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 17px; padding-top: 5px; }
+.account-form-footer .button-primary { min-width: 140px; padding: 0 23px; justify-content: space-between; }
+.account-form-footer > p { color: #a0a48f; font-size: 11px; }
+.account-form-footer > p.save-success { color: var(--green); font-size: 12px; }
+.address-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 23px; }
+.address-toolbar > p { color: #8c9480; font-size: 12px; }
+.address-toolbar strong { color: var(--green); font-family: Georgia, serif; font-size: 22px; font-weight: 400; margin: 0 6px; }
+.address-toolbar .button-primary { padding: 0 18px; min-height: 40px; font-size: 12px; }
+.address-limit { margin: -12px 0 20px; }
+.address-list { display: grid; gap: 15px; }
+.address-card { border: 1px solid #e2e3d8; border-radius: 6px; padding: 22px 23px 15px; background: #fdfdf7; }
+.address-card.is-default { border-color: #bbc9af; background: #f7f9f0; }
+.address-card-top { display: flex; gap: 17px; align-items: center; flex-wrap: wrap; }
+.address-card h2 { font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
+.address-phone { font-size: 12px; color: #8d957f; }
+.default-badge { background: #e6eddb; color: #668052; padding: 4px 8px; border-radius: 3px; font-size: 10px; margin-left: auto; }
+.address-location { margin-top: 17px; font-size: 12px; color: #78866c; line-height: 1.7; overflow-wrap: anywhere; }
+.address-detail { margin-top: 5px; font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+.address-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 18px; padding-top: 13px; border-top: 1px solid #e7eade; }
+.address-actions > div { display: flex; gap: 23px; }
+.inline-button { padding: 3px 0; border: 0; background: transparent; color: #637b52; font: inherit; font-size: 11px; }
+.inline-button:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 4px; }
+.delete-button { color: #a28a72; }
+.default-note { color: #99a28a; font-size: 10px; }
+.address-empty { text-align: center; padding: 62px 15px 70px; border: 1px dashed #d8dece; border-radius: 7px; background: #fafbf4; }
+.address-empty > span { display: block; font-size: 55px; color: #a0af8b; margin-bottom: 18px; }
+.address-empty h2 { font-family: var(--serif); font-weight: 400; font-size: 21px; }
+.address-empty p { font-size: 12px; color: #929a85; line-height: 1.9; margin-top: 12px; }
+.address-editor { margin-top: 27px; border: 1px solid #dce2d0; border-radius: 6px; padding: 25px; background: #fbfcf5; }
+.address-editor form { margin-top: 25px; display: grid; gap: 20px; }
+.address-contact { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.account-checkbox { display: flex; align-items: center; gap: 8px; width: fit-content; font-size: 12px; line-height: 1.7; }
+.account-checkbox input { accent-color: var(--green); width: 15px; height: 15px; margin: 0; }
+.account-checkbox + .field-help { margin-top: -13px; }
+.region-fieldset { margin: 0; padding: 0; min-width: 0; border: 0; }
+.region-fieldset legend { padding: 0; }
+.region-fieldset .el-cascader { width: 100%; --el-color-primary: #294f3f; --el-border-color: #dedfd5; --el-fill-color-blank: #fcfcf6; }
+.region-fieldset .el-input__wrapper { padding: 5px 14px; min-height: 46px; }
+.region-toggle { margin-top: 11px; color: #78866c; }
+.manual-region { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 13px; margin-top: 19px; }
+.delete-dialog { width: min(460px, calc(100% - 36px)); padding: 33px; background: var(--paper); border: 1px solid #d4d9c8; border-radius: 8px; color: var(--green); box-shadow: 0 20px 90px #17271930; }
+.delete-dialog::backdrop { background: #24362965; backdrop-filter: blur(2px); }
+.delete-dialog .eyebrow { font-family: Georgia, serif; letter-spacing: 1.5px; color: #929a85; font-size: 9px; }
+.delete-dialog h2 { font-family: var(--serif); font-weight: 400; font-size: 23px; margin: 18px 0 22px; }
+.delete-dialog > p:not(.eyebrow) { font-size: 12px; line-height: 1.9; color: #86917a; overflow-wrap: anywhere; }
+.delete-dialog > div { display: flex; justify-content: flex-end; gap: 12px; margin-top: 27px; }
+.delete-dialog .button-primary { padding-inline: 20px; min-height: 42px; font-size: 12px; }
+@media (max-width: 1100px) {
+  .account-shell { width: calc(100% - 64px); grid-template-columns: 195px minmax(0, 1fr); }
+  .account-sidebar { padding-inline: 20px; }
+  .account-content { padding: 34px 30px; }
+  .account-heading .eyebrow { letter-spacing: 1px; }
+  .section-caption small { display: none; }
+}
+@media (max-width: 760px) {
+  .account-shell { width: calc(100% - 36px); grid-template-columns: 1fr; margin-top: 4px; }
+  .account-sidebar { padding: 20px; }
+  .account-sidebar > .eyebrow, .account-sidebar h2, .sidebar-note, .sidebar-stitch { display: none; }
+  .account-sidebar nav { grid-template-columns: 1fr 1fr; }
+  .account-sidebar nav a { padding: 13px 10px; font-size: 12px; gap: 8px; }
+  .account-content { padding: 27px 20px; }
+  .account-heading { gap: 10px; }
+  .account-heading .eyebrow { font-size: 7px; letter-spacing: .6px; }
+  .account-heading h1 { font-size: 26px; }
+  .account-heading p:last-child { font-size: 11px; }
+  .account-mark { display: none; }
+  .avatar-section { gap: 17px; align-items: flex-start; }
+  .avatar-section:has(.avatar-selected-preview) { flex-wrap: wrap; }
+  .avatar-selected-preview { margin-left: 82px; }
+  .profile-avatar { width: 65px; height: 65px; flex-basis: 65px; }
+  .profile-avatar span { font-size: 30px; }
+  .avatar-copy h2 { font-size: 12px; line-height: 1.8; }
+  .avatar-copy > p { font-size: 10px; }
+  .address-contact, .manual-region { grid-template-columns: 1fr; gap: 18px; }
+  .address-editor { padding: 21px 16px; }
+  .address-toolbar { gap: 10px; }
+  .address-toolbar .button-primary { padding-inline: 13px; }
+  .address-card { padding: 20px 17px 15px; }
+  .address-card-top { gap: 10px; }
+  .default-badge { margin-left: 0; }
+  .address-empty { padding: 40px 14px; }
+  .address-empty h2 { font-size: 18px; line-height: 1.8; }
+  .account-back { font-size: 10px; }
+  .account-back span { margin-left: 3px; }
+}

@@ -12,6 +12,18 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '我的拾作' },
     },
     {
+      path: '/account/profile',
+      name: 'profile',
+      component: () => import('@/views/ProfileView.vue'),
+      meta: { requiresAuth: true, title: '个人资料' },
+    },
+    {
+      path: '/account/addresses',
+      name: 'addresses',
+      component: () => import('@/views/AddressesView.vue'),
+      meta: { requiresAuth: true, title: '收货地址' },
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),

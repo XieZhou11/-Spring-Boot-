@@ -92,6 +92,8 @@ export const test = base.extend<object, { mailbox: Mailbox }>({
             '--spring.mail.properties.mail.smtp.auth=false',
             '--spring.mail.properties.mail.smtp.ssl.enable=false',
             '--app.auth.verification-secret=browser-test-only-secret-at-least-32-bytes',
+            // 普通回归固定验证未配置存储，避免读取本地真实凭据后向云端写入测试对象。
+            '--app.oss.endpoint=',
           ],
           { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
         )

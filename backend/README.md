@@ -1,6 +1,6 @@
 # 后端工程
 
-已有统一响应、异常处理、MySQL/Flyway、MyBatis-Plus、CORS/CSRF 及账号注册、登录、找回密码接口。真实 SMTP 发送逻辑已接入，本机 QQ SMTP 连接与认证已验证，QQ/163 公网实收待验收；OSS 未接入。前端认证页面已按 [T-002](../docs/development/tasks/T-002-frontend-auth.md)接入，启动与浏览器联调见[前端说明](../frontend/README.md)。
+已有统一响应、异常处理、MySQL/Flyway、MyBatis-Plus、CORS/CSRF、账号接口及个人资料、头像、收货地址接口。真实 SMTP 发送逻辑已接入，本机 QQ SMTP 连接与认证已验证，QQ/163 公网实收待验收；头像已完成真实 OSS 上传、签名读取及替换联调。认证页面见 [T-002](../docs/development/tasks/T-002-frontend-auth.md)，个人中心见 [T-003](../docs/development/tasks/T-003-personal-center.md)，启动与浏览器联调见[前端说明](../frontend/README.md)。
 
 ## 环境与依赖
 
@@ -116,6 +116,26 @@ MySQL DDL 隐式提交，整批建表不能靠 ROLLBACK 撤销。V1 使用临时
 调用顺序：先 GET `/api/csrf`，保留 Cookie，并按返回的 headerName/token 发起写请求；登录会销毁旧会话并创建新会话，因此下一次写请求重新获取 CSRF。发送验证码成功只说明 SMTP 接受且状态保存成功，仍需在收件箱确认收信；超时、发送或保存未知时返回 50302，重新获取后用最新邮件的验证码。
 
 会话 Cookie 为 HttpOnly、SameSite=Lax，七天保存；容器空闲超时七天，服务端另检查登录时固定的七天截止时间，多端登录互不挤出。应用重启须重新登录；退出仅撤销当前会话，密码重置撤销全部旧凭证，后续请求再次核对密码指纹。两种暂停标记均不禁止登录。当前没有 WebSocket 连接，消息功能接入时须复用截止时间/指纹校验并在退出、重置、到期时断开旧连接。
+
+## 个人资料、地址与头像
+
+个人中心业务及接口入口见 [T-003](../docs/development/tasks/T-003-personal-center.md)。登录后通过首页的个人资料、收货地址入口使用；昵称、简介和地址使用真实 MySQL。资料更新不会改变密码或延长登录态；地址最多 10 条，首条自动默认，删除默认后选择剩余最新地址，归属、容量和默认切换在用户行锁事务中校验。当前尚无订单建单实现，地址快照随订单功能验收。
+
+头像由后端校验实际 JPEG/PNG 和 2MiB 大小，上传至私有 OSS，再短事务绑定本人头像。数据库仅保存文件对象键，读取本人资料时签发 15 分钟访问 URL；成功替换保留旧文件，失败的新上传通过持久化补偿清理，不把外部网络调用放在长数据库事务中。
+
+2026-11-13 已按用户提供的信息在本地 `application.yml` 配置北京地域私有 OSS，不使用空项、示例凭据或占位值。更换配置时维护 `app.oss` 下以下全部属性并重启后端：
+
+| 属性 | 填写内容 |
+| --- | --- |
+| `app.oss.endpoint` | Bucket 所在地域的 OSS Endpoint（包含 HTTPS 协议） |
+| `app.oss.region` | 与 Bucket 一致的签名地域名称 |
+| `app.oss.bucket` | 已设为私有的 Bucket 名称 |
+| `app.oss.access-key-id` | 具备该 Bucket 必要读写权限的访问密钥编号 |
+| `app.oss.access-key-secret` | 对应访问密钥秘密，仅在本地保存 |
+
+配置仍集中在 `application.yml`，不使用环境变量占位或额外 local 文件；真实密钥不加入 Git、前端或日志。缺少任一配置时应用仍可启动，上传明确返回 HTTP 503，昵称、简介和地址仍可保存；不会写入假文件或返回假上传成功。前端只呈现“头像上传暂时不可用”等用户提示。
+
+本地协议测试验证 SDK、文件状态和失败补偿；另已使用隔离账号与真实北京 OSS 完成页面上传、刷新、替换、签名读取及匿名访问拒绝，并推进浏览器时钟触发续签。测试账号数据库及本轮上传对象均已清理，结果维护在 [T-003 测试记录](../docs/testing/T-003-personal-center.md)。
 
 ## 后续开发边界
 

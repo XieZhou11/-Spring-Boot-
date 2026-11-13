@@ -19,6 +19,12 @@ public class UserAccount {
     /** 用户昵称，按 Unicode 字符计为 2—8 字。 */
     private String nickname;
 
+    /** 本人头像文件编号，关联 file_asset，不保存签名地址。 */
+    private Long avatarFileId;
+
+    /** 对外展示的个人简介，最多 200 字，未填写时可为空。 */
+    private String bio;
+
     /** 管理员标记，对应 is_admin；仅由服务端维护。 */
     private boolean admin;
 

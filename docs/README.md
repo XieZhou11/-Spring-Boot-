@@ -17,8 +17,8 @@
 | 技术选型 | 用户已确认采用；账号本地业务集成已验证，QQ/163 公网实收待验收，其他业务能力按任务验证 | [ADR-001](design/decisions/ADR-001-technology-stack.md) |
 | 数据库详细设计 | V1.5 设计草稿；27 表 Flyway SQL 已在本地执行，迁移及失败补偿在 MySQL 8.4 验证 | [数据库表结构](design/数据库表结构.md)，含字段、索引、应用关联与事务回滚 |
 | 架构、领域与 UI 详细设计 | 尚未编写 | [设计约定](design/README.md)，在相关任务中逐步形成 |
-| 前后端工程 | 已有原型风格的登录、注册、找回密码及会话页，接入真实后端；QQ/163 公网实收待验收，其他业务尚未实现 | [后端说明](../backend/README.md)、[前端说明](../frontend/README.md)、[T-002](development/tasks/T-002-frontend-auth.md) |
-| 业务接口、自动化测试与 CI | 账号后端有 MySQL、HTTP/本地 SMTP 集成验证，前端有 Playwright 浏览器回归；后端测试源码按约定仅保留本地且被 Git 忽略；无 CI 文件，未执行远端 CI | [T-001](development/tasks/T-001-backend-auth.md)、[后端测试](testing/T-001-backend-auth.md)、[前端联调测试](testing/T-002-frontend-auth.md) |
+| 前后端工程 | 已有登录、注册、找回密码、会话及个人中心页面，接入真实后端；真实 OSS 云端联调已通过，QQ/163 公网实收待补齐，作品与交易页面尚未实现 | [后端说明](../backend/README.md)、[前端说明](../frontend/README.md)、[T-002](development/tasks/T-002-frontend-auth.md)、[T-003](development/tasks/T-003-personal-center.md) |
+| 业务接口、自动化测试与 CI | 账号和个人中心使用真实 MySQL、HTTP 及协议接收器集成验证，前端有 Playwright 回归；后端测试源码按约定仅保留本地且被 Git 忽略；无 CI 文件，未执行远端 CI | [账号后端测试](testing/T-001-backend-auth.md)、[认证联调测试](testing/T-002-frontend-auth.md)、[个人中心测试](testing/T-003-personal-center.md) |
 
 用户已于 2026-11-12 指定 V1.5 MVP 版为后续需求与开发依据，`requirements.md` 已同步替换。正文保留“待审核”状态；采用为工作依据不等于宣称全部内容已经最终批准。遇到影响实现的歧义或冲突，记录具体问题并澄清，不拼接不同版本的规则。
 
@@ -32,7 +32,7 @@ V1.5 MVP 版正文仅描述完整实现范围，不划分功能优先级，也�
 
 不保留独立的 `contracts/` 和根目录 `tests/`。接口约定在设计与实现时明确；仅业务功能开发或业务缺陷修复编写测试类；后端 `src/test/java/` 内容仅供本地使用，不纳入 Git。非业务工作通过临时命令或实际运行验证，不新增持久化测试类。本目录的 `testing/` 仅保存任务或功能点的简短测试结果，不再细分子目录。
 
-2026-11-13 T-001 账号后端已实现并通过本地验证：只支持 QQ/163 邮箱，注册填写昵称，验证码五分钟共用，登录七天绝对有效、多端可用，重置撤销旧会话。T-002 接入登录、注册及找回页面、受保护会话首页，复用 Cookie/CSRF/CORS。本机 QQ SMTP 连接认证已通过，QQ/163 公网实收仍待验收，其他业务尚未实现。任务、接口和测试入口见上表。
+2026-11-13 T-001 账号后端已实现并通过本地验证：只支持 QQ/163 邮箱，注册填写昵称，验证码五分钟共用，登录七天绝对有效、多端可用，重置撤销旧会话。T-002 接入登录、注册及找回页面、受保护会话首页，复用 Cookie/CSRF/CORS。本机 QQ SMTP 连接认证已通过，QQ/163 公网实收仍待验收。T-003 增加个人资料、独立头像上传与收货地址，用户补齐北京私有 OSS 配置后，真实云端上传、读取与替换联调已通过；订单地址快照随订单功能实现。任务、接口和实际测试入口见上表。
 
 ## 2. 文档导航
 
@@ -84,11 +84,13 @@ docs/
 │   └── tasks/                        # 具体任务文件
 │       ├── TASK_TEMPLATE.md          # 业务功能开始开发时使用的模板
 │       ├── T-001-backend-auth.md     # 账号后端接口与验收状态
-│       └── T-002-frontend-auth.md    # 认证页面与联调验收
+│       ├── T-002-frontend-auth.md    # 认证页面与联调验收
+│       └── T-003-personal-center.md  # 个人资料、头像与收货地址
 └── testing/                          # 简短测试结果，不存测试代码、不建子目录
     ├── README.md                     # 业务功能测试记录方式与格式示例
     ├── T-001-backend-auth.md          # 账号后端测试与复测结果
-    └── T-002-frontend-auth.md         # 浏览器联调与复测结果
+    ├── T-002-frontend-auth.md         # 认证浏览器联调与复测结果
+    └── T-003-personal-center.md       # 个人中心测试及本轮回归结果
 ```
 
 补充说明：
@@ -96,8 +98,8 @@ docs/
 - `archive/` 中仅当前 V1.5 中文副本随 `requirements.md` 同步；V1.4、`_修订版.md` 及不带版本后缀的 Markdown 是历史资料，Word 是原始输入，均不随当前正文覆盖。
 - `prototypes/README.md` 是当前导航，`assets/原型说明.md` 是原始设计说明，两者职责接近；后续若精简，可以合并说明并减少一层目录，本轮未改写原始材料。
 - 原 `design/database.md` 已删除，现有 [数据库表结构](design/数据库表结构.md)为按当前需求编写的新草稿，对应 SQL 位于后端 `src/main/resources/db/migration/`，V1 已执行且包含异常结构补偿；人工结构回退位于相邻 `rollback/`，未执行。
-- `decisions/` 中的 ADR-001 记录已选技术；数据库基础迁移及框架联调已验证，仍不代表业务、SMTP/OSS、详细架构和页面已经实现。
-- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端 T-001 和认证前端 T-002。
+- `decisions/` 中的 ADR-001 记录已选技术；选型和框架验证不代表全部业务已经实现，SMTP 公网实收仍需按任务确认，OSS 实际结果见 T-003。
+- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端 T-001、认证前端 T-002 和个人中心 T-003。
 - `testing/README.md` 只规定业务功能测试结果如何填写；功能开发时再增加实际记录，复测更新同一文件，任务只保留总体结果和链接。
 
 ## 3. 已有资料迁移对照
@@ -166,4 +168,4 @@ docs/
 
 后续统一以[当前 V1.5 MVP 版需求](requirements/requirements.md)为依据，其中所列需求均须实现；[后续功能清单](requirements/archive/手工定制作品分享与交易平台后续功能清单.md)独立留存，供完成后选择补充。数据库设计及 SQL 待审核，原型待按当前范围调整。
 
-后续从[当前需求](requirements/requirements.md)、[数据库表结构](design/数据库表结构.md)及 [ADR-001](design/decisions/ADR-001-technology-stack.md)继续。工程说明见[后端 README](../backend/README.md)与[前端 README](../frontend/README.md)。认证页面入口见 [T-002](development/tasks/T-002-frontend-auth.md)，公网收件按 [T-001](development/tasks/T-001-backend-auth.md)补齐邮件配置，并在页面验证 QQ/163 注册及找回；其他功能按明确任务补充权限、事务、并发及端到端验证。
+后续从[当前需求](requirements/requirements.md)、[数据库表结构](design/数据库表结构.md)及 [ADR-001](design/decisions/ADR-001-technology-stack.md)继续。工程说明见[后端 README](../backend/README.md)与[前端 README](../frontend/README.md)。已完成的个人中心及真实 OSS 结果见 [T-003](development/tasks/T-003-personal-center.md)；公网收件按 [T-001](development/tasks/T-001-backend-auth.md)在页面验证 QQ/163 注册及找回。作品与交易功能按明确任务补充权限、事务、并发及端到端验证。

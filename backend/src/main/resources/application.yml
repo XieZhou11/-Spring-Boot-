@@ -1,4 +1,9 @@
 spring:
+  servlet:
+    multipart:
+      # 头像上限 2MiB；请求额外保留 multipart 表单边界空间，服务层仍检查实际字节数。
+      max-file-size: 2MB
+      max-request-size: 3MB
   application:
     name: handcraft-platform
   # 后端配置统一在本文件显式维护，不加载额外本地配置。
@@ -60,5 +65,7 @@ app:
 # 业务关键节点输出到控制台，INFO 记录过程和结果；不输出 SQL 参数或 SMTP 协议正文。
 logging:
   level:
+    # OSS SDK 原始错误可能包含对象键或签名；业务层已保留脱敏异常类型与调用栈。
+    com.aliyun.oss: OFF
     root: INFO
     com.handcraft.platform: INFO
