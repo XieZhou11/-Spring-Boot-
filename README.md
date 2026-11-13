@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-前后端基础框架已接通：后端包含公共响应、异常处理、MySQL/Flyway、MyBatis-Plus 及 CORS/安全配置；前端包含常用目录、Router、Pinia 和 Axios，页面仍为空白，尚无业务实现。本地开发库已完成 27 表迁移；SMTP、OSS 未接入，当前不涉及部署。启动及验证入口见前后端 README。
+后端已实现账号注册、登录、找回密码、会话及真实 SMTP 发送逻辑，详见 [T-001](docs/development/tasks/T-001-backend-auth.md)。前端已有原型风格的登录、注册、找回密码与会话页，接入真实后端，见 [T-002](docs/development/tasks/T-002-frontend-auth.md)。本机 QQ SMTP 连接认证已通过，QQ/163 公网实收仍待验收；作品与交易页面、OSS 尚未实现，当前不涉及部署。本地开发库已完成 27 表迁移，启动及验证入口见前后端 README。
 
 用户已指定后续需求与开发统一以 [V1.5 MVP 版需求规格说明书](docs/requirements/requirements.md)为依据，正文文档状态保留“待审核”。[V1.5 中文文件名副本](docs/requirements/archive/手工定制作品分享与交易平台需求规格说明书_V1.5_MVP版.md)与当前正文逐字节一致，每次修改同步更新。[V1.4 MVP 版](docs/requirements/archive/手工定制作品分享与交易平台需求规格说明书_V1.4_MVP版.md)和[修订版归档](docs/requirements/archive/手工定制作品分享与交易平台需求规格说明书_修订版.md)保留为历史资料，展示版本更替，不再同步覆盖。新[数据库表结构](docs/design/数据库表结构.md)已按当前范围编写，待审核；原型基于 V1.3，待适配。独立的[后续功能清单](docs/requirements/archive/手工定制作品分享与交易平台后续功能清单.md)不属于当前验收范围。
 
@@ -33,7 +33,7 @@
     └── testing/               # 任务或功能点的简短测试结果
 ```
 
-已按用户授权补齐框架：后端启动时连接 MySQL 并自动执行 Flyway；前端保留空白首页，后续业务组件与状态按任务增加。数据库设计仍为草稿，执行迁移不等于需求或设计已全部批准。
+后端启动时连接 MySQL 并自动执行 Flyway；前端未登录访问业务页面先进入登录页，当前首页仅确认本人会话与退出。其他业务组件与状态按任务增加。数据库设计仍为草稿，执行迁移不等于需求或设计已全部批准。
 
 采用按需创建目录的方式，不预建独立脚本、部署、接口契约或根测试目录。接口约定随设计与实现任务维护，必要测试代码在对应工程内组织。
 
@@ -42,7 +42,7 @@
 - 技术与版本见 [ADR-001](docs/design/decisions/ADR-001-technology-stack.md)；本轮按用户已确认的选型搭建，保留不使用 Redis、原生 HttpSession 与阿里云 OSS 的约定。
 - JDK 21、Maven Wrapper 3.9.15；前端 Node 24.22.2、npm 11.19.1。系统 Node 21 不满足前端要求，需切换 Node 24。
 - 精确依赖在 `backend/pom.xml`、`frontend/package.json` 和生成的锁文件中维护。基础数据源及联调配置已完成，业务集成与外部服务按后续任务实现。
-- 框架检查、MySQL 8.4 迁移/失败补偿及浏览器跨域联调已验证，业务集成尚未验证；当前工作树未包含 CI 文件，未执行远端 CI。
+- 框架检查、MySQL 8.4 迁移/失败补偿及浏览器跨域联调已验证；账号后端的 MySQL、HTTP/SMTP 本地集成结果见 [T-001 测试记录](docs/testing/T-001-backend-auth.md)，认证页面的 13 项真实前后端浏览器回归及响应式验证见 [T-002 测试记录](docs/testing/T-002-frontend-auth.md)。当前工作树未包含 CI 文件，未执行远端 CI。
 - 个人资料、上传文件、日志和构建产物不进入版本库；用户已指定后端配置及开发数据库凭据统一在 `application.yml` 中显式填写，不再使用 local 配置或样例文件。
 
 ## 安装与检查
@@ -54,7 +54,7 @@ npm ci
 npm run dev
 ```
 
-页面为空白，默认访问 `http://localhost:5173`；前端直连 `http://localhost:8080/api`，跨域由后端处理。质量检查使用 `npm run lint`、`npm run build`（包含类型检查）。详细目录和版本说明见 [前端 README](frontend/README.md)。
+默认访问 `http://localhost:5173`，未登录自动进入登录页；前端直连 `http://localhost:8080/api`，跨域由后端处理。质量检查使用 `npm run lint`、`npm run build`（包含类型检查），账号浏览器联调使用 `npm run test:e2e`。启动顺序、邮件配置前提和测试环境见 [前端 README](frontend/README.md)。
 
 后端在 `backend/` 下执行：
 

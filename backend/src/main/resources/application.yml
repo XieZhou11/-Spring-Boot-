@@ -16,12 +16,29 @@ spring:
     clean-disabled: true
   jackson:
     time-zone: Asia/Shanghai
+  mail:
+    # 平台只需一个发件账号，可同时向 QQ 与 163 邮箱发送验证码。
+    host: smtp.qq.com
+    port: 465
+    username: ""
+    # 填 SMTP 授权码，不是邮箱登录密码；真实凭据仅在本地配置，不进入提交。
+    password: ""
+    default-encoding: UTF-8
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.ssl.enable: true
+      mail.smtp.connectiontimeout: 3000
+      mail.smtp.timeout: 3000
+      mail.smtp.writetimeout: 3000
 
 server:
   port: 8080
   servlet:
     session:
+      # 空闲超时不缩短七天登录期；绝对截止时刻另由认证过滤器校验。
+      timeout: 7d
       cookie:
+        max-age: 7d
         http-only: true
         # 本地联调前后端须统一使用 localhost 或统一使用 127.0.0.1。
         same-site: lax
@@ -32,6 +49,16 @@ mybatis-plus:
     map-underscore-to-camel-case: true
 
 app:
+  auth:
+    # 本地填写至少 32 字节随机密钥，用于验证码 HMAC；留空时验证码接口明确不可用。
+    # 保持密钥稳定，轮换会使未消费验证码失效；真实密钥不进入提交。
+    verification-secret: ""
   cors:
     # 精确列出可携带 Session Cookie 的前端来源，不使用通配符。
     allowed-origins: http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173
+
+# 业务关键节点输出到控制台，INFO 记录过程和结果；不输出 SQL 参数或 SMTP 协议正文。
+logging:
+  level:
+    root: INFO
+    com.handcraft.platform: INFO

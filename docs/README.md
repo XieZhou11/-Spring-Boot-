@@ -1,6 +1,6 @@
 # 项目文档中心
 
-更新日期：2026-11-12。
+更新日期：2026-11-13。
 
 这里是从 0 开发时的统一上下文入口。先确认当前资料与任务，再按需要阅读相关文档；不要把所有历史版本同时作为实现依据。
 
@@ -14,11 +14,11 @@
 | 需求历史资料 | V1.4 MVP 版、修订版、旧版 Markdown 和 Word 保留供追溯及展示版本更替 | [需求索引](requirements/README.md)，区分当前版本同步副本与历史资料 |
 | 页面原型 | 基于 V1.3 的第一版静态 PC 原型，待适配 V1.5 | [原型索引](prototypes/README.md)，说明布局、入口与示例流程 |
 | AI 协作约定 | 已建立 | [AGENTS.md](../AGENTS.md)，规定任务、实现与验证方式 |
-| 技术选型 | 用户已确认采用，已有工程骨架；业务集成未验证 | [ADR-001](design/decisions/ADR-001-technology-stack.md) |
+| 技术选型 | 用户已确认采用；账号本地业务集成已验证，QQ/163 公网实收待验收，其他业务能力按任务验证 | [ADR-001](design/decisions/ADR-001-technology-stack.md) |
 | 数据库详细设计 | V1.5 设计草稿；27 表 Flyway SQL 已在本地执行，迁移及失败补偿在 MySQL 8.4 验证 | [数据库表结构](design/数据库表结构.md)，含字段、索引、应用关联与事务回滚 |
 | 架构、领域与 UI 详细设计 | 尚未编写 | [设计约定](design/README.md)，在相关任务中逐步形成 |
-| 前后端工程骨架 | 前端有常用目录、Router/Pinia/Axios，页面空白；后端已有公共层、数据库及 CORS 配置，尚无业务 | [后端说明](../backend/README.md)、[前端说明](../frontend/README.md) |
-| 业务接口、自动化测试与 CI | 无业务接口与业务用例；已有框架验证结果，测试源码仅保留在本地且被 Git 忽略；当前工作树无 CI 文件，未执行远端 CI | 检查依赖、类型、静态规则与构建；后续按业务任务补充验证 |
+| 前后端工程 | 已有原型风格的登录、注册、找回密码及会话页，接入真实后端；QQ/163 公网实收待验收，其他业务尚未实现 | [后端说明](../backend/README.md)、[前端说明](../frontend/README.md)、[T-002](development/tasks/T-002-frontend-auth.md) |
+| 业务接口、自动化测试与 CI | 账号后端有 MySQL、HTTP/本地 SMTP 集成验证，前端有 Playwright 浏览器回归；后端测试源码按约定仅保留本地且被 Git 忽略；无 CI 文件，未执行远端 CI | [T-001](development/tasks/T-001-backend-auth.md)、[后端测试](testing/T-001-backend-auth.md)、[前端联调测试](testing/T-002-frontend-auth.md) |
 
 用户已于 2026-11-12 指定 V1.5 MVP 版为后续需求与开发依据，`requirements.md` 已同步替换。正文保留“待审核”状态；采用为工作依据不等于宣称全部内容已经最终批准。遇到影响实现的歧义或冲突，记录具体问题并澄清，不拼接不同版本的规则。
 
@@ -26,11 +26,13 @@ V1.5 MVP 版正文仅描述完整实现范围，不划分功能优先级，也�
 
 `requirements/requirements.md` 与 `requirements/archive/手工定制作品分享与交易平台需求规格说明书_V1.5_MVP版.md` 是当前需求的两份相同内容文件。日常以 `requirements.md` 为编辑入口，每次修改后同步当前版本中文副本并验证逐字节一致。V1.4 MVP 版、`_修订版.md`、旧版 Markdown 与原始 Word 作为历史资料保留，不随当前正文同步；版本升级时保留上一版本文件及其原有内容，用于展示版本更替。
 
-用户已授权补齐框架。后端有启动入口、公共响应/异常处理、数据源与 Flyway、MyBatis-Plus 和 CORS/安全链；前端有常用目录、Router、Pinia、Axios/CSRF 封装，页面仍为空白。当前机器的 handcraft_trade_platform 开发库（MySQL 8.0.46）已完成 V1 初始化；另在独立 MySQL 8.4 验证 27 表迁移与失败补偿，人工整批回退脚本未执行。按用户要求，后端全部配置和开发数据库凭据集中在 `backend/src/main/resources/application.yml` 显式维护，不使用额外 local 文件或环境变量占位。实际业务功能开始开发时再创建任务，当前任务目录仅保留模板；文档修改、选型、初始化和纯设计不建立任务或对应检查记录。
+用户已授权补齐框架。后端有启动入口、公共响应/异常处理、数据源与 Flyway、MyBatis-Plus 和 CORS/安全链；前端有 Router、Pinia、Axios/CSRF 封装，认证页面已接入对应后端接口。当前机器的 handcraft_trade_platform 开发库（MySQL 8.0.46）已完成 V1 初始化；另在独立 MySQL 8.4 验证 27 表迁移与失败补偿，人工整批回退脚本未执行。按用户要求，后端全部配置和开发数据库凭据集中在 `backend/src/main/resources/application.yml` 显式维护，不使用额外 local 文件或环境变量占位。实际业务功能开发按任务记录；文档修改、选型、初始化和纯设计不建立任务或对应检查记录。
 
 当前项目不涉及部署，不建立部署配置、部署文档或独立脚本目录。后续按实际产物创建必要目录，避免提前增加层级。
 
 不保留独立的 `contracts/` 和根目录 `tests/`。接口约定在设计与实现时明确；仅业务功能开发或业务缺陷修复编写测试类；后端 `src/test/java/` 内容仅供本地使用，不纳入 Git。非业务工作通过临时命令或实际运行验证，不新增持久化测试类。本目录的 `testing/` 仅保存任务或功能点的简短测试结果，不再细分子目录。
+
+2026-11-13 T-001 账号后端已实现并通过本地验证：只支持 QQ/163 邮箱，注册填写昵称，验证码五分钟共用，登录七天绝对有效、多端可用，重置撤销旧会话。T-002 接入登录、注册及找回页面、受保护会话首页，复用 Cookie/CSRF/CORS。本机 QQ SMTP 连接认证已通过，QQ/163 公网实收仍待验收，其他业务尚未实现。任务、接口和测试入口见上表。
 
 ## 2. 文档导航
 
@@ -80,9 +82,13 @@ docs/
 ├── development/                      # 开发任务与过程记录
 │   ├── README.md                     # 如何拆任务、记录状态及交接
 │   └── tasks/                        # 具体任务文件
-│       └── TASK_TEMPLATE.md          # 业务功能开始开发时使用的模板
+│       ├── TASK_TEMPLATE.md          # 业务功能开始开发时使用的模板
+│       ├── T-001-backend-auth.md     # 账号后端接口与验收状态
+│       └── T-002-frontend-auth.md    # 认证页面与联调验收
 └── testing/                          # 简短测试结果，不存测试代码、不建子目录
-    └── README.md                     # 业务功能测试记录方式与格式示例
+    ├── README.md                     # 业务功能测试记录方式与格式示例
+    ├── T-001-backend-auth.md          # 账号后端测试与复测结果
+    └── T-002-frontend-auth.md         # 浏览器联调与复测结果
 ```
 
 补充说明：
@@ -91,7 +97,7 @@ docs/
 - `prototypes/README.md` 是当前导航，`assets/原型说明.md` 是原始设计说明，两者职责接近；后续若精简，可以合并说明并减少一层目录，本轮未改写原始材料。
 - 原 `design/database.md` 已删除，现有 [数据库表结构](design/数据库表结构.md)为按当前需求编写的新草稿，对应 SQL 位于后端 `src/main/resources/db/migration/`，V1 已执行且包含异常结构补偿；人工结构回退位于相邻 `rollback/`，未执行。
 - `decisions/` 中的 ADR-001 记录已选技术；数据库基础迁移及框架联调已验证，仍不代表业务、SMTP/OSS、详细架构和页面已经实现。
-- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前尚无业务功能任务。
+- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端 T-001 和认证前端 T-002。
 - `testing/README.md` 只规定业务功能测试结果如何填写；功能开发时再增加实际记录，复测更新同一文件，任务只保留总体结果和链接。
 
 ## 3. 已有资料迁移对照
@@ -160,4 +166,4 @@ docs/
 
 后续统一以[当前 V1.5 MVP 版需求](requirements/requirements.md)为依据，其中所列需求均须实现；[后续功能清单](requirements/archive/手工定制作品分享与交易平台后续功能清单.md)独立留存，供完成后选择补充。数据库设计及 SQL 待审核，原型待按当前范围调整。
 
-后续从[当前需求](requirements/requirements.md)、[数据库表结构](design/数据库表结构.md)及 [ADR-001](design/decisions/ADR-001-technology-stack.md)继续。工程骨架说明见[后端 README](../backend/README.md)与[前端 README](../frontend/README.md)。基础应用配置和数据库迁移已接通；下一次明确开展业务实现时，再补充相应权限、事务、并发及端到端验证；前端按具体功能建立页面及调用方。业务任务按验收边界拆分，每次完成一个闭环。
+后续从[当前需求](requirements/requirements.md)、[数据库表结构](design/数据库表结构.md)及 [ADR-001](design/decisions/ADR-001-technology-stack.md)继续。工程说明见[后端 README](../backend/README.md)与[前端 README](../frontend/README.md)。认证页面入口见 [T-002](development/tasks/T-002-frontend-auth.md)，公网收件按 [T-001](development/tasks/T-001-backend-auth.md)补齐邮件配置，并在页面验证 QQ/163 注册及找回；其他功能按明确任务补充权限、事务、并发及端到端验证。

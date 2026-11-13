@@ -16,7 +16,7 @@ public class Result<T> {
     /** 提示信息：用于向前端说明本次请求的处理结果。 */
     private String message;
 
-    /** 业务数据：成功时按需返回，失败时为 null。 */
+    /** 业务数据：成功时按需返回；校验失败可返回字段错误，其余失败通常为 null。 */
     private T data;
 
     /**
@@ -53,9 +53,15 @@ public class Result<T> {
      * @return 失败响应
      */
     public static <T> Result<T> error(Integer code, String message) {
+        return error(code, message, null);
+    }
+
+    /** 创建带安全错误详情的失败响应，不接收异常对象或原始请求值。 */
+    public static <T> Result<T> error(Integer code, String message, T data) {
         Result<T> result = new Result<>();
         result.code = code;
         result.message = message;
+        result.data = data;
         return result;
     }
 }

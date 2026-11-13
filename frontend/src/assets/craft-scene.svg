@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 390" fill="none">
+  <!-- 原创手作静物插画：沿用原型的皮革、陶艺与自然材料色彩。 -->
+  <defs>
+    <pattern id="grain" width="15" height="17" patternUnits="userSpaceOnUse"><circle cx="3" cy="4" r=".65" fill="#73553b" opacity=".15"/><circle cx="11" cy="12" r=".5" fill="#73553b" opacity=".12"/></pattern>
+    <pattern id="weave" width="9" height="9" patternUnits="userSpaceOnUse"><path d="M0 2h9M2 0v9" stroke="#b7996c" stroke-width="1" opacity=".5"/></pattern>
+  </defs>
+  <path d="M188 290V157a139 139 0 0 1 278 0v133" fill="#dadfcd"/>
+  <path d="M210 290V157a117 117 0 0 1 234 0v133" stroke="#bec8b2"/>
+  <circle cx="519" cy="84" r="35" fill="#eee6d6"/>
+  <path d="M32 314h598" stroke="#bac4af"/>
+  <path d="M68 315h481v18H68z" fill="#d7c4a4"/>
+  <path d="M88 333h434v47H88z" fill="#dfd0b7"/>
+  <path d="M88 333h434v47H88z" fill="url(#grain)"/>
+  <ellipse cx="315" cy="302" rx="156" ry="15" fill="#304c3d" opacity=".09"/>
+  <path d="M211 131q99-15 196 0l29 163q-115 24-252 0z" fill="#9f623a"/>
+  <path d="M222 137q89-12 175 0l24 148q-105 21-222 0z" fill="#b57b4c"/>
+  <path d="M222 137q89-12 175 0l24 148q-105 21-222 0z" fill="url(#grain)"/>
+  <path d="M227 145q83-13 163 0l23 133q-100 20-205 0z" stroke="#e3be87" stroke-width="2" stroke-dasharray="4 5"/>
+  <path d="M247 150V90c0-73 52-73 52 0v60M333 150V90c0-73 52-73 52 0v60" stroke="#6f452e" stroke-width="13"/>
+  <path d="M247 150V90c0-73 52-73 52 0v60M333 150V90c0-73 52-73 52 0v60" stroke="#b9804f" stroke-width="7"/>
+  <path d="M283 178h61v65q-30 12-61 0z" fill="#a46a40" stroke="#8f5834"/>
+  <path d="M289 184h49v55q-25 10-49 0z" stroke="#dfb17c" stroke-dasharray="3 4"/>
+  <rect x="296" y="260" width="33" height="12" rx="2" fill="#81512f"/>
+  <path d="M306 266h13" stroke="#d8b07a"/>
+  <circle cx="247" cy="151" r="3" fill="#d9ba7d"/><circle cx="385" cy="151" r="3" fill="#d9ba7d"/>
+  <ellipse cx="464" cy="322" rx="66" ry="10" fill="#304c3d" opacity=".1"/>
+  <ellipse cx="460" cy="314" rx="55" ry="9" fill="#b0c2ae"/>
+  <path d="M491 243c55-9 58 65 0 51" stroke="#648774" stroke-width="13"/>
+  <path d="M414 237h83l-7 68q-35 16-69 0z" fill="#86a38f"/>
+  <path d="M421 246l6 54" stroke="#b6c9b9" stroke-width="3"/>
+  <ellipse cx="455.5" cy="237" rx="41.5" ry="11" fill="#b7c9b7"/>
+  <ellipse cx="455.5" cy="237" rx="34" ry="7" fill="#54725f"/>
+  <path d="M446 207c-11-14 9-18-1-32M465 209c-11-14 9-18-1-32" stroke="#fffdf6" stroke-width="3" stroke-linecap="round" opacity=".8"/>
+  <path d="M117 311V207h44v104" fill="#b99464"/>
+  <path d="M117 311V207h44v104" fill="url(#weave)"/>
+  <ellipse cx="139" cy="207" rx="22" ry="7" fill="#d4bb92"/>
+  <path d="M141 207c-2-41 8-82 13-103M137 207c-16-39-23-70-24-94" stroke="#7b8c66" stroke-width="2"/>
+  <path d="M151 124c-18-4-19-20-16-25 14 2 17 15 16 25M148 149c17-4 22-16 18-24-15 2-18 14-18 24M139 175c-19 0-25-16-23-22 15 1 23 14 23 22M123 151c-16-3-21-16-17-22 14 1 17 12 17 22M114 123c13-3 20-16 16-23-12 2-17 12-16 23" fill="#8c9c78"/>
+  <path d="M505 348h57l-7 21h-58z" fill="#c4aa7b"/>
+  <path d="M505 348h57l-7 21h-58z" fill="url(#weave)"/>
+  <path d="M559 358c19 3 23-17 36-16" stroke="#a99068" stroke-width="2"/>
+  <path d="M75 292l6-3M562 161l7-4M553 156l-1-8M567 171l9 1" stroke="#b4beaa" stroke-width="2" stroke-linecap="round"/>
+</svg>
