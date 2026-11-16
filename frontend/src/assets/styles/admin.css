@@ -1,0 +1,87 @@
+/* 后台独立于前台：固定菜单、紧凑工具栏和保留上下文的审核双栏。 */
+.admin-page { min-height: 100svh; background: #f5f5ef; }
+.admin-page .admin-sidebar { position: fixed; inset: 0 auto 0 0; width: 208px; z-index: 30; display: flex; flex-direction: column; padding: 28px 16px 20px; background: #fcfdf8; color: var(--green); border-right: 1px solid #e2e6da; overflow-y: auto; }
+.admin-brand { display: flex; align-items: center; gap: 12px; padding: 0 8px 30px; white-space: nowrap; }
+.admin-brand strong { font-size: 19px; font-weight: 600; }
+.admin-brand-seal { display: grid; place-items: center; width: 36px; height: 38px; border-radius: 9px 9px 3px 9px; background: var(--green); color: #f5edce; font: 25px var(--serif); }
+.admin-page .admin-sidebar nav { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 12px 0; }
+.admin-page .admin-sidebar nav a { display: flex; align-items: center; gap: 13px; color: #7c8b72; padding: 15px 17px; font-size: 14px; border-radius: 6px; }
+.admin-page .admin-sidebar nav a.active { color: var(--green); background: #e9f0de; font-weight: 600; }
+.admin-page .admin-sidebar nav a:hover { background: #f0f4e9; }
+.admin-sidebar-bottom { display: grid; gap: 16px; margin-top: auto; padding: 28px 14px 0; font-size: 12px; }
+.admin-sidebar-bottom a, .admin-sidebar-bottom button { display: flex; align-items: center; gap: 12px; color: #7c8b72; }
+.admin-sidebar-bottom button { border: 0; padding: 0; background: none; text-align: left; font: inherit; }
+.admin-main { margin-left: 208px; min-width: 0; }
+.admin-topbar { min-height: 70px; padding: 16px 30px; border-bottom: 1px solid #e4e7dc; background: var(--paper); display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.admin-topbar nav { display: flex; gap: 14px; font-size: 12px; color: #8d9983; }
+.admin-user-tools, .admin-user { display: flex; align-items: center; gap: 18px; font-size: 12px; }
+.admin-user-tools .identity-label { border: 0; background: none; padding: 0; color: #819073; }
+.admin-user > span { display: grid; place-items: center; background: #e6ecdd; width: 32px; height: 32px; border-radius: 50%; font: 17px var(--serif); }
+.admin-page .admin-content { padding: 28px 30px 40px; }
+.admin-page .admin-heading { display: flex; align-items: center; justify-content: space-between; border: 0; padding: 0; margin: 0 0 26px; }
+.admin-page .admin-heading h1 { margin: 0; font: 600 27px 'Microsoft YaHei', sans-serif; letter-spacing: 0; }
+.admin-review-grid { display: grid; grid-template-columns: minmax(340px, .95fr) minmax(0, 1.05fr); gap: 20px; align-items: start; }
+.review-queue, .review-detail { min-width: 0; background: var(--paper); border: 1px solid #e0e5d8; border-radius: 8px; padding: 22px; }
+.review-queue { position: sticky; top: 20px; }
+.review-queue-heading { display: flex; justify-content: space-between; align-items: center; padding-bottom: 18px; border-bottom: 1px solid #e7eadf; margin-bottom: 18px; gap: 14px; }
+.review-queue-heading h2, .review-detail-heading h2 { font-size: 17px; margin: 0; }
+.review-queue-heading span { font-size: 12px; color: #8c9781; }
+.review-queue .category-tabs { gap: 18px; }
+.review-queue .category-tabs button { font-size: 12px; padding: 10px 0; }
+.review-queue .queue-toolbar { gap: 12px; margin: 0 0 18px; }
+.review-queue .queue-toolbar .work-field { flex: 1; min-width: 120px; }
+.review-queue .queue-toolbar input { width: 100%; }
+.review-queue .queue-toolbar label { gap: 8px; font-size: 12px; }
+.review-queue .managed-work-list { border: 0; }
+.review-queue .managed-work-row { padding: 17px 10px; gap: 12px; border-bottom-color: #eceee4; border-left: 3px solid transparent; }
+.review-queue .managed-work-row.selected { background: #eff4e6; border-left-color: #78905a; }
+.review-queue .managed-work-row > .work-image, .review-queue .managed-work-empty-image { width: 52px; height: 56px; }
+.review-queue .managed-work-copy { min-width: 0; }
+.review-queue .managed-work-copy h3 { font-family: inherit; font-size: 13px; line-height: 1.65; margin: 4px 0; }
+.review-queue .managed-work-copy p { font-size: 11px; line-height: 1.7; }
+.review-queue .managed-work-row > a { font-size: 11px; flex-shrink: 0; white-space: nowrap; }
+.review-queue .work-status { font-size: 10px; padding: 3px 6px; }
+.review-queue .review-table { font-size: 11px; }
+.review-queue .review-table th, .review-queue .review-table td { padding: 13px 8px; }
+.review-table tr.selected td { background: #eff4e6; }
+.review-detail-heading { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 20px; }
+.review-detail-heading a { font-size: 12px; color: #819273; }
+.review-placeholder { min-height: 470px; display: grid; align-content: center; justify-items: center; gap: 16px; color: #8d9980; }
+.review-placeholder .app-icon { width: 40px; height: 40px; color: #afbc9d; }
+.review-placeholder h2 { font-size: 17px; font-weight: 400; }
+.review-detail .work-detail-grid { grid-template-columns: 1fr; gap: 16px; }
+.review-detail .work-gallery > .work-image { aspect-ratio: 16/9; }
+.review-detail .work-detail-info { padding: 0; }
+.review-detail .work-detail-info h1 { font: 600 21px 'Microsoft YaHei', sans-serif; margin: 8px 0 16px; }
+.review-detail .work-detail-lead, .review-detail .work-prose .eyebrow, .review-detail .work-history .eyebrow { display: none; }
+.review-detail .work-specifications { margin: 16px 0; padding-top: 12px; }
+.review-detail .trade-summary { padding: 17px; }
+.review-detail .trade-summary h2 { font-size: 15px; margin-bottom: 12px; }
+.review-detail .work-creator-link { margin-top: 15px; padding: 14px 0; }
+.review-detail .work-prose { margin: 16px 0 0; }
+.review-detail .work-prose section { padding: 18px 0; }
+.review-detail .work-prose h2 { font-family: inherit; font-size: 16px; margin: 0 0 12px; }
+.review-detail .work-prose section > p { font-size: 13px; }
+.review-detail .admin-work-meta { margin-bottom: 18px; gap: 12px; }
+.review-detail .work-review-panel, .review-detail .review-editor { margin-top: 20px; padding: 20px; }
+.review-detail .work-review-panel h2 { font-family: inherit; font-size: 16px; margin: 0 0 16px; }
+.review-detail .work-history { margin-top: 25px; padding-top: 20px; }
+.review-detail .work-history h2 { font-family: inherit; font-size: 17px; }
+.review-detail .review-actions { gap: 10px; flex-wrap: wrap; }
+.review-detail .review-actions button { min-height: 40px; font-size: 12px; padding-inline: 15px; }
+.review-detail .material-fields > div { grid-template-columns: 88px minmax(0, 1fr); }
+.review-detail .work-thumbnails { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+/* 材料可独立浏览，审核意见与操作保持在紧邻的位置。 */
+@media (min-width: 901px) {
+  .review-detail .work-detail-grid { grid-template-columns: minmax(110px, .65fr) minmax(0, 1fr); gap: 16px; }
+  .review-detail .work-gallery > .work-image { aspect-ratio: 4/3; }
+  .review-detail .work-specifications > div { gap: 10px; font-size: 12px; }
+  .review-detail .work-specifications dt { width: 55px; }
+  .review-material-scroll { max-height: clamp(200px, calc(100svh - 550px), 420px); overflow: auto; scrollbar-gutter: stable; padding-right: 10px; }
+  .review-queue .managed-work-list, .review-queue .review-table-wrap { max-height: calc(100svh - 350px); overflow: auto; }
+}
+.review-material-scroll:focus-visible { outline: 2px solid var(--green); outline-offset: 4px; }
+@media (min-width: 1700px) { .admin-review-grid { grid-template-columns: minmax(420px, 1fr) minmax(0, 1fr); } .admin-page .admin-content { max-width: 1780px; margin-inline: auto; } }
+@media (max-width: 1150px) { .admin-page .admin-sidebar { width: 176px; padding-inline: 12px; } .admin-brand { gap: 8px; padding-inline: 0; } .admin-brand strong { font-size: 17px; } .admin-main { margin-left: 176px; } .admin-page .admin-content { padding: 24px 20px; } .admin-review-grid { grid-template-columns: minmax(280px, .9fr) minmax(0, 1.1fr); gap: 14px; } .review-queue, .review-detail { padding: 16px; } .review-queue .managed-work-row { flex-wrap: wrap; } .review-queue .managed-work-row > a { margin-left: auto; } }
+@media (max-width: 900px) { .admin-review-grid { grid-template-columns: 1fr; } .review-queue { position: static; } .admin-review-grid.has-selection .review-queue { display: none; } .review-placeholder { min-height: 230px; } .review-detail .work-gallery > .work-image { max-height: 360px; } }
+@media (max-width: 600px) { .admin-page .admin-sidebar { width: 64px; padding: 20px 8px; } .admin-brand { justify-content: center; } .admin-brand strong { display: none; } .admin-page .admin-sidebar nav a { flex-direction: column; gap: 8px; padding: 14px 2px; font-size: 10px; } .admin-sidebar-bottom { padding: 20px 0 0; } .admin-sidebar-bottom a, .admin-sidebar-bottom button { flex-direction: column; gap: 8px; font-size: 10px; text-align: center; line-height: 1.8; } .admin-main { margin-left: 64px; } .admin-topbar { padding: 14px 12px; min-height: 64px; } .admin-topbar nav { gap: 8px; font-size: 10px; } .admin-user-tools { gap: 10px; } .admin-user-tools .identity-label, .admin-user { display: none; } .admin-page .admin-content { padding: 22px 12px; } .admin-page .admin-heading h1 { font-size: 22px; } .review-detail, .review-queue { padding: 14px; } .review-detail .material-fields > div { grid-template-columns: 65px minmax(0, 1fr); } .review-detail .review-actions button { width: 100%; } .review-queue .review-table th:nth-child(2), .review-queue .review-table td:nth-child(2) { display: none; } }

@@ -7,6 +7,7 @@ const router = createRouter({
   routes: [
     {
       path: '/',
+      alias: '/discover',
       name: 'home',
       component: () => import('@/views/HomeView.vue'),
       meta: { requiresAuth: true, title: '发现手作' },
@@ -15,17 +16,25 @@ const router = createRouter({
     { path: '/creators/:id', component: () => import('@/views/CreatorPublicView.vue'), meta: { requiresAuth: true, title: '创作者主页' } },
     { path: '/requests', component: () => import('@/views/CustomRequestsView.vue'), props: { scope: 'hall' }, meta: { requiresAuth: true, requiresCreator: true, title: '需求大厅' } },
     { path: '/requests/:id', component: () => import('@/views/CustomRequestDetailView.vue'), meta: { requiresAuth: true, title: '需求详情' } },
-    { path: '/account/requests', component: () => import('@/views/CustomRequestsView.vue'), props: { scope: 'mine' }, meta: { requiresAuth: true, title: '我的需求' } },
-    { path: '/account/requests/new', component: () => import('@/views/CustomRequestEditorView.vue'), meta: { requiresAuth: true, title: '发布定制需求' } },
-    { path: '/account/requests/:id/edit', component: () => import('@/views/CustomRequestEditorView.vue'), meta: { requiresAuth: true, title: '编辑需求草稿' } },
+    { path: '/my-requests', component: () => import('@/views/CustomRequestsView.vue'), props: { scope: 'mine' }, meta: { requiresAuth: true, title: '我的需求' } },
+    { path: '/my-requests/new', component: () => import('@/views/CustomRequestEditorView.vue'), meta: { requiresAuth: true, title: '发布定制需求' } },
+    { path: '/my-requests/:id/edit', component: () => import('@/views/CustomRequestEditorView.vue'), meta: { requiresAuth: true, title: '编辑需求草稿' } },
     { path: '/creator/invitations', component: () => import('@/views/CustomRequestsView.vue'), props: { scope: 'invitations' }, meta: { requiresAuth: true, requiresCreator: true, title: '收到的定向邀约' } },
-    { path: '/account/conversations', component: () => import('@/views/ConversationsView.vue'), meta: { requiresAuth: true, title: '需求沟通' } },
-    { path: '/account/conversations/:id', component: () => import('@/views/ConversationDetailView.vue'), meta: { requiresAuth: true, title: '需求沟通' } },
+    { path: '/messages', redirect: '/messages/conversations' },
+    { path: '/messages/conversations', component: () => import('@/views/ConversationsView.vue'), meta: { requiresAuth: true, title: '消息中心' }, children: [
+      { path: ':id', component: () => import('@/views/ConversationDetailView.vue'), meta: { title: '需求沟通' } },
+    ] },
+    // 旧需求、会话和通知链接继续可用，完整保留筛选参数与页面锚点。
+    { path: '/account/requests/:rest(.*)*', redirect: to => ({ path: to.path.replace('/account/requests', '/my-requests'), query: to.query, hash: to.hash }) },
+    { path: '/account/conversations/:rest(.*)*', redirect: to => ({ path: to.path.replace('/account/conversations', '/messages/conversations'), query: to.query, hash: to.hash }) },
+    { path: '/account/notifications', redirect: to => ({ path: '/messages/notifications', query: to.query, hash: to.hash }) },
     { path: '/creator/works', component: () => import('@/views/MyWorksView.vue'), meta: { requiresAuth: true, requiresCreator: true, title: '我的作品' } },
     { path: '/creator/works/new', component: () => import('@/views/WorkEditorView.vue'), meta: { requiresAuth: true, requiresCreator: true, title: '发布作品' } },
     { path: '/creator/works/:id/edit', component: () => import('@/views/WorkEditorView.vue'), meta: { requiresAuth: true, requiresCreator: true, title: '编辑作品' } },
-    { path: '/admin/works', component: () => import('@/views/AdminWorksView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: '作品审核' } },
-    { path: '/admin/works/:id', component: () => import('@/views/AdminWorkReviewView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: '作品材料审核' } },
+    { path: '/admin', redirect: '/admin/works' },
+    { path: '/admin/works', component: () => import('@/views/AdminWorksView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: '作品审核' }, children: [
+      { path: ':id', component: () => import('@/views/AdminWorkReviewView.vue'), meta: { title: '作品材料审核' } },
+    ] },
     {
       path: '/account/profile',
       name: 'profile',
@@ -45,7 +54,7 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '创作者入驻' },
     },
     {
-      path: '/account/notifications',
+      path: '/messages/notifications',
       name: 'notifications',
       component: () => import('@/views/NotificationsView.vue'),
       meta: { requiresAuth: true, title: '系统通知' },
@@ -55,12 +64,7 @@ const router = createRouter({
       name: 'admin-creator-applications',
       component: () => import('@/views/AdminCreatorApplicationsView.vue'),
       meta: { requiresAuth: true, requiresAdmin: true, title: '入驻审核' },
-    },
-    {
-      path: '/admin/creator-applications/:id',
-      name: 'admin-creator-review',
-      component: () => import('@/views/AdminCreatorReviewView.vue'),
-      meta: { requiresAuth: true, requiresAdmin: true, title: '入驻材料审核' },
+      children: [{ path: ':id', name: 'admin-creator-review', component: () => import('@/views/AdminCreatorReviewView.vue'), meta: { title: '入驻材料审核' } }],
     },
     {
       path: '/admin/categories',
@@ -103,6 +107,8 @@ router.beforeEach(async (to) => {
   }
   if (to.meta.requiresAuth && !auth.session)
     return { path: '/login', query: { redirect: to.fullPath } }
+  // 管理员默认进入工作后台，显式访问 /discover 时仍可查看前台作品。
+  if (to.path === '/' && auth.session?.roles.includes('ADMIN')) return { path: '/admin/works' }
   if (to.meta.requiresAdmin && !auth.session?.roles.includes('ADMIN')) return '/'
   if (to.meta.requiresCreator && !auth.session?.roles.includes('CREATOR')) return '/account/creator-certification'
   if (to.meta.guestOnly && auth.session) {

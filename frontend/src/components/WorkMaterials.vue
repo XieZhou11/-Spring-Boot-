@@ -83,7 +83,7 @@ onBeforeUnmount(() => { avatarRevision++; clearTimeout(avatarTimer) })
       </section><RouterLink
         v-if="work.customizable && work.creatorId !== auth.session?.userId && !auth.session?.roles.includes('ADMIN')"
         class="button-primary"
-        :to="{ path: '/account/requests/new', query: { sourceWorkId: work.id } }"
+        :to="{ path: '/my-requests/new', query: { sourceWorkId: work.id } }"
       >发起同类定制 ↗</RouterLink><RouterLink
         :to="`/creators/${work.creatorId}`"
         class="work-creator-link"

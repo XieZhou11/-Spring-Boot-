@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import BrandLogo from './BrandLogo.vue'
 import SessionTools from './SessionTools.vue'
+import AppIcon from './AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
+import '@/assets/styles/navigation.css'
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 const keyword = ref('')
 const leaving = ref(false)
 const error = ref('')
@@ -23,10 +26,38 @@ async function signOut() {
 <template>
   <header class="site-header business-header">
     <BrandLogo />
+    <nav
+      class="primary-navigation"
+      aria-label="主导航"
+    >
+      <RouterLink
+        :to="auth.session?.roles.includes('ADMIN') ? '/discover' : '/'"
+        :class="{ active: route.path === '/' || route.path === '/discover' || route.path.startsWith('/works/') || route.path.startsWith('/creators/') }"
+      >发现作品</RouterLink>
+      <RouterLink
+        v-if="!auth.session?.roles.includes('ADMIN')"
+        to="/my-requests"
+        active-class="active"
+      >我的需求</RouterLink>
+      <RouterLink
+        v-if="auth.session?.roles.includes('CREATOR') && !auth.session.roles.includes('ADMIN')"
+        to="/requests"
+        :class="{ active: route.path === '/requests' }"
+      >需求大厅</RouterLink>
+      <RouterLink
+        v-if="auth.session?.roles.includes('CREATOR') && !auth.session.roles.includes('ADMIN')"
+        to="/creator/works"
+        :class="{ active: route.path.startsWith('/creator/') }"
+      >创作者工作台</RouterLink>
+      <RouterLink
+        v-if="auth.session?.roles.includes('ADMIN')"
+        to="/admin/works"
+      >管理后台</RouterLink>
+    </nav>
     <form
       class="header-search"
       role="search"
-      @submit.prevent="router.push({ path: '/', query: keyword.trim() ? { keyword: keyword.trim() } : {} })"
+      @submit.prevent="router.push({ path: auth.session?.roles.includes('ADMIN') ? '/discover' : '/', query: keyword.trim() ? { keyword: keyword.trim() } : {} })"
     >
       <input
         v-model="keyword"
@@ -38,7 +69,7 @@ async function signOut() {
         type="submit"
         aria-label="搜索"
       >
-        ⌕
+        <AppIcon name="search" />
       </button>
     </form>
     <div class="header-account">
@@ -46,7 +77,10 @@ async function signOut() {
       <RouterLink
         to="/account/profile"
         class="current-account"
-      >{{ auth.session?.nickname }} · 个人中心</RouterLink>
+      ><span
+        class="account-initial"
+        aria-hidden="true"
+      >{{ auth.session?.nickname?.slice(0, 1) }}</span><span>{{ auth.session?.nickname }} · 个人中心</span></RouterLink>
       <button
         class="inline-button"
         :disabled="leaving"

@@ -56,7 +56,7 @@ async function submitMaterials(page: Page) {
 }
 
 test('入驻、通知及后台路由未登录保留目标地址', async ({ page }) => {
-  for (const path of ['/account/creator-certification', '/account/notifications', '/admin/creator-applications', '/admin/categories']) {
+  for (const path of ['/account/creator-certification', '/messages/notifications', '/admin/creator-applications', '/admin/categories']) {
     await page.goto(path)
     await expect(page).toHaveURL(/\/login\?redirect=/)
     expect(new URL(page.url()).searchParams.get('redirect')).toBe(path)
@@ -166,7 +166,7 @@ test('入驻撤回重提、管理员驳回补正通过、实时通知及会话�
     await expect(page.getByRole('button', { name: '切换为创作者', exact: true })).toBeVisible()
     expect(await page.evaluate(() => [Object.keys(localStorage), Object.keys(sessionStorage)])).toEqual([[], []])
 
-    await page.goto('/account/notifications')
+    await page.goto('/messages/notifications')
     await expect(page.getByRole('article')).toHaveCount(2)
     await expect(page.getByRole('button', { name: '标为已读', exact: true })).toHaveCount(2)
     await page.getByRole('button', { name: '标为已读', exact: true }).first().click()
@@ -229,7 +229,7 @@ test('管理员维护两级品类、保留层级并使停用父品类退出新�
 test('通知空状态与入驻页面在 PC 上无横向溢出', async ({ page, mailbox }, testInfo) => {
   await createApplicant(page, mailbox.codes)
   await page.setViewportSize({ width: 1366, height: 1000 })
-  for (const path of ['/account/creator-certification', '/account/notifications']) {
+  for (const path of ['/account/creator-certification', '/messages/notifications']) {
     await page.goto(path)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await expect(page.getByText(/正在读取入驻资料…|正在读取通知…/)).toHaveCount(0)

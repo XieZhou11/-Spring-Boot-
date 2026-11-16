@@ -43,3 +43,45 @@
 .chat-compose textarea { min-height:100px; }
 .chat-compose .request-images { max-width:460px; }
 @media(max-width:720px) { .request-detail-grid { grid-template-columns:1fr; } .request-card { padding:20px; } .request-card footer { align-items:flex-start; flex-direction:column; } .request-filters { padding:15px; } .request-filters input, .request-filters select { max-width:100%; } .chat-transcript { padding:12px; } .chat-message { max-width:93%; } .conversation-row { flex-wrap:wrap; } .message-center-tabs { gap:12px; flex-wrap:wrap; } }
+
+/* 消息中心用稳定的会话列表承接选择，当前沟通始终留在同一工作区。 */
+.message-page-heading { margin: 8px 0 24px; }
+.message-page-heading h1 { font: 500 30px var(--serif); }
+.message-center-tabs { padding: 0; margin-bottom: 24px; gap: 30px; }
+.message-center-tabs a { padding: 0 2px 15px; border-bottom: 2px solid transparent; font-size: 14px; color: #87917c; }
+.message-center-tabs a.router-link-active { border-bottom-color: var(--green); }
+.message-workspace { display: grid; grid-template-columns: 285px minmax(0, 1fr); border: 1px solid #dde3d2; border-radius: 8px; background: var(--paper); overflow: hidden; min-height: 620px; }
+.conversation-list { border-right: 1px solid #e2e7d8; min-width: 0; }
+.conversation-list-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 23px 20px; border-bottom: 1px solid #e8ecdf; }
+.conversation-list-heading h2 { font-size: 15px; }
+.conversation-list .conversation-row { display: flex; justify-content: flex-start; gap: 13px; padding: 22px 18px; border-left: 3px solid transparent; }
+.conversation-list .conversation-row.selected { background: #edf3e2; border-left-color: #7c975e; }
+.conversation-list .conversation-row:hover { background: #f3f6ec; }
+.conversation-avatar { flex: 0 0 36px; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: #e5ebdb; color: #6b805b; font: 20px var(--serif); }
+.conversation-copy { min-width: 0; }
+.conversation-copy h2 { font-size: 14px; margin: 0 0 8px; }
+.conversation-copy p { font-size: 12px; color: #849274; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-copy small { display: block; color: #98a28b; font-size: 10px; margin-top: 10px; }
+.conversation-copy time { display: block; font-size: 10px; margin-top: 8px; }
+.conversation-list .pagination { gap: 8px; padding: 0 12px 16px; }
+.conversation-empty { display: grid; gap: 18px; justify-items: center; padding: 60px 16px; font-size: 13px; color: #8d9981; }
+.message-offline { display: flex; align-items: center; justify-content: space-between; padding: 15px; font-size: 12px; color: #a47852; background: #f4eee1; }
+.conversation-detail { min-width: 0; }
+.message-placeholder { height: 100%; min-height: 400px; display: grid; justify-items: center; align-content: center; gap: 20px; color: #a0ad91; }
+.message-placeholder .app-icon { width: 44px; height: 44px; }
+.message-placeholder h2 { font: 400 18px var(--serif); }
+.conversation-current { padding: 24px; }
+.conversation-current > .work-section-heading { margin-bottom: 18px; }
+.conversation-current > .work-section-heading h1 { font-family: inherit; font-size: 20px; margin: 0 0 10px; }
+.conversation-current > .work-section-heading a { font-size: 12px; color: #8a9979; }
+.conversation-current > .queue-toolbar { margin-bottom: 16px; }
+.conversation-current .chat-panel { max-width: none; }
+.conversation-current .chat-transcript { height: 42vh; min-height: 280px; background: #f7f8f0; border-radius: 5px 5px 0 0; }
+.conversation-current .chat-message { font-size: 13px; }
+.conversation-current .chat-compose { padding: 20px; }
+.conversation-current .chat-compose .request-actions { margin-bottom: 0; }
+.conversation-current .chat-compose .request-actions .field-help { width: auto; margin-right: auto; }
+.conversation-current .chat-compose .request-actions button { padding-inline: 24px; }
+.conversation-back { display: none; margin-bottom: 24px; font-size: 12px; }
+@media(max-width:1000px) { .message-workspace { grid-template-columns: 240px minmax(0, 1fr); } .conversation-current { padding: 20px; } }
+@media(max-width:720px) { .message-workspace { grid-template-columns: minmax(0, 1fr); min-height: 400px; } .message-workspace.has-selection .conversation-list, .message-workspace:not(.has-selection) .conversation-detail { display: none; } .conversation-list { border-right: 0; } .conversation-current { padding: 18px; } .conversation-back { display: block; } .conversation-current .chat-compose { padding: 14px; } .conversation-copy p { white-space: normal; overflow-wrap: anywhere; } .conversation-current .chat-message { max-width: 100%; } }

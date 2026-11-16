@@ -99,7 +99,7 @@ async function persist(publication: boolean) {
     current.value = publication ? await publishRequest(existing.id, requestContent(form), existing.version) : await saveRequest(existing.id, requestContent(form), existing.version)
     Object.assign(form, requestContent(current.value)); baseline.value = JSON.stringify(form)
     notice.value = publication ? '需求已发布' : '草稿已保存'
-    await router.replace(publication ? `/requests/${current.value.id}` : `/account/requests/${current.value.id}/edit`)
+    await router.replace(publication ? `/requests/${current.value.id}` : `/my-requests/${current.value.id}/edit`)
   } catch (failure) {
     // 明确拒绝且尚未创建时，修正后的内容必须成为新的创建请求。
     if (!current.value && failure instanceof ApiError && [400, 403, 404, 422].includes(failure.status)) { creation = undefined; requestKey = crypto.randomUUID() }
@@ -123,7 +123,7 @@ async function reconcile() {
 function beforeUnload(event: BeforeUnloadEvent) { if (auth.session && (dirty.value || uploading.value || busy.value)) { event.preventDefault(); event.returnValue = '' } }
 onBeforeRouteLeave(to => {
   if (!auth.session) return true
-  if (current.value && (to.path === `/requests/${current.value.id}` || to.path === `/account/requests/${current.value.id}/edit`) && !dirty.value) return true
+  if (current.value && (to.path === `/requests/${current.value.id}` || to.path === `/my-requests/${current.value.id}/edit`) && !dirty.value) return true
   if (busy.value || uploading.value) return false
   return !dirty.value || window.confirm('还有未保存的修改，确定离开？')
 })
@@ -145,7 +145,7 @@ onBeforeUnmount(() => { disposed = true; candidateRevision++; window.removeEvent
 <template>
   <WorkLayout>
     <nav class="work-breadcrumb">
-      <RouterLink to="/account/requests">我的需求</RouterLink><span>/</span><span>{{ current ? '编辑草稿' : '发布定制需求' }}</span>
+      <RouterLink to="/my-requests">我的需求</RouterLink><span>/</span><span>{{ current ? '编辑草稿' : '发布定制需求' }}</span>
     </nav>
     <header class="work-section-heading">
       <div>

@@ -18,7 +18,8 @@
 | 数据库详细设计 | V1.5 设计草稿；27 表 Flyway SQL 已在本地执行，迁移及失败补偿在 MySQL 8.4 验证 | [数据库表结构](design/数据库表结构.md)，含字段、索引、应用关联与事务回滚 |
 | 架构、领域与 UI 详细设计 | 尚未编写 | [设计约定](design/README.md)，在相关任务中逐步形成 |
 | 前后端工程 | 已有账号、个人中心、创作者入驻与后台审核、两级品类、身份切换、系统通知、作品链路及定制需求/图文会话；真实 OSS 云端联调已通过，QQ/163 公网收件及找回密码补充验收用户明确暂缓；报价、订单及互动待后续实现 | [后端说明](../backend/README.md)、[前端说明](../frontend/README.md)、[T-002](development/tasks/T-002-frontend-auth.md)、[T-003](development/tasks/T-003-personal-center.md)、[T-004](development/tasks/T-004-creator-onboarding.md)、[T-005](development/tasks/T-005-work-publication.md)、[T-007](development/tasks/T-007-custom-requests.md) |
-| 业务接口、自动化测试与 CI | 已交付业务用真实 MySQL、HTTP、WebSocket 及协议接收器验证，真实 OSS 单独验证；最终后端verify 148项、0失败/错误、3项云端开关跳过，本任务真实OSS另行2项通过；Playwright回归32/32通过，前端类型/lint/构建通过；后端测试源码仅本地保留且被Git忽略；无CI文件，未执行远端CI | [账号后端测试](testing/T-001-backend-auth.md)、[认证联调测试](testing/T-002-frontend-auth.md)、[个人中心测试](testing/T-003-personal-center.md)、[入驻审核测试](testing/T-004-creator-onboarding.md)、[作品链路测试](testing/T-005-work-publication.md)、[需求会话测试](testing/T-007-custom-requests.md) |
+| 前后台导航与工作区 | T-008 已完成独立后台、审核双栏、前台一级导航、创作者工作台与消息双栏；需求和沟通移出个人中心，旧链接兼容跳转 | [T-008](development/tasks/T-008-navigation-layout.md)、[测试记录](testing/T-008-navigation-layout.md) |
+| 业务接口、自动化测试与 CI | 已交付业务用真实 MySQL、HTTP、WebSocket 及协议接收器验证，真实 OSS 单独验证；T-007 后端 verify 148 项、0失败/错误、3项云端开关跳过，真实 OSS 另行2项通过；T-008 最新 Playwright 36/36 通过，前端类型/lint/构建通过，本轮未重跑后端及云端专项；后端测试源码仅本地保留且被 Git 忽略；无 CI 文件，未执行远端 CI | [账号后端测试](testing/T-001-backend-auth.md)、[认证联调测试](testing/T-002-frontend-auth.md)、[个人中心测试](testing/T-003-personal-center.md)、[入驻审核测试](testing/T-004-creator-onboarding.md)、[作品链路测试](testing/T-005-work-publication.md)、[需求会话测试](testing/T-007-custom-requests.md)、[导航交互测试](testing/T-008-navigation-layout.md) |
 
 用户已于 2026-11-12 指定 V1.5 MVP 版为后续需求与开发依据，`requirements.md` 已同步替换。正文保留“待审核”状态；采用为工作依据不等于宣称全部内容已经最终批准。遇到影响实现的歧义或冲突，记录具体问题并澄清，不拼接不同版本的规则。
 
@@ -41,6 +42,8 @@ T-005 已完成作品草稿、发布额度、版本冲突、审核历史、作�
 ## 2. 文档导航
 
 [T-007 定制需求与需求沟通](development/tasks/T-007-custom-requests.md)已完成前后端及实际验收：包含需求草稿/发布/关闭/复制、公开大厅、单人定向邀约、私有图片与图文会话，V4追加幂等/版本/删除/冷却字段。V1—V4已在隔离MySQL验证，本轮未主动迁移开发库，下次启动新版后端由Flyway追加尚未执行版本。大厅权限按用户确认补充到V1.5正文并同步中文副本，仍保留待审核。作品互动任务与代码当前未出现，不能声称已完成对应回归；报价、对比与定标建单为下一阶段，沿用现有需求及会话接口。
+
+[T-008 导航与工作区修复](development/tasks/T-008-navigation-layout.md)沿用现有接口：管理员默认进入固定左栏的后台，作品和入驻审核保留队列/详情上下文；普通用户从一级导航管理需求，从独立消息中心沟通，个人中心只保留资料、地址与入驻。当前页面路径以[前端说明](../frontend/README.md)为准，旧个人中心需求/消息路径兼容跳转。
 
 | 目录 | 放什么 | 入口 |
 | --- | --- | --- |
@@ -94,7 +97,8 @@ docs/
 │       ├── T-003-personal-center.md  # 个人资料、头像与收货地址
 │       ├── T-004-creator-onboarding.md # 创作者入驻、审核、品类与通知
 │       ├── T-005-work-publication.md # 作品发布、审核与浏览
-│       └── T-007-custom-requests.md # 定制需求、定向邀约与图文会话
+│       ├── T-007-custom-requests.md # 定制需求、定向邀约与图文会话
+│       └── T-008-navigation-layout.md # 前后台导航、审核与消息双栏修复
 └── testing/                          # 简短测试结果，不存测试代码、不建子目录
     ├── README.md                     # 业务功能测试记录方式与格式示例
     ├── T-001-backend-auth.md          # 账号后端测试与复测结果
@@ -102,7 +106,8 @@ docs/
     ├── T-003-personal-center.md       # 个人中心测试及本轮回归结果
     ├── T-004-creator-onboarding.md    # 入驻、审核与通知联调结果
     ├── T-005-work-publication.md       # 作品、审核、浏览及完整回归结果
-    └── T-007-custom-requests.md         # 需求、会话、真实OSS及完整回归结果
+    ├── T-007-custom-requests.md         # 需求、会话、真实OSS及完整回归结果
+    └── T-008-navigation-layout.md      # 导航与双栏交互修复及回归结果
 ```
 
 补充说明：
@@ -111,7 +116,7 @@ docs/
 - `prototypes/README.md` 是当前导航，`assets/原型说明.md` 是原始设计说明，两者职责接近；后续若精简，可以合并说明并减少一层目录，本轮未改写原始材料。
 - 原 `design/database.md` 已删除，现有 [数据库表结构](design/数据库表结构.md)为按当前需求编写的新草稿，对应 SQL 位于后端 `src/main/resources/db/migration/`，V1 已执行且包含异常结构补偿；人工结构回退位于相邻 `rollback/`，未执行。
 - `decisions/` 中的 ADR-001 记录已选技术；选型和框架验证不代表全部业务已经实现，SMTP 公网实收补充验收已由用户明确暂缓，OSS 实际结果见 T-003。
-- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端T-001、认证前端T-002、个人中心T-003、入驻审核T-004、作品链路T-005和定制需求/会话T-007，避让尚未出现在本工作区的互动T-006。
+- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端T-001、认证前端T-002、个人中心T-003、入驻审核T-004、作品链路T-005、定制需求/会话T-007及导航交互修复T-008，避让尚未出现在本工作区的互动T-006。
 - `testing/README.md` 只规定业务功能测试结果如何填写；功能开发时再增加实际记录，复测更新同一文件，任务只保留总体结果和链接。
 
 ## 3. 已有资料迁移对照

@@ -76,7 +76,7 @@ onBeforeUnmount(() => { revision++; clearTimeout(timer) })
       </section><RouterLink
         v-if="!creator.paused && creator.id !== auth.session?.userId && !auth.session?.roles.includes('ADMIN')"
         class="button-primary"
-        :to="{ path: '/account/requests/new', query: { creatorId: creator.id } }"
+        :to="{ path: '/my-requests/new', query: { creatorId: creator.id } }"
       >邀请定制 ↗</RouterLink><header class="work-section-heading">
         <h2>手作作品</h2><span class="muted">{{ total }} 件已上架作品</span>
       </header><div

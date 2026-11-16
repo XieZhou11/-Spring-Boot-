@@ -27,9 +27,9 @@ async function act(action: 'close' | 'copy' | 'chat' | 'delete') {
   const stillCurrent = () => expected === revision && requestId === String(route.params.id)
   try {
     if (action === 'close') { const result = await closeRequest(requestId, version); if (stillCurrent()) value.value = result }
-    if (action === 'copy') { const result = await copyRequest(requestId, copyKey); if (stillCurrent()) await router.push(`/account/requests/${result.id}/edit`) }
-    if (action === 'chat') { const result = await openConversation(requestId); if (stillCurrent()) await router.push(`/account/conversations/${result.id}`) }
-    if (action === 'delete') { await deleteRequest(requestId, version); if (stillCurrent()) await router.push('/account/requests') }
+    if (action === 'copy') { const result = await copyRequest(requestId, copyKey); if (stillCurrent()) await router.push(`/my-requests/${result.id}/edit`) }
+    if (action === 'chat') { const result = await openConversation(requestId); if (stillCurrent()) await router.push(`/messages/conversations/${result.id}`) }
+    if (action === 'delete') { await deleteRequest(requestId, version); if (stillCurrent()) await router.push('/my-requests') }
   } catch (failure) { if (stillCurrent()) error.value = `${failure instanceof Error ? failure.message : '操作失败'}。请刷新核对最新状态。` }
   finally { busy.value = false }
 }
@@ -41,7 +41,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('custom-request-u
 <template>
   <WorkLayout>
     <nav class="work-breadcrumb">
-      <RouterLink to="/account/requests">我的需求</RouterLink><span>/</span><span>需求详情</span>
+      <RouterLink to="/my-requests">我的需求</RouterLink><span>/</span><span>需求详情</span>
     </nav>
     <p
       v-if="error"
@@ -102,7 +102,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('custom-request-u
           </p><RouterLink
             v-if="value.canEdit"
             class="button-secondary"
-            :to="`/account/requests/${value.id}/edit`"
+            :to="`/my-requests/${value.id}/edit`"
           >继续编辑草稿</RouterLink><button
             v-if="value.canEdit"
             class="inline-button"
@@ -124,7 +124,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('custom-request-u
             {{ value.consultationReason }}
           </p><RouterLink
             v-if="value.owned"
-            to="/account/conversations"
+            to="/messages/conversations"
             class="inline-button"
           >查看已有沟通会话 ↗</RouterLink><button
             v-if="value.canClose"

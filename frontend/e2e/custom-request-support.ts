@@ -19,7 +19,7 @@ export async function register(page: Page, codes: Map<string, string>, nickname:
   expect((await mutate(page, '/sessions', { email, password: 'CraftTest123' })).status()).toBe(201)
   return email
 }
-export async function prepareCreator(page: Page, admin: Page, codes: Map<string, string>, promote: (email: string) => Promise<void>) {
+export async function prepareCreator(page: Page, admin: Page, codes: Map<string, string>, promote: (email: string) => Promise<void>, approve = true) {
   await promote(await register(admin, codes, '需求审核员'))
   const parent = await mutate(admin, '/admin/categories', { name: `器物${randomBytes(3).toString('hex')}`, enabled: true, sortOrder: 1 })
   expect(parent.status()).toBe(201)
@@ -37,8 +37,9 @@ export async function prepareCreator(page: Page, admin: Page, codes: Map<string,
   }
   const application = await mutate(page, '/me/creator-applications', { requestKey: randomUUID(), realName: '测试手艺', contactPhone: '13800138000', province: '北京市', city: '市辖区', district: '东城区', categoryIds: [parentId], experienceYears: 5, introduction: '专注于原创手作的创作者，从选材到设计和每一个制作工序都由本人独立完成，希望用传统工艺带来舒适温暖的日常。', originalWorks: [0, 1, 2].map(i => ({ finishedImageIds: [ids[i * 2]], processImageIds: [ids[i * 2 + 1]] })), alipayAccount: '13800138000', payeeName: '测试手艺', supportingDescription: '' })
   expect(application.status()).toBe(201)
-  expect((await mutate(admin, `/admin/creator-applications/${(await application.json()).data.id}/review`, { decision: 'APPROVED', reason: '' }, 'put')).status()).toBe(200)
-  return { categoryId }
+  const applicationId = (await application.json()).data.id as string
+  if (approve) expect((await mutate(admin, `/admin/creator-applications/${applicationId}/review`, { decision: 'APPROVED', reason: '' }, 'put')).status()).toBe(200)
+  return { categoryId, applicationId }
 }
 
 export async function fillRequest(page: Page, categoryId: string, title: string) {

@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import AdminLayout from '@/layouts/AdminLayout.vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import ApplicationMaterials from '@/components/ApplicationMaterials.vue'
 import AccountField from '@/components/AccountField.vue'
 import { getApplication, reviewApplication } from '@/api/creator'
 import type { ApplicationVO } from '@/types/creator'
 import { useAuthForm } from '@/composables/useAuthForm'
 import { ApiError } from '@/utils/request'
+import { useAuthStore } from '@/stores/auth'
 
+const emit = defineEmits<{ reviewed: [] }>()
 const route = useRoute()
+const auth = useAuthStore()
 const application = ref<ApplicationVO | null>(null)
 const previous = ref<ApplicationVO | null>(null)
 const loading = ref(true)
@@ -28,6 +30,7 @@ async function load() {
   loadError.value = ''
   comparisonError.value = ''
   previous.value = null
+  application.value = null
   try {
     const result = await getApplication(String(route.params.id), true)
     if (current !== revision) return
@@ -39,12 +42,12 @@ async function load() {
       }
       catch (failure) { if (current === revision) comparisonError.value = failure instanceof Error ? failure.message : '上次材料读取失败，请重新读取后审核' }
     }
-  } catch (failure) { loadError.value = failure instanceof Error ? failure.message : '申请读取失败' }
+  } catch (failure) { if (current === revision) loadError.value = failure instanceof Error ? failure.message : '申请读取失败' }
   finally { if (current === revision) loading.value = false }
 }
 
 async function prepareReview(value: 'APPROVED' | 'REJECTED') {
-  if (submitting.value) return
+  if (submitting.value || loading.value || !application.value) return
   if (!(await validate({ reason: value === 'REJECTED' && !reason.value.trim() ? '驳回时请说明具体原因及需补正的材料' : '' }))) return
   decision.value = value
   confirmation.value?.showModal()
@@ -58,6 +61,7 @@ async function review() {
   try {
     application.value = await reviewApplication(application.value.id, decision.value, reason.value.trim())
     confirmation.value?.close()
+    reason.value = ''
     notice.value = '审核结论已保存，系统通知已生成。'
   } catch (failure) {
     showError(failure)
@@ -71,22 +75,23 @@ async function review() {
         } else message.value = '尚未保存审核结论，可保留当前意见后重试。'
       } catch { message.value = '暂时无法确认审核结果，请重新读取材料后核对。' }
     }
-  } finally { submitting.value = false }
+  } finally { submitting.value = false; emit('reviewed') }
 }
-watch(() => route.params.id, () => void load())
-onMounted(() => void load())
+/** 阻止提交中换材料；会话已撤销时立即离开，避免草稿确认拦住退出。 */
+function canLeave() { return !auth.session || (!submitting.value && (!reason.value.trim() || window.confirm('审核意见尚未提交，确定离开？'))) }
+onBeforeRouteLeave(canLeave)
+onBeforeRouteUpdate(canLeave)
+watch(() => route.params.id, () => void load(), { immediate: true })
+onBeforeUnmount(() => revision++)
 </script>
 
 <template>
-  <AdminLayout
-    title="入驻材料审核"
-    subtitle="核对完整性、原创过程及收款人一致性，结论将保留在历史记录中。"
-  >
+  <div>
+    <header class="review-detail-heading">
+      <h2>当前审核对象</h2><RouterLink :to="{ path: '/admin/creator-applications', query: route.query }">返回队列</RouterLink>
+    </header>
     <div class="detail-toolbar">
-      <RouterLink
-        class="text-link"
-        to="/admin/creator-applications"
-      >← 返回审核队列</RouterLink><button
+      <button
         class="button-secondary"
         :disabled="loading || submitting"
         @click="load"
@@ -120,28 +125,31 @@ onMounted(() => void load())
         role="alert"
       >
         无法比较上次材料：{{ comparisonError }}
-      </p><ApplicationMaterials
-        :application="application"
-        :previous="previous"
-      />
+      </p><div
+        class="review-material-scroll"
+        role="region"
+        aria-label="入驻审核材料"
+        tabindex="0"
+      >
+        <ApplicationMaterials
+          :application="application"
+          :previous="previous"
+        />
+      </div>
       <section
         v-if="application.status === 'PENDING'"
         class="review-editor"
       >
         <div class="section-caption">
-          <span>审核结论</span><small>ONE REVIEW, A CLEAR DECISION</small>
-        </div><ul class="review-checklist">
-          <li>3—5 件作品，成品及制作过程完整，能说明原创手艺。</li><li>主品类与作品对应，介绍和材料符合平台规则。</li><li>真实支付宝资料，收款人姓名与申请人一致。</li>
-        </ul><AccountField
+          <span>审核结论</span>
+        </div><AccountField
           v-model="reason"
           label="审核意见"
           multiline
           hint="驳回必填：请明确说明原因及需补正的材料；通过可补充核对意见。"
           :error="errors.reason"
           :disabled="submitting"
-        /><p class="privacy-note">
-          此审核为平台资格及材料人工核对，不宣称完成权威实名认证或实际打款验证。
-        </p><div class="review-actions">
+        /><div class="review-actions">
           <button
             class="button-secondary reject-review"
             :disabled="submitting || !!comparisonError"
@@ -207,5 +215,5 @@ onMounted(() => void load())
         </button>
       </div>
     </dialog>
-  </AdminLayout>
+  </div>
 </template>

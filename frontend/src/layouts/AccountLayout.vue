@@ -1,19 +1,28 @@
 <script setup lang="ts">
 import BusinessHeader from '@/components/BusinessHeader.vue'
+import AdminLayout from './AdminLayout.vue'
+import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/account.css'
 import '@/assets/styles/work.css'
 
 defineProps<{ title: string; subtitle: string; number: string }>()
+const auth = useAuthStore()
 </script>
 
 <template>
-  <div class="member-page account-page">
+  <AdminLayout
+    v-if="auth.session?.roles.includes('ADMIN')"
+    :title="title"
+  >
+    <slot />
+  </AdminLayout>
+  <div
+    v-else
+    class="member-page account-page"
+  >
     <BusinessHeader />
     <main class="account-shell">
       <aside class="account-sidebar">
-        <p class="eyebrow">
-          MY SHIZUO
-        </p>
         <h2>个人中心</h2>
         <nav aria-label="个人中心">
           <RouterLink
@@ -21,47 +30,22 @@ defineProps<{ title: string; subtitle: string; number: string }>()
             active-class="active"
           ><span>01</span> 个人资料 <i aria-hidden="true">↗</i></RouterLink>
           <RouterLink
+            v-if="!auth.session?.roles.includes('ADMIN')"
             to="/account/addresses"
             active-class="active"
           ><span>02</span> 收货地址 <i aria-hidden="true">↗</i></RouterLink>
           <RouterLink
+            v-if="!auth.session?.roles.includes('ADMIN')"
             to="/account/creator-certification"
             active-class="active"
           ><span>03</span> 创作者入驻 <i aria-hidden="true">↗</i></RouterLink>
-          <RouterLink
-            to="/account/notifications"
-            active-class="active"
-          ><span>04</span> 系统通知 <i aria-hidden="true">↗</i></RouterLink>
-          <RouterLink
-            to="/account/requests"
-            active-class="active"
-          ><span>05</span> 我的需求 <i aria-hidden="true">↗</i></RouterLink>
-          <RouterLink
-            to="/account/conversations"
-            active-class="active"
-          ><span>06</span> 需求沟通 <i aria-hidden="true">↗</i></RouterLink>
         </nav>
-        <p class="sidebar-note">
-          每一份用心，<br>都有它的归处。
-        </p>
-        <div
-          class="sidebar-stitch"
-          aria-hidden="true"
-        >
-          ✳
-        </div>
       </aside>
       <section class="account-content">
         <div class="account-heading">
           <div>
-            <p class="eyebrow">
-              A LITTLE MORE ABOUT YOU · {{ number }}
-            </p><h1>{{ title }}</h1><p>{{ subtitle }}</p>
+            <h1>{{ title }}</h1>
           </div>
-          <span
-            class="account-mark"
-            aria-hidden="true"
-          >拾</span>
         </div>
         <slot />
       </section>

@@ -8,8 +8,10 @@ import { getWorks } from '@/api/work'
 import { getCategories } from '@/api/creator'
 import type { CategoryVO } from '@/types/creator'
 import type { WorkQuery, WorkVO } from '@/types/work'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
+const auth = useAuthStore()
 const router = useRouter()
 const categories = ref<CategoryVO[]>([])
 const parentId = ref('')
@@ -40,7 +42,7 @@ async function load() {
 function apply(page = 1) {
   const next = Object.fromEntries(Object.entries({ ...query, page }).filter(([, value]) => value !== '' && value !== undefined && value !== false).map(([key, value]) => [key, String(value)]))
   if (JSON.stringify(route.query) === JSON.stringify(next)) void load()
-  else void router.push({ path: '/', query: next })
+  else void router.push({ path: route.path, query: next })
 }
 function selectParent(id: string) { parentId.value = id; query.categoryId = id; apply() }
 watch(() => route.query, () => void load(), { immediate: true })
@@ -59,14 +61,21 @@ onBeforeUnmount(() => revision++)
       <div>
         <p class="eyebrow">
           MADE BY HAND, MEANT FOR YOU
-        </p><h1>发现手作之美</h1><p>让日常慢一点，让喜欢特别一点。<br>在一针一线、一琢一磨之间，遇见有温度的好物。</p><a
-          href="#discover"
-          class="button-primary"
-        >发现好手艺 <span aria-hidden="true">↗</span></a>
+        </p><h1>发现手作之美<span>定制你的日常。</span></h1><p>从一件喜欢的作品，开始一场与创作者的合作。</p>
+        <div class="hero-actions">
+          <RouterLink
+            v-if="!auth.session?.roles.includes('ADMIN')"
+            to="/my-requests/new"
+            class="button-primary"
+          >发布定制需求</RouterLink><a
+            href="#discover"
+            class="button-secondary"
+          >逛逛最新作品 <span aria-hidden="true">→</span></a>
+        </div>
       </div><img
         src="@/assets/craft-scene.svg"
         alt="陶器、织物与手作工具组成的温暖工作台"
-      ><span class="hero-note">一物一心意 · 好手艺，值得被看见</span>
+      >
     </section>
     <section
       id="discover"
@@ -74,9 +83,7 @@ onBeforeUnmount(() => revision++)
     >
       <header class="work-section-heading">
         <div>
-          <p class="eyebrow">
-            THE CRAFT COLLECTION
-          </p><h2>为生活，拾一份美好</h2>
+          <h2>发现作品</h2>
         </div><span class="muted">{{ total }} 件作品</span>
       </header>
       <nav
@@ -188,6 +195,24 @@ onBeforeUnmount(() => revision++)
         :loading="loading"
         @change="apply"
       />
+    </section>
+    <section
+      v-if="!auth.session?.roles.includes('ADMIN')"
+      class="discovery-entrypoints"
+      aria-label="开始定制与创作"
+    >
+      <article>
+        <div><h2>让一个想法，成为一件作品</h2><p>写下你的定制需求。</p></div><RouterLink
+          to="/my-requests/new"
+          class="button-secondary"
+        >发布需求 →</RouterLink>
+      </article>
+      <article>
+        <div><h2>{{ auth.session?.roles.includes('CREATOR') ? '继续你的创作' : '让你的手艺，被更多人看见' }}</h2><p>{{ auth.session?.roles.includes('CREATOR') ? '管理作品，发现新的定制需求。' : '分享作品，开启你的创作者工作台。' }}</p></div><RouterLink
+          :to="auth.session?.roles.includes('CREATOR') ? '/creator/works' : '/account/creator-certification'"
+          class="button-secondary"
+        >{{ auth.session?.roles.includes('CREATOR') ? '进入工作台 →' : '申请入驻 →' }}</RouterLink>
+      </article>
     </section>
   </WorkLayout>
 </template>

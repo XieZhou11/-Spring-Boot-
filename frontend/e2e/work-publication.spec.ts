@@ -106,8 +106,9 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
     await admin.goto('/admin/works')
     await admin.getByRole('button', { name: '全部作品', exact: true }).click()
     await expect(admin.locator('.managed-work-row').filter({ hasText: '原木手工杯垫' })).toBeVisible()
-    await admin.getByRole('link', { name: /审核作品/ }).click()
-    await expect(admin).toHaveURL(`/admin/works/${workId}`)
+    await admin.locator('.managed-work-row').filter({ hasText: '原木手工杯垫' }).getByRole('link', { name: /审核作品/ }).click()
+    // 材料页必须保留从队列选择的筛选范围。
+    await expect(admin).toHaveURL(`/admin/works/${workId}?status=ALL`)
     for (const width of [1366, 1440, 1920, 390]) {
       await admin.setViewportSize({ width, height: 1000 })
       expect(await admin.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -183,7 +184,7 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
     expect((await buyer.request.get(`${api}/works/${workId}`)).status()).toBe(404)
     await buyer.goto('/?keyword=原木手工圆杯垫')
     await expect(buyer.getByText('还没有符合条件的作品')).toBeVisible()
-    await page.goto('/account/notifications')
+    await page.goto('/messages/notifications')
     await expect(page.getByRole('article').filter({ hasText: '管理员验收下架' })).toBeVisible()
   } finally { await adminContext.close(); await buyerContext.close() }
 })

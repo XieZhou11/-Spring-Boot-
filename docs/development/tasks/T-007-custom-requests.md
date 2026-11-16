@@ -24,6 +24,8 @@
 
 ## 设计与接口约定
 
+页面导航已由 [T-008](T-008-navigation-layout.md)调整：本人需求使用 `/my-requests`，消息使用 `/messages`，旧个人中心路径兼容跳转。下方业务接口及规则继续有效，当前页面入口以[前端说明](../../../frontend/README.md)为准。
+
 沿用Controller→Service→Mapper平级包、普通DTO与标准字段校验、Service中文脱敏日志及提交后成功日志。复用现有表，追加未占用Flyway版本，需求增加create_request_key、version、deleted_at；会话增加双方发送冷却截止时间。不修改已执行迁移，不改本地application.yml。
 
 统一Result、字符串编号/版本、金额十进制字符串、带北京偏移的时间。常规列表PageVO，默认20最大50；大厅固定20。消息游标默认50最大50，返回items与hasMore，items按seqNo升序。初次读取取最新50条，beforeSeq读更早，afterSeq向后补拉，两者不可同时提供。

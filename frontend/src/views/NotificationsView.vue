@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import AccountLayout from '@/layouts/AccountLayout.vue'
+import MessageLayout from '@/layouts/MessageLayout.vue'
 import { getNotifications, readNotification } from '@/api/creator'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { NotificationVO } from '@/types/creator'
 import { formatTime } from '@/utils/creator'
-import MessageCenterTabs from '@/components/MessageCenterTabs.vue'
 
 const notifications = useNotificationsStore()
 const router = useRouter()
@@ -62,12 +61,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('focus', refreshO
 </script>
 
 <template>
-  <AccountLayout
-    title="系统通知"
-    subtitle="每一次进展，都好好告诉你。"
-    number="04"
-  >
-    <MessageCenterTabs />
+  <MessageLayout>
     <div class="queue-toolbar">
       <p>
         未读 <strong>{{ notifications.unreadCount }}</strong> 条 <span
@@ -109,7 +103,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('focus', refreshO
       v-else-if="!rows.length && !error"
       class="creator-empty"
     >
-      <span aria-hidden="true">✉</span><h2>这里，等一封好消息</h2><p>入驻与作品审核进度会留在这里，离线也不会错过。</p>
+      <h2>暂无系统通知</h2>
     </div><div
       v-else
       class="notification-list"
@@ -162,5 +156,5 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('focus', refreshO
         下一页
       </button>
     </div>
-  </AccountLayout>
+  </MessageLayout>
 </template>

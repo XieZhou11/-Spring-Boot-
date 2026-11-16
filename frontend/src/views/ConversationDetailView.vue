@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
-import WorkLayout from '@/layouts/WorkLayout.vue'
 import PrivateImage from '@/components/PrivateImage.vue'
 import PrivateImagePicker from '@/components/PrivateImagePicker.vue'
 import { getConversation, getMessages, readConversation, sendMessage } from '@/api/customRequest'
@@ -112,19 +111,18 @@ onMounted(() => { window.addEventListener('focus', focused); document.addEventLi
 onBeforeUnmount(() => { disposed = true; generation++; observer?.disconnect(); clearTimeout(readTimer); window.removeEventListener('focus', focused); document.removeEventListener('visibilitychange', focused) })
 </script>
 <template>
-  <WorkLayout>
-    <nav class="work-breadcrumb">
-      <RouterLink to="/account/conversations">需求沟通</RouterLink><span>/</span><span>{{ conversation?.otherNickname || '会话' }}</span>
-    </nav>
+  <div class="conversation-current">
+    <RouterLink
+      to="/messages/conversations"
+      class="conversation-back"
+    >← 返回会话列表</RouterLink>
     <header class="work-section-heading">
       <div>
-        <p class="eyebrow">
-          LET'S MAKE IT TOGETHER
-        </p><h1>{{ conversation?.otherNickname || '需求沟通' }}</h1><RouterLink
+        <h1>{{ conversation?.otherNickname || '需求沟通' }}</h1><RouterLink
           v-if="conversation"
           :to="`/requests/${conversation.requestId}`"
         >{{ conversation.requestTitle }} ↗</RouterLink>
-      </div><span class="muted">{{ notifications.connected ? '实时连接中' : '连接中断，可通过刷新补拉消息' }}</span>
+      </div>
     </header>
     <p
       v-if="error || loadError"
@@ -227,7 +225,7 @@ onBeforeUnmount(() => { disposed = true; generation++; observer?.disconnect(); c
           :disabled="sending || uncertain || !conversation.canSend"
           @uploading="uploading = $event"
         /><div class="request-actions">
-          <span class="field-help">{{ content.length }} / 500 · 每分钟最多 20 条，勿重复发送相同内容。</span><button
+          <span class="field-help">{{ content.length }} / 500</span><button
             class="button-primary"
             :disabled="sending || uploading"
           >
@@ -236,5 +234,5 @@ onBeforeUnmount(() => { disposed = true; generation++; observer?.disconnect(); c
         </div>
       </form>
     </div>
-  </WorkLayout>
+  </div>
 </template>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import WorkLayout from '@/layouts/WorkLayout.vue'
+import CreatorLayout from '@/layouts/CreatorLayout.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
 import { getCategories } from '@/api/creator'
 import { getRequestQuota, getRequests } from '@/api/customRequest'
@@ -35,24 +36,14 @@ onMounted(() => { void load(); void getCategories().then(result => categories.va
 onBeforeUnmount(() => revision++)
 </script>
 <template>
-  <WorkLayout>
-    <nav
-      class="request-tabs"
-      aria-label="定制需求"
-    >
-      <RouterLink to="/account/requests">我的需求</RouterLink><RouterLink to="/requests">需求大厅</RouterLink><RouterLink to="/creator/invitations">收到的邀约</RouterLink>
-    </nav>
+  <component :is="scope === 'mine' ? WorkLayout : CreatorLayout">
     <header class="work-section-heading">
       <div>
-        <p class="eyebrow">
-          AN IDEA, A PAIR OF HANDS
-        </p><h1>{{ title }}</h1><p class="muted">
-          {{ scope === 'hall' ? '发现一个值得用手艺回应的想法。' : scope === 'mine' ? '从一份想法开始，慢慢做成心里的样子。' : '有人欣赏你的手艺，想请你专门做一件。' }}
-        </p>
+        <h1>{{ title }}</h1>
       </div><RouterLink
         v-if="scope === 'mine'"
         class="button-primary"
-        to="/account/requests/new"
+        to="/my-requests/new"
       >发布定制需求 ↗</RouterLink>
     </header>
     <p
@@ -136,7 +127,7 @@ onBeforeUnmount(() => revision++)
         :key="row.id"
         class="request-card"
       >
-        <header><span class="eyebrow">{{ row.categoryPath.join(' / ') || '未选择品类' }}</span><span class="work-status">{{ requestStatus[row.status] || row.status }}</span></header><h2><RouterLink :to="row.canEdit && scope === 'mine' ? `/account/requests/${row.id}/edit` : `/requests/${row.id}`">{{ row.title || '未命名草稿' }}</RouterLink></h2><p class="request-excerpt">
+        <header><span class="eyebrow">{{ row.categoryPath.join(' / ') || '未选择品类' }}</span><span class="work-status">{{ requestStatus[row.status] || row.status }}</span></header><h2><RouterLink :to="row.canEdit && scope === 'mine' ? `/my-requests/${row.id}/edit` : `/requests/${row.id}`">{{ row.title || '未命名草稿' }}</RouterLink></h2><p class="request-excerpt">
           {{ row.description || '还没有填写描述' }}
         </p><footer><strong class="work-price">{{ row.budgetMin ? `¥ ${row.budgetMin} — ${row.budgetMax || '待定'}` : '预算待填写' }}</strong><span>{{ row.visibility === 'DIRECTED' ? '定向邀约' : '公开需求' }} · {{ row.buyerNickname }}</span><time>{{ formatTime(row.publishedAt || row.updatedAt) }}</time></footer>
       </article>
@@ -147,5 +138,5 @@ onBeforeUnmount(() => revision++)
       :loading="loading"
       @change="load"
     />
-  </WorkLayout>
+  </component>
 </template>
