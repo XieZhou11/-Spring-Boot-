@@ -1,3 +1,4 @@
+import { api, origin } from './environment'
 import type { Page } from '@playwright/test'
 import { randomBytes } from 'node:crypto'
 import { test, expect } from './fixtures'
@@ -87,7 +88,7 @@ for (const domain of ['qq.com', '163.com']) {
     await expect(page.getByRole('heading', { name: '发现手作之美' })).toBeVisible()
     await page.reload()
     await expect(page.getByRole('link', { name: '手作测试 · 个人中心' })).toBeVisible()
-    expect((await (await page.request.get('http://localhost:18080/api/sessions/current')).json()).data.email).toBe(email)
+    expect((await (await page.request.get(`${api}/sessions/current`)).json()).data.email).toBe(email)
     expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([])
     const session = (await page.context().cookies()).find((cookie) => cookie.name === 'JSESSIONID')
     expect(session?.httpOnly).toBe(true)
@@ -130,11 +131,11 @@ test('登录返回原站内地址，外部地址不能作为跳转目标', async
   await page.goto('/?from=collection#saved')
   await expect(page).toHaveURL(/\/login\?redirect=/)
   await signIn(page, email)
-  await expect(page).toHaveURL('http://localhost:5173/?from=collection#saved')
+  await expect(page).toHaveURL(`${origin}/?from=collection#saved`)
   await page.getByRole('button', { name: '退出登录' }).click()
   await page.goto('/login?redirect=https%3A%2F%2Fexample.com')
   await signIn(page, email)
-  await expect(page).toHaveURL('http://localhost:5173/')
+  await expect(page).toHaveURL(`${origin}/`)
 })
 
 test('邮箱找回重置后旧密码失效、新密码可用，另一设备旧会话退出', async ({
@@ -150,7 +151,7 @@ test('邮箱找回重置后旧密码失效、新密码可用，另一设备旧�
   const otherContext = await browser.newContext()
   try {
     const other = await otherContext.newPage()
-    await other.goto('http://localhost:5173/login')
+    await other.goto(`${origin}/login`)
     await signIn(other, email)
     await expect(other.getByRole('heading', { name: '发现手作之美' })).toBeVisible()
     await page.getByRole('link', { name: '手作测试 · 个人中心', exact: true }).click()

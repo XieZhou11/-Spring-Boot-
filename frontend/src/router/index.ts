@@ -11,6 +11,8 @@ const router = createRouter({
       component: () => import('@/views/HomeView.vue'),
       meta: { requiresAuth: true, title: '发现手作' },
     },
+    { path: '/account/favorites', component: () => import('@/views/SavedInteractionsView.vue'), meta: { requiresAuth: true, title: '收藏作品' } },
+    { path: '/account/following', component: () => import('@/views/SavedInteractionsView.vue'), meta: { requiresAuth: true, title: '关注创作者' } },
     { path: '/works/:id', component: () => import('@/views/WorkDetailView.vue'), meta: { requiresAuth: true, title: '作品详情' } },
     { path: '/creators/:id', component: () => import('@/views/CreatorPublicView.vue'), meta: { requiresAuth: true, title: '创作者主页' } },
     { path: '/creator/works', component: () => import('@/views/MyWorksView.vue'), meta: { requiresAuth: true, requiresCreator: true, title: '我的作品' } },

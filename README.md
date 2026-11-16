@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-后端已实现账号注册、登录、找回密码、会话及真实 SMTP 发送逻辑，详见 [T-001](docs/development/tasks/T-001-backend-auth.md)。前端认证页面见 [T-002](docs/development/tasks/T-002-frontend-auth.md)；个人资料、头像及收货地址前后端见 [T-003](docs/development/tasks/T-003-personal-center.md)。本机 QQ SMTP 连接认证已通过，QQ/163 公网收件及找回密码补充验收用户明确暂缓；头像已完成真实 OSS 上传、私有签名读取与替换联调。作品发布、管理员审核和首页/详情/创作者主页已完成，见 [T-005](docs/development/tasks/T-005-work-publication.md)及[测试记录](docs/testing/T-005-work-publication.md)；交易与互动仍待后续任务，当前不涉及部署。本地开发库已完成 27 表迁移，V3 作品请求键与版本在下次启动新版后端时自动追加，启动及验证入口见前后端 README。
+后端已实现账号注册、登录、找回密码、会话及真实 SMTP 发送逻辑，详见 [T-001](docs/development/tasks/T-001-backend-auth.md)。前端认证页面见 [T-002](docs/development/tasks/T-002-frontend-auth.md)；个人资料、头像及收货地址前后端见 [T-003](docs/development/tasks/T-003-personal-center.md)。本机 QQ SMTP 连接认证已通过，QQ/163 公网收件及找回密码补充验收用户明确暂缓；头像已完成真实 OSS 上传、私有签名读取与替换联调。作品发布、管理员审核和首页/详情/创作者主页已完成，见 [T-005](docs/development/tasks/T-005-work-publication.md)及[测试记录](docs/testing/T-005-work-publication.md)。[T-006](docs/development/tasks/T-006-work-interactions.md)接入点赞、收藏、图文评论、关注及个人列表，当前在独立互动分支待验收与 Git 集成；交易另行开发，当前不涉及部署。本地开发库已完成 27 表迁移，V3 作品请求键与版本在下次启动新版后端时自动追加，启动及验证入口见前后端 README。
 
 [T-004](docs/development/tasks/T-004-creator-onboarding.md)增加创作者入驻与管理员审核：申请撤回及补正历史、私有材料图片、收款账号加密、两级品类、会话身份切换和持久化实时通知。前后端接口及浏览器联调结果见任务与[测试记录](docs/testing/T-004-creator-onboarding.md)。本地开发库已执行 V2 申请幂等键迁移。管理员先维护启用一级品类，再由普通买家填写申请；入驻作品不自动公开。
 

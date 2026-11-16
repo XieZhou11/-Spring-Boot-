@@ -17,8 +17,8 @@
 | 技术选型 | 用户已确认采用；账号本地业务集成已验证，QQ/163 公网收件及找回密码补充验收用户明确暂缓，其他业务能力按任务验证 | [ADR-001](design/decisions/ADR-001-technology-stack.md) |
 | 数据库详细设计 | V1.5 设计草稿；27 表 Flyway SQL 已在本地执行，迁移及失败补偿在 MySQL 8.4 验证 | [数据库表结构](design/数据库表结构.md)，含字段、索引、应用关联与事务回滚 |
 | 架构、领域与 UI 详细设计 | 尚未编写 | [设计约定](design/README.md)，在相关任务中逐步形成 |
-| 前后端工程 | 已有账号、个人中心、创作者入驻与后台审核、两级品类、身份切换及系统通知；真实 OSS 云端联调已通过，QQ/163 公网收件及找回密码补充验收用户明确暂缓，作品链路见 T-005，交易与互动待后续实现 | [后端说明](../backend/README.md)、[前端说明](../frontend/README.md)、[T-002](development/tasks/T-002-frontend-auth.md)、[T-003](development/tasks/T-003-personal-center.md)、[T-004](development/tasks/T-004-creator-onboarding.md)、[T-005](development/tasks/T-005-work-publication.md) |
-| 业务接口、自动化测试与 CI | 账号、个人中心、入驻和作品已用真实 MySQL、HTTP、WebSocket 及协议接收器验证，真实 OSS 单独验证；最新后端测试 122 项、Playwright 回归 29 项通过；后端测试源码仅本地保留且被 Git 忽略；无 CI 文件，未执行远端 CI | [账号后端测试](testing/T-001-backend-auth.md)、[认证联调测试](testing/T-002-frontend-auth.md)、[个人中心测试](testing/T-003-personal-center.md)、[入驻审核测试](testing/T-004-creator-onboarding.md)、[作品链路测试](testing/T-005-work-publication.md) |
+| 前后端工程 | 已有账号、个人中心、创作者入驻与后台审核、两级品类、身份切换及系统通知；作品链路见 T-005，互动在独立分支接入，见 T-006；交易待后续实现。QQ/163 公网收件及找回密码补充验收用户明确暂缓 | [后端说明](../backend/README.md)、[前端说明](../frontend/README.md)、[T-002](development/tasks/T-002-frontend-auth.md)、[T-003](development/tasks/T-003-personal-center.md)、[T-004](development/tasks/T-004-creator-onboarding.md)、[T-005](development/tasks/T-005-work-publication.md)、[T-006](development/tasks/T-006-work-interactions.md) |
+| 业务接口、自动化测试与 CI | 账号、个人中心、入驻、作品和互动已用真实 MySQL、HTTP、WebSocket 及协议接收器验证，真实 OSS 单独验证；本轮后端 136 项执行通过、6 项条件跳过，互动云测试另行通过；完整浏览器 36 项通过，最后局部样式修改后互动 7 项复测通过。后端测试源码仅本地保留且被 Git 忽略；无 CI 文件，未执行远端 CI | [账号后端测试](testing/T-001-backend-auth.md)、[认证联调测试](testing/T-002-frontend-auth.md)、[个人中心测试](testing/T-003-personal-center.md)、[入驻审核测试](testing/T-004-creator-onboarding.md)、[作品链路测试](testing/T-005-work-publication.md)、[互动测试](testing/T-006-work-interactions.md) |
 
 用户已于 2026-11-12 指定 V1.5 MVP 版为后续需求与开发依据，`requirements.md` 已同步替换。正文保留“待审核”状态；采用为工作依据不等于宣称全部内容已经最终批准。遇到影响实现的歧义或冲突，记录具体问题并澄清，不拼接不同版本的规则。
 
@@ -37,6 +37,8 @@ V1.5 MVP 版正文仅描述完整实现范围，不划分功能优先级，也�
 T-004 已实现创作者申请、撤回补正、后台审核及材料比较、两级品类、收款账号加密、私有入驻图片、当前会话身份切换及持久化实时通知。V2 为申请增加用户范围请求键，本机开发库已执行；具体状态及验证以 [T-004](development/tasks/T-004-creator-onboarding.md) 为准。入驻材料不会自动公开；作品发布、审核与浏览在 [T-005](development/tasks/T-005-work-publication.md)实现，普通聊天与交易待后续开发。
 
 T-005 已完成作品草稿、发布额度、版本冲突、审核历史、作品图片、通知与首页/详情/基础创作者主页。V3 保留 V1/V2，补齐历史作品创建请求键及版本；已在隔离库验证，未向开发库执行，下次启动新版后端时自动追加。浏览页面均要求登录。交易设置即时生效、图文修改重审；前后端验收以 [T-005](development/tasks/T-005-work-publication.md)及[测试记录](testing/T-005-work-publication.md)为准。
+
+T-006 基于 T-005 实际提交 `bd693e6`，接入点赞、收藏、图文评论、关注及个人收藏和关注列表；评论图片沿用私有 OSS，并隔离用途、鉴权和历史引用清理。无新增表、迁移或共享配置。实现位于 `codex/work-interactions` 功能分支，用户已授权本轮提交与推送；任务及正式集成边界见 [T-006](development/tasks/T-006-work-interactions.md)，实际结果见[测试记录](testing/T-006-work-interactions.md)。
 
 ## 2. 文档导航
 
@@ -91,14 +93,16 @@ docs/
 │       ├── T-002-frontend-auth.md    # 认证页面与联调验收
 │       ├── T-003-personal-center.md  # 个人资料、头像与收货地址
 │       ├── T-004-creator-onboarding.md # 创作者入驻、审核、品类与通知
-│       └── T-005-work-publication.md # 作品发布、审核与浏览
+│       ├── T-005-work-publication.md # 作品发布、审核与浏览
+│       └── T-006-work-interactions.md # 作品互动与个人收藏、关注
 └── testing/                          # 简短测试结果，不存测试代码、不建子目录
     ├── README.md                     # 业务功能测试记录方式与格式示例
     ├── T-001-backend-auth.md          # 账号后端测试与复测结果
     ├── T-002-frontend-auth.md         # 认证浏览器联调与复测结果
     ├── T-003-personal-center.md       # 个人中心测试及本轮回归结果
     ├── T-004-creator-onboarding.md    # 入驻、审核与通知联调结果
-    └── T-005-work-publication.md       # 作品、审核、浏览及完整回归结果
+    ├── T-005-work-publication.md       # 作品、审核、浏览及完整回归结果
+    └── T-006-work-interactions.md      # 互动、图片及联合回归结果
 ```
 
 补充说明：
@@ -107,7 +111,7 @@ docs/
 - `prototypes/README.md` 是当前导航，`assets/原型说明.md` 是原始设计说明，两者职责接近；后续若精简，可以合并说明并减少一层目录，本轮未改写原始材料。
 - 原 `design/database.md` 已删除，现有 [数据库表结构](design/数据库表结构.md)为按当前需求编写的新草稿，对应 SQL 位于后端 `src/main/resources/db/migration/`，V1 已执行且包含异常结构补偿；人工结构回退位于相邻 `rollback/`，未执行。
 - `decisions/` 中的 ADR-001 记录已选技术；选型和框架验证不代表全部业务已经实现，SMTP 公网实收补充验收已由用户明确暂缓，OSS 实际结果见 T-003。
-- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端 T-001、认证前端 T-002、个人中心 T-003、入驻审核 T-004 和作品链路 T-005。
+- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端 T-001、认证前端 T-002、个人中心 T-003、入驻审核 T-004、作品链路 T-005 和作品互动 T-006。
 - `testing/README.md` 只规定业务功能测试结果如何填写；功能开发时再增加实际记录，复测更新同一文件，任务只保留总体结果和链接。
 
 ## 3. 已有资料迁移对照
@@ -176,4 +180,4 @@ docs/
 
 后续统一以[当前 V1.5 MVP 版需求](requirements/requirements.md)为依据，其中所列需求均须实现；[后续功能清单](requirements/archive/手工定制作品分享与交易平台后续功能清单.md)独立留存，供完成后选择补充。数据库设计及 SQL 待审核，原型待按当前范围调整。
 
-后续从[当前需求](requirements/requirements.md)、[数据库表结构](design/数据库表结构.md)及 [ADR-001](design/decisions/ADR-001-technology-stack.md)继续。工程说明见[后端 README](../backend/README.md)与[前端 README](../frontend/README.md)。已完成的个人中心及真实 OSS 结果见 [T-003](development/tasks/T-003-personal-center.md)；QQ/163 公网收件及找回密码补充验收在 T-001/T-002 标记“用户明确暂缓”。作品链路实现、验证及交接从 [T-005](development/tasks/T-005-work-publication.md)继续；后续互动与交易按独立任务接入。
+后续从[当前需求](requirements/requirements.md)、[数据库表结构](design/数据库表结构.md)及 [ADR-001](design/decisions/ADR-001-technology-stack.md)继续。工程说明见[后端 README](../backend/README.md)与[前端 README](../frontend/README.md)。已完成的个人中心及真实 OSS 结果见 [T-003](development/tasks/T-003-personal-center.md)；QQ/163 公网收件及找回密码补充验收在 T-001/T-002 标记“用户明确暂缓”。作品链路见 [T-005](development/tasks/T-005-work-publication.md)，互动交接从 [T-006](development/tasks/T-006-work-interactions.md)继续；下一步在明确授权后执行 `codex/work-integration` 正式集成，保留原功能分支，交易按独立任务接入。

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
 import { test, expect } from './fixtures'
 
-const api = 'http://localhost:18080/api'
+import { api, origin } from './environment'
 const image = readFileSync(new URL('./avatar.png', import.meta.url))
 test.use({ storageMode: 'receiver', actionTimeout: 15_000 })
 
@@ -74,8 +74,8 @@ async function fillWork(page: Page, categoryId: string, title = '原木手工杯
 
 test('创作者草稿、驳回补正通过、即时交易设置、买家浏览、重审下架完整链路', async ({ page, browser, mailbox }, testInfo) => {
   test.setTimeout(240_000)
-  const adminContext = await browser.newContext({ baseURL: 'http://localhost:5173' })
-  const buyerContext = await browser.newContext({ baseURL: 'http://localhost:5173' })
+  const adminContext = await browser.newContext({ baseURL: origin })
+  const buyerContext = await browser.newContext({ baseURL: origin })
   page.on('dialog', dialog => dialog.accept())
   try {
     const admin = await adminContext.newPage()
@@ -187,7 +187,7 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
 
 test('草稿响应丢失、断网保留、续签、撤回删除与初始化失败保护', async ({ page, browser, mailbox }) => {
   test.setTimeout(180_000)
-  const adminContext = await browser.newContext({ baseURL: 'http://localhost:5173' })
+  const adminContext = await browser.newContext({ baseURL: origin })
   page.on('dialog', dialog => dialog.accept())
   try {
     const admin = await adminContext.newPage()
@@ -275,7 +275,7 @@ test('作品详情、创作者主页与管理页均要求真实登录，安全�
 
 test('编辑未保存或上传中仍可退出，会话过期不能被离开确认阻挡', async ({ page, browser, mailbox }) => {
   test.setTimeout(120_000)
-  const adminContext = await browser.newContext({ baseURL: 'http://localhost:5173' })
+  const adminContext = await browser.newContext({ baseURL: origin })
   let releaseUpload: (() => void) | undefined
   // 身份失效后的跳转不应再询问是否留在受保护表单。
   page.on('dialog', dialog => dialog.dismiss())

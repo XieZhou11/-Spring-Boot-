@@ -1,6 +1,6 @@
 # 前端工程
 
-Vue 3 + TypeScript + Vite 工程。登录注册、个人中心、创作者入驻、管理员审核、两级品类管理及系统通知已接入后端，沿用原型“拾作”的纸张底色、深绿主操作和手作插画。实施及验收见 [T-002](../docs/development/tasks/T-002-frontend-auth.md)、[T-003](../docs/development/tasks/T-003-personal-center.md)、[T-004](../docs/development/tasks/T-004-creator-onboarding.md)。作品发布、审核与浏览见 [T-005](../docs/development/tasks/T-005-work-publication.md)，交易和互动随后续任务接入。
+Vue 3 + TypeScript + Vite 工程。登录注册、个人中心、创作者入驻、管理员审核、两级品类管理及系统通知已接入后端，沿用原型“拾作”的纸张底色、深绿主操作和手作插画。实施及验收见 [T-002](../docs/development/tasks/T-002-frontend-auth.md)、[T-003](../docs/development/tasks/T-003-personal-center.md)、[T-004](../docs/development/tasks/T-004-creator-onboarding.md)。作品发布、审核与浏览见 [T-005](../docs/development/tasks/T-005-work-publication.md)，互动接入见 [T-006](../docs/development/tasks/T-006-work-interactions.md)，交易随后续任务实现。
 
 ## 环境与依赖
 
@@ -90,7 +90,7 @@ npm run preview
 
 `/account/notifications` 查看审核通知、已读状态及未读数；全应用共享原生 WebSocket，多端同步未读，断线最多自动重试 5 次，失败后可手动连接，持久化列表始终独立查询。通过后页首可切换买家/创作者，仅改变当前会话入口，不延长登录有效期。创作者身份进入“我的作品”；普通聊天随后续功能实现。
 
-## 账号、个人中心、入驻与作品浏览器回归
+## 账号、个人中心、入驻、作品与互动浏览器回归
 
 前提：Node/npm 版本符合工程要求，JDK 21 可从 PATH 启动，本机 MySQL 在 3306 可连接，账号与开发配置一致并有创建/删除测试库权限。先在 `backend/` 执行 `.\mvnw.cmd -B -ntp verify` 生成最新可执行 JAR，再回本目录执行：
 
@@ -114,6 +114,22 @@ npx playwright test e2e/creator-onboarding.spec.ts
 
 首页 `/` 按原型 01 展示横幅、两级品类、关键词、价格及交易属性组合筛选、排序和每页 20 条作品。`/works/:id` 展示图集、规格、创作说明与交易属性；`/creators/:id` 展示必要公开资料和真实口碑统计。上述页面均要求登录；无评价展示“暂无评价”。
 
-认证创作者在 `/creator/works` 管理草稿、撤回、驳回补正和下架；`/creator/works/new`、`/creator/works/:id/edit` 为四段式表单，图片真实上传、排序并按短时签名续签。创建复用请求键，修改携带版本，响应未知时先核验；上传期间禁用提交，失败与版本冲突保留输入，离开未保存内容须确认。已上架作品的交易设置即时更新，图文修改转待审核并立即停止公开。管理员在 `/admin/works` 及详情审核、比较历史、驳回或说明原因下架。购买、定制需求和互动入口随对应任务实现。
+认证创作者在 `/creator/works` 管理草稿、撤回、驳回补正和下架；`/creator/works/new`、`/creator/works/:id/edit` 为四段式表单，图片真实上传、排序并按短时签名续签。创建复用请求键，修改携带版本，响应未知时先核验；上传期间禁用提交，失败与版本冲突保留输入，离开未保存内容须确认。已上架作品的交易设置即时更新，图文修改转待审核并立即停止公开。管理员在 `/admin/works` 及详情审核、比较历史、驳回或说明原因下架。购买、定制需求入口随对应任务实现，互动入口见下文 T-006。
 
 复测作品链路：`npx playwright test e2e/work-publication.spec.ts`；完整回归：`npm run test:e2e`。作品套件使用隔离 MySQL、真实后端和本地 OSS 协议接收器，云端 OSS 另行验证，实际结果见 [T-005 测试记录](../docs/testing/T-005-work-publication.md)。QQ/163 公网收件及找回密码补充验收为“用户明确暂缓”，保留认证回归。
+
+## 作品互动与个人收藏、关注
+
+作品详情接入点赞、收藏和图文评论；作者区与创作者主页提供关注。个人中心 `/account/favorites`、`/account/following` 支持分页和取消，失效收藏显示“已下架”。评论失败保留文字图片；响应未知时先核对结果，由用户确认后再发。图片按原鉴权端点续签，切换账号或作品清除私有草稿并忽略旧响应；管理员仅读公开内容。
+
+互动浏览器回归保存在 `e2e/work-interactions.spec.ts`，使用真实入驻、发布和审核前置，并采用独立随机库组，避免已发布作品污染其他套件的空首页断言。分页规模边界夹具另补历史下架收藏及认证失效关注，仅操作本轮随机库。并行开发时使用以下测试端口，Origin 只对测试实例生效，不修改共享配置；不设置时仍使用 5173/18080。
+
+```powershell
+$env:HANDCRAFT_E2E_FRONTEND_PORT='15173'
+$env:HANDCRAFT_E2E_BACKEND_PORT='19081'
+npm run test:e2e
+# 只复测互动
+npx playwright test e2e/work-interactions.spec.ts
+```
+
+接口与交接见 [T-006](../docs/development/tasks/T-006-work-interactions.md)，实际回归及真实 OSS 结果见 [测试记录](../docs/testing/T-006-work-interactions.md)。
