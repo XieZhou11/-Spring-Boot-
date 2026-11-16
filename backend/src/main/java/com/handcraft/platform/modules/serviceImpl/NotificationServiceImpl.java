@@ -24,6 +24,18 @@ public class NotificationServiceImpl implements NotificationService {
     private final ObjectMapper json;
     public NotificationServiceImpl(SystemNotificationMapper notices,NotificationSocketHandler socket,ObjectMapper json){this.notices=notices;this.socket=socket;this.json=json;}
     @Transactional(propagation=Propagation.MANDATORY)
+    public void workChanged(Long recipientId,Long workId,Long submittedVersion,String eventType,String decision,String reason){BusinessLog.run(LoggerFactory.getLogger(getClass()),"作品状态通知保存",recipientId,()->{
+        var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType(eventType);n.setEventKey(eventType+":"+workId+":"+submittedVersion);
+        boolean offline="WORK_OFFLINED".equals(eventType);boolean approved="APPROVED".equals(decision);
+        n.setTitle(offline?"作品已下架":approved?"作品审核已通过":"作品审核未通过");
+        String content=offline?"管理员已下架作品，请查看原因。":approved?"作品已上架，可在作品管理中查看。":"作品需补正，请查看审核原因。";
+        // 下架和驳回均携带具体原因，独立拼接避免嵌套条件表达式遗漏分支。
+        if((offline||!approved)&&reason!=null&&!reason.isBlank())content+="原因："+reason;
+        n.setContent(content);
+        n.setBusinessReference(json.writeValueAsString(Map.of("type","WORK","id",workId.toString(),"version",submittedVersion.toString())));notices.insert(n);
+        afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(n.getId()))));publishUnread(recipientId);});return null;
+    });}
+    @Transactional(propagation=Propagation.MANDATORY)
     public void creatorReviewed(Long recipientId,Long applicationId,String decision,String reason){BusinessLog.run(LoggerFactory.getLogger(getClass()),"认证审核通知保存",recipientId,()->{
         var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType("CREATOR_APPLICATION_REVIEWED");n.setEventKey("CREATOR_REVIEW:"+applicationId);n.setTitle("APPROVED".equals(decision)?"创作者认证已通过":"创作者申请需补正");
         n.setContent("APPROVED".equals(decision)?"你的创作者认证已通过，可以切换创作者身份。":"申请被驳回，请查看原因并补正材料。"+(reason.isBlank()?"":"原因："+reason));n.setBusinessReference(json.writeValueAsString(Map.of("type","CREATOR_APPLICATION","id",applicationId.toString())));notices.insert(n);

@@ -93,7 +93,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
           revision.value++
           void refreshUnread()
           // 资料页自行重新核验资格，不把推送内容当作认证权威数据。
-          window.dispatchEvent(new Event('creator-certification-updated'))
+          if (payload.notification?.businessReference?.type === 'WORK') window.dispatchEvent(new Event('work-updated'))
+          else window.dispatchEvent(new Event('creator-certification-updated'))
         }
       } catch {
         // 忽略无法识别的推送，不影响离线列表读取。

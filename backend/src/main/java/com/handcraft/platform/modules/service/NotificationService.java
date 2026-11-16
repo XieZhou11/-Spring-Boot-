@@ -6,6 +6,8 @@ import com.handcraft.platform.modules.vo.*;
 public interface NotificationService {
     /** 审核事务内保存唯一事件，事务提交后才推送。 */
     void creatorReviewed(Long recipientId,Long applicationId,String decision,String reason);
+    /** 作品审核或管理员下架通知，事件按作品及提交版本去重并在提交后推送。 */
+    void workChanged(Long recipientId,Long workId,Long submittedVersion,String eventType,String decision,String reason);
     /** 读取本人通知分页，最新优先。 */
     PageVO<NotificationVO> list(Long userId,int page,int size);
     /** 查询本人未读总数。 */

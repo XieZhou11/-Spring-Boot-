@@ -1,21 +1,14 @@
 <script setup lang="ts">
-import BrandLogo from '@/components/BrandLogo.vue'
-import SessionTools from '@/components/SessionTools.vue'
+import BusinessHeader from '@/components/BusinessHeader.vue'
 import '@/assets/styles/account.css'
+import '@/assets/styles/work.css'
 
 defineProps<{ title: string; subtitle: string; number: string }>()
 </script>
 
 <template>
   <div class="member-page account-page">
-    <header class="site-header">
-      <BrandLogo />
-      <SessionTools />
-      <RouterLink
-        to="/"
-        class="account-back"
-      >返回我的拾作 <span aria-hidden="true">↗</span></RouterLink>
-    </header>
+    <BusinessHeader />
     <main class="account-shell">
       <aside class="account-sidebar">
         <p class="eyebrow">

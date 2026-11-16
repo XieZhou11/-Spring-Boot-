@@ -1,18 +1,13 @@
 <script setup lang="ts">
-import BrandLogo from '@/components/BrandLogo.vue'
-import SessionTools from '@/components/SessionTools.vue'
+import BusinessHeader from '@/components/BusinessHeader.vue'
 import '@/assets/styles/account.css'
+import '@/assets/styles/work.css'
 defineProps<{ title: string; subtitle: string }>()
 </script>
 
 <template>
   <div class="member-page admin-page">
-    <header class="site-header">
-      <BrandLogo /><SessionTools /><RouterLink
-        class="account-back"
-        to="/"
-      >返回我的拾作 ↗</RouterLink>
-    </header><main class="admin-shell">
+    <BusinessHeader /><main class="admin-shell">
       <aside class="admin-sidebar">
         <p class="eyebrow">
           SHIZUO / CURATION
@@ -20,12 +15,15 @@ defineProps<{ title: string; subtitle: string }>()
           认真核对每一份手艺。
         </p><nav aria-label="后台管理">
           <RouterLink
+            to="/admin/works"
+            active-class="active"
+          ><span>01</span> 作品审核 <i aria-hidden="true">↗</i></RouterLink><RouterLink
             to="/admin/creator-applications"
             active-class="active"
-          ><span>01</span> 入驻审核 <i aria-hidden="true">↗</i></RouterLink><RouterLink
+          ><span>02</span> 入驻审核 <i aria-hidden="true">↗</i></RouterLink><RouterLink
             to="/admin/categories"
             active-class="active"
-          ><span>02</span> 品类管理 <i aria-hidden="true">↗</i></RouterLink>
+          ><span>03</span> 品类管理 <i aria-hidden="true">↗</i></RouterLink>
         </nav><span
           class="admin-seal"
           aria-hidden="true"

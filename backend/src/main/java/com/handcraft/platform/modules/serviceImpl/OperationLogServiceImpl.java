@@ -14,7 +14,17 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 public class OperationLogServiceImpl implements OperationLogService {
     private final OperationLogMapper logs;
-    public OperationLogServiceImpl(OperationLogMapper logs){this.logs=logs;}
+    private final tools.jackson.databind.ObjectMapper json;
+    public OperationLogServiceImpl(OperationLogMapper logs,tools.jackson.databind.ObjectMapper json){this.logs=logs;this.json=json;}
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void record(Long operatorId,boolean admin,String targetType,Long targetId,String action,String before,String after,String reason,java.util.Map<String,Object> detail){
+        BusinessLog.run(LoggerFactory.getLogger(getClass()),"作品内容历史保存",operatorId,()->{
+            logs.insertDetail(operatorId,admin?"ADMIN":"USER",targetType,targetId,action,before,after,reason,json.writeValueAsString(detail));
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){
+                @Override public void afterCommit(){LoggerFactory.getLogger(OperationLogServiceImpl.class).info("作品状态变更已提交：operatorId={}, targetId={}, action={}, before={}, after={}",operatorId,targetId,action,before,after);}
+            });return null;
+        });
+    }
     @Transactional(propagation=Propagation.MANDATORY)
     public void record(Long operatorId,boolean admin,String targetType,Long targetId,String action,String before,String after,String reason){
         BusinessLog.run(LoggerFactory.getLogger(getClass()),"操作历史保存",operatorId,()->{

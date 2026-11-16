@@ -9,8 +9,15 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: () => import('@/views/HomeView.vue'),
-      meta: { requiresAuth: true, title: '我的拾作' },
+      meta: { requiresAuth: true, title: '发现手作' },
     },
+    { path: '/works/:id', component: () => import('@/views/WorkDetailView.vue'), meta: { requiresAuth: true, title: '作品详情' } },
+    { path: '/creators/:id', component: () => import('@/views/CreatorPublicView.vue'), meta: { requiresAuth: true, title: '创作者主页' } },
+    { path: '/creator/works', component: () => import('@/views/MyWorksView.vue'), meta: { requiresAuth: true, requiresCreator: true, title: '我的作品' } },
+    { path: '/creator/works/new', component: () => import('@/views/WorkEditorView.vue'), meta: { requiresAuth: true, requiresCreator: true, title: '发布作品' } },
+    { path: '/creator/works/:id/edit', component: () => import('@/views/WorkEditorView.vue'), meta: { requiresAuth: true, requiresCreator: true, title: '编辑作品' } },
+    { path: '/admin/works', component: () => import('@/views/AdminWorksView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: '作品审核' } },
+    { path: '/admin/works/:id', component: () => import('@/views/AdminWorkReviewView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: '作品材料审核' } },
     {
       path: '/account/profile',
       name: 'profile',
@@ -89,6 +96,7 @@ router.beforeEach(async (to) => {
   if (to.meta.requiresAuth && !auth.session)
     return { path: '/login', query: { redirect: to.fullPath } }
   if (to.meta.requiresAdmin && !auth.session?.roles.includes('ADMIN')) return '/'
+  if (to.meta.requiresCreator && !auth.session?.roles.includes('CREATOR')) return '/account/creator-certification'
   if (to.meta.guestOnly && auth.session) {
     const target = safeRedirect(to.query.redirect)
     return router.resolve(target).meta.requiresAuth ? target : '/'

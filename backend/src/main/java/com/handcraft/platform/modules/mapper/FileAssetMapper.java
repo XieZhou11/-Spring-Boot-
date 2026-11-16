@@ -41,4 +41,29 @@ public interface FileAssetMapper {
 
     @Select("SELECT (upload_status='CLEANUP_PENDING' OR (upload_status='UPLOADING' AND updated_at < DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 1 HOUR)) OR (upload_status='AVAILABLE' AND updated_at < DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 24 HOUR))) FROM file_asset WHERE id=#{fileId}")
     boolean applicationCleanupDue(Long fileId);
+    /** 扫描时排除所有当前与历史引用，避免旧引用填满批次导致孤儿资源饥饿。 */
+    @Select("SELECT "+COLUMNS+" "+"""
+        FROM file_asset f
+        WHERE object_key LIKE 'works/%' AND (
+            upload_status='CLEANUP_PENDING'
+            OR (upload_status='UPLOADING' AND updated_at < DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 1 HOUR))
+            OR (
+                upload_status='AVAILABLE' AND updated_at < DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 24 HOUR)
+                AND NOT EXISTS (
+                    SELECT 1 FROM work w WHERE w.creator_id=f.uploader_id AND (
+                        JSON_CONTAINS(w.main_image_ids,JSON_QUOTE(CAST(f.id AS CHAR)))
+                        OR JSON_CONTAINS(w.specification_image_ids,JSON_QUOTE(CAST(f.id AS CHAR)))
+                    )
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM operation_log l JOIN work w ON l.target_type='WORK' AND l.target_id=w.id
+                    WHERE w.creator_id=f.uploader_id AND JSON_SEARCH(l.detail,'one',CAST(f.id AS CHAR),NULL,
+                    '$.snapshot.mainImageIds[*]','$.snapshot.specificationImageIds[*]',
+                    '$.before.mainImageIds[*]','$.before.specificationImageIds[*]',
+                    '$.after.mainImageIds[*]','$.after.specificationImageIds[*]') IS NOT NULL
+                )
+            )
+        ) ORDER BY updated_at,id LIMIT 100
+        """)
+    List<FileAsset> findInterruptedWorks();
 }

@@ -1,6 +1,6 @@
 # 后端工程
 
-已有账号、个人资料、头像、收货地址，以及创作者入驻、管理员审核、两级品类和系统通知接口。真实 SMTP 发送逻辑已接入，本机 QQ SMTP 连接与认证已验证，QQ/163 公网实收待验收；头像已完成真实 OSS 联调。认证页面见 [T-002](../docs/development/tasks/T-002-frontend-auth.md)，个人中心见 [T-003](../docs/development/tasks/T-003-personal-center.md)，入驻接口与联调结果见 [T-004](../docs/development/tasks/T-004-creator-onboarding.md)。
+已有账号、个人资料、头像、收货地址，以及创作者入驻、管理员审核、两级品类和系统通知接口。真实 SMTP 发送逻辑已接入，本机 QQ SMTP 连接与认证已验证，QQ/163 公网收件及找回密码补充验收用户明确暂缓；头像已完成真实 OSS 联调。认证页面见 [T-002](../docs/development/tasks/T-002-frontend-auth.md)，个人中心见 [T-003](../docs/development/tasks/T-003-personal-center.md)，入驻接口与联调结果见 [T-004](../docs/development/tasks/T-004-creator-onboarding.md)。作品发布、审核、检索及基础公开资料接口已完成，见 [T-005](../docs/development/tasks/T-005-work-publication.md)。
 
 ## 环境与依赖
 
@@ -30,7 +30,7 @@ backend/
     │       ├── application.yml     # 数据源、迁移、Cookie 和跨域白名单
     │       ├── mapper/              # 后续 MyBatis XML
     │       └── db/
-    │           ├── migration/      # Flyway V1 建表、V2 申请幂等键
+    │           ├── migration/      # Flyway V1 建表、V2 申请幂等键、V3 作品请求键及版本
     │           └── rollback/       # 人工结构回退，不加入 Flyway 扫描
     └── test/java/                  # 仅供本地业务测试，Git 忽略
 ```
@@ -152,3 +152,9 @@ MySQL DDL 隐式提交，整批建表不能靠 ROLLBACK 撤销。V1 使用临时
 ## 后续开发边界
 
 后端配置按用户要求集中在 `application.yml` 显式维护；SMTP、OSS 接入时也遵守此约定。建表使用真实迁移，不添加演示数据。新增业务功能时在 `modules` 下对应职责包中补齐三层实现、接口校验和业务测试，不在公共层放置具体业务规则。
+
+## 作品发布、审核与浏览（T-005）
+
+接口、状态、版本与验收约定见 [T-005](../docs/development/tasks/T-005-work-publication.md)。新增 V3 为作品补齐创作者范围创建请求键及版本；已有 V1、V2 保持原样，启动时由 Flyway 追加迁移。所有浏览接口均要求登录；资格、归属、状态、额度和图片引用在服务端复核。图片使用独立 OSS 前缀，复用当前私有配置；无引用且超过 24 小时的临时作品图定时清理，草稿与历史引用继续保留。审核状态、通知、快照同事务写入，推送与成功日志在提交后执行。
+
+本轮使用本地隔离 MySQL 验证 V1—V3、额度及审核竞争、事务回滚，另执行真实 HTTP 和真实 OSS；结果见 [测试记录](../docs/testing/T-005-work-publication.md)。QQ/163 公网收件及找回密码的补充验收为“用户明确暂缓”，保留已有实现。后端业务测试源码仍只在本地，重新检出没有相同测试用例；构建通过不能替代业务验证。

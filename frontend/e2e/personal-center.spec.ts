@@ -48,7 +48,7 @@ test('未登录不能读取个人中心，登录入口保留资料目标地址',
 test('资料 Unicode 校验、保存刷新、独立头像失败后仍可保存资料', async ({ page, mailbox }) => {
   const email = await createMember(page, mailbox.codes)
   await page.goto('/')
-  await page.getByRole('link', { name: '个人资料', exact: true }).click()
+  await page.getByRole('link', { name: /个人中心/ }).click()
   await expect(page.getByLabel('邮箱地址')).toHaveValue(email)
   await expect(page.getByLabel('邮箱地址')).toHaveAttribute('readonly', '')
   await page.getByLabel('昵称', { exact: true }).fill('𠮷作')

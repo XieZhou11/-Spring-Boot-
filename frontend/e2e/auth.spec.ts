@@ -84,9 +84,10 @@ for (const domain of ['qq.com', '163.com']) {
     await expect(page.getByRole('alert')).toHaveText('邮箱或密码错误')
     await expect(page).toHaveURL(/\/login/)
     await signIn(page, email)
-    await expect(page.getByRole('heading', { name: '欢迎，手作测试。' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '发现手作之美' })).toBeVisible()
     await page.reload()
-    await expect(page.getByText(email, { exact: true })).toBeVisible()
+    await expect(page.getByRole('link', { name: '手作测试 · 个人中心' })).toBeVisible()
+    expect((await (await page.request.get('http://localhost:18080/api/sessions/current')).json()).data.email).toBe(email)
     expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([])
     const session = (await page.context().cookies()).find((cookie) => cookie.name === 'JSESSIONID')
     expect(session?.httpOnly).toBe(true)
@@ -145,13 +146,14 @@ test('邮箱找回重置后旧密码失效、新密码可用，另一设备旧�
   const newPassword = 'ChangedCraft123'
   await registerAccount(page, email, mailbox.codes)
   await signIn(page, email)
-  await expect(page.getByRole('heading', { name: '欢迎，手作测试。' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '发现手作之美' })).toBeVisible()
   const otherContext = await browser.newContext()
   try {
     const other = await otherContext.newPage()
     await other.goto('http://localhost:5173/login')
     await signIn(other, email)
-    await expect(other.getByRole('heading', { name: '欢迎，手作测试。' })).toBeVisible()
+    await expect(other.getByRole('heading', { name: '发现手作之美' })).toBeVisible()
+    await page.getByRole('link', { name: '手作测试 · 个人中心', exact: true }).click()
     await page.getByRole('link', { name: /重新设置密码/ }).click()
     await page.getByLabel('邮箱地址').fill(email)
     await page.getByLabel('邮箱验证码').fill(await requestCode(page, email, mailbox.codes))
@@ -165,7 +167,7 @@ test('邮箱找回重置后旧密码失效、新密码可用，另一设备旧�
     await signIn(page, email)
     await expect(page.getByRole('alert')).toHaveText('邮箱或密码错误')
     await signIn(page, email, newPassword)
-    await expect(page.getByRole('heading', { name: '欢迎，手作测试。' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '发现手作之美' })).toBeVisible()
   } finally {
     await otherContext.close()
   }
@@ -219,7 +221,7 @@ test('退出后延迟到达的旧会话响应不能恢复登录缓存', async ({
   const email = newEmail()
   await registerAccount(page, email, mailbox.codes)
   await signIn(page, email)
-  await expect(page.getByRole('heading', { name: '欢迎，手作测试。' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '发现手作之美' })).toBeVisible()
   let release: (() => void) | undefined
   const gate = new Promise<void>((resolve) => {
     release = resolve
@@ -237,7 +239,7 @@ test('退出后延迟到达的旧会话响应不能恢复登录缓存', async ({
   await expect.poll(() => captured).toBe(true)
   await page.getByRole('button', { name: '退出登录' }).click()
   // 等待退出确已清空本人信息，再释放此前的 200 响应，稳定覆盖响应乱序。
-  await expect(page.getByRole('heading', { name: '欢迎，手作测试。' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: '发现手作之美' })).toHaveCount(0)
   release!()
   await expect(page).toHaveURL(/\/login$/)
   await page.getByRole('link', { name: '立即注册' }).click()

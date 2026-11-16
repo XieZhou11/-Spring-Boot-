@@ -59,6 +59,8 @@ request.interceptors.request.use(async (config) => {
 
 request.interceptors.response.use(
   (response) => {
+    // REST 删除成功无响应体，不能按统一 JSON 业务码误判失败。
+    if (response.status === 204) return response
     const result = response.data as ApiResult<unknown>
     if (result.code !== 0) {
       return Promise.reject(responseError(result, response.status))

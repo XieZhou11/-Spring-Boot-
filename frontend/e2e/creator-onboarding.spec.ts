@@ -176,8 +176,8 @@ test('入驻撤回重提、管理员驳回补正通过、实时通知及会话�
     await page.getByRole('button', { name: '标为已读', exact: true }).click()
     await expect(page.locator('.notification-link .unread-badge')).toHaveCount(0)
     await page.getByRole('button', { name: '切换为创作者', exact: true }).click()
-    await expect(page).toHaveURL('/')
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('创作者')
+    await expect(page).toHaveURL('/creator/works')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('我的作品')
     const switched = (await (await page.request.get(`${api}/sessions/current`)).json()).data
     const otherSession = (await (await second.request.get(`${api}/sessions/current`)).json()).data
     expect(switched.activeRole).toBe('CREATOR')

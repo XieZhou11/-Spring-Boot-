@@ -48,6 +48,7 @@ async function markRead(notification: NotificationVO) {
 async function openApplication(notification: NotificationVO) {
   await markRead(notification)
   if (notification.businessReference?.type === 'CREATOR_APPLICATION') await router.push({ path: '/account/creator-certification', query: { applicationId: notification.businessReference.id } })
+  if (notification.businessReference?.type === 'WORK') await router.push(`/creator/works/${notification.businessReference.id}/edit`)
 }
 function refreshOnFocus() {
   void load()
@@ -105,7 +106,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('focus', refreshO
       v-else-if="!rows.length && !error"
       class="creator-empty"
     >
-      <span aria-hidden="true">✉</span><h2>这里，等一封好消息</h2><p>入驻审核进度会留在这里，离线也不会错过。</p>
+      <span aria-hidden="true">✉</span><h2>这里，等一封好消息</h2><p>入驻与作品审核进度会留在这里，离线也不会错过。</p>
     </div><div
       v-else
       class="notification-list"
@@ -131,11 +132,11 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('focus', refreshO
             >
               {{ marking.includes(notification.id) ? '正在更新…' : '标为已读' }}
             </button><button
-              v-if="notification.businessReference?.type === 'CREATOR_APPLICATION'"
+              v-if="notification.businessReference"
               class="inline-button"
               @click="openApplication(notification)"
             >
-              查看申请 ↗
+              {{ notification.businessReference?.type === 'WORK' ? '查看作品' : '查看申请' }} ↗
             </button>
           </div>
         </footer>

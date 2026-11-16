@@ -17,7 +17,7 @@ async function switchRole() {
   error.value = ''
   try {
     await auth.switchRole(auth.session.activeRole === 'CREATOR' ? 'BUYER' : 'CREATOR')
-    await router.push('/')
+    await router.push(auth.session?.activeRole === 'CREATOR' ? '/creator/works' : '/')
   } catch (failure) {
     error.value = failure instanceof Error ? failure.message : '身份切换失败'
   } finally {
@@ -40,6 +40,10 @@ async function switchRole() {
     >
       {{ switching ? '正在切换…' : auth.session?.activeRole === 'CREATOR' ? '切换为买家' : '切换为创作者' }}
     </button>
+    <RouterLink
+      v-if="auth.session?.roles.includes('CREATOR')"
+      to="/creator/works"
+    >我的作品</RouterLink>
     <RouterLink
       to="/account/notifications"
       class="notification-link"

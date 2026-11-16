@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-后端已实现账号注册、登录、找回密码、会话及真实 SMTP 发送逻辑，详见 [T-001](docs/development/tasks/T-001-backend-auth.md)。前端认证页面见 [T-002](docs/development/tasks/T-002-frontend-auth.md)；个人资料、头像及收货地址前后端见 [T-003](docs/development/tasks/T-003-personal-center.md)。本机 QQ SMTP 连接认证已通过，QQ/163 公网实收仍待验收；头像已完成真实 OSS 上传、私有签名读取与替换联调。作品与交易页面尚未实现，当前不涉及部署。本地开发库已完成 27 表迁移，启动及验证入口见前后端 README。
+后端已实现账号注册、登录、找回密码、会话及真实 SMTP 发送逻辑，详见 [T-001](docs/development/tasks/T-001-backend-auth.md)。前端认证页面见 [T-002](docs/development/tasks/T-002-frontend-auth.md)；个人资料、头像及收货地址前后端见 [T-003](docs/development/tasks/T-003-personal-center.md)。本机 QQ SMTP 连接认证已通过，QQ/163 公网收件及找回密码补充验收用户明确暂缓；头像已完成真实 OSS 上传、私有签名读取与替换联调。作品发布、管理员审核和首页/详情/创作者主页已完成，见 [T-005](docs/development/tasks/T-005-work-publication.md)及[测试记录](docs/testing/T-005-work-publication.md)；交易与互动仍待后续任务，当前不涉及部署。本地开发库已完成 27 表迁移，V3 作品请求键与版本在下次启动新版后端时自动追加，启动及验证入口见前后端 README。
 
 [T-004](docs/development/tasks/T-004-creator-onboarding.md)增加创作者入驻与管理员审核：申请撤回及补正历史、私有材料图片、收款账号加密、两级品类、会话身份切换和持久化实时通知。前后端接口及浏览器联调结果见任务与[测试记录](docs/testing/T-004-creator-onboarding.md)。本地开发库已执行 V2 申请幂等键迁移。管理员先维护启用一级品类，再由普通买家填写申请；入驻作品不自动公开。
 
@@ -35,14 +35,14 @@
     └── testing/               # 任务或功能点的简短测试结果
 ```
 
-后端启动时连接 MySQL 并自动执行 Flyway；前端未登录访问业务页面先进入登录页，首页提供本人会话、退出及个人中心入口。其他业务组件与状态按任务增加。数据库设计仍为草稿，执行迁移不等于需求或设计已全部批准。
+后端启动时连接 MySQL 并自动执行 Flyway；前端未登录访问业务页面先进入登录页，首页为作品发现与检索，提供本人会话、退出及个人中心入口；创作者进入我的作品，管理员进入作品审核，详情与主页均要求登录。数据库设计仍为草稿，执行迁移不等于需求或设计已全部批准。
 
 采用按需创建目录的方式，不预建独立脚本、部署、接口契约或根测试目录。接口约定随设计与实现任务维护，必要测试代码在对应工程内组织。
 
 ## 工程初始化约定
 
 - 技术与版本见 [ADR-001](docs/design/decisions/ADR-001-technology-stack.md)；本轮按用户已确认的选型搭建，保留不使用 Redis、原生 HttpSession 与阿里云 OSS 的约定。
-- JDK 21、Maven Wrapper 3.9.15；前端 Node 24.22.2、npm 11.19.1。系统 Node 21 不满足前端要求，需切换 Node 24。
+- JDK 21、Maven Wrapper 3.9.15；前端 Node 24.22.2、npm 11.19.1。低于 Node 24.22.2 的版本不满足当前工程要求，需先切换工具链。
 - 精确依赖在 `backend/pom.xml`、`frontend/package.json` 和生成的锁文件中维护。基础数据源及联调配置已完成，业务集成与外部服务按后续任务实现。
 - 框架检查、MySQL 8.4 迁移/失败补偿及浏览器跨域联调已验证；账号及认证页面结果见 [T-001 测试记录](docs/testing/T-001-backend-auth.md)、[T-002 测试记录](docs/testing/T-002-frontend-auth.md)，个人中心及本轮回归结果见 [T-003 测试记录](docs/testing/T-003-personal-center.md)。当前工作树未包含 CI 文件，未执行远端 CI。
 - 个人资料、上传文件、日志和构建产物不进入版本库；用户已指定后端配置及开发数据库凭据统一在 `application.yml` 中显式填写，不再使用 local 配置或样例文件。

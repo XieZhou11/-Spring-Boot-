@@ -22,6 +22,8 @@ export interface CategoryVO {
   enabled: boolean
   /** 升序展示顺序。 */
   sortOrder: number
+  /** 当前启用且为末级，可用于作品提交。 */
+  selectableForWork: boolean
   /** 下级品类。 */
   children: CategoryVO[]
 }
@@ -155,7 +157,9 @@ export interface NotificationVO {
   /** 关联申请。 */
   businessReference: {
     /** 当前任务支持创作者申请通知。 */
-    type: 'CREATOR_APPLICATION'
+    type: 'CREATOR_APPLICATION' | 'WORK'
+    /** 作品审核轮次，申请通知不含此字段。 */
+    version?: string
     /** 关联申请编号。 */
     id: string
   } | null
