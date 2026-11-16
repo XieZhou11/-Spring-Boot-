@@ -34,8 +34,8 @@ public class GlobalExceptionHandler {
     /** 容器先于业务解析拒绝超大文件时，仍提供一致且可理解的响应。 */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Result<Void>> handleUploadSize(HttpServletRequest request) {
-        logFailure(request, 413, 41300, "上传文件过大，头像不能超过 2MB");
-        return ResponseEntity.status(413).body(Result.error(41300, "上传文件过大，头像不能超过 2MB"));
+        logFailure(request, 413, 41300, "上传文件超过允许大小，请按页面说明重新选择");
+        return ResponseEntity.status(413).body(Result.error(41300, "上传文件超过允许大小，请按页面说明重新选择"));
     }
 
     @ExceptionHandler(BusinessException.class)

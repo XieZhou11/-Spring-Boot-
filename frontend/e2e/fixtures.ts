@@ -1,6 +1,7 @@
 import { test as base, expect } from '@playwright/test'
 import { createConnection } from 'mysql2/promise'
 import { createServer } from 'node:net'
+import { createServer as createHttpServer } from 'node:http'
 import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
@@ -9,13 +10,46 @@ import { resolve } from 'node:path'
 interface Mailbox {
   codes: Map<string, string>
   rejectNext: boolean
+  /** 仅向本 worker 随机测试库中的指定账号授权，生产服务没有此接口。 */
+  promoteAdmin: (email: string) => Promise<void>
 }
 
 /** 只在测试进程使用隔离库和 SMTP 夹具，生产后端无测试接口或假验证码。 */
-export const test = base.extend<object, { mailbox: Mailbox }>({
+export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabled' | 'receiver' }>({
+  storageMode: ['disabled', { scope: 'worker', option: true }],
   mailbox: [
-    async ({ browserName }, use, workerInfo) => {
-      const mailbox: Mailbox = { codes: new Map(), rejectNext: false }
+    async ({ browserName, storageMode }, use, workerInfo) => {
+      const mailbox: Mailbox = {
+        codes: new Map(), rejectNext: false,
+        promoteAdmin: async () => { throw new Error('测试数据库尚未就绪') },
+      }
+      // 经过真实 OSS SDK 的 HTTP 协议；仅接收本夹具随机对象，绝不访问真实云端。
+      const objects = new Map<string, { bytes: Buffer; type: string }>()
+      const storage = createHttpServer(async (request, response) => {
+        const path = new URL(request.url || '/', 'http://localhost').pathname
+        response.setHeader('x-oss-request-id', 'browser-test-request')
+        response.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173')
+        if (request.method === 'PUT') {
+          const chunks: Buffer[] = []
+          for await (const chunk of request) chunks.push(Buffer.from(chunk))
+          objects.set(path, { bytes: Buffer.concat(chunks), type: request.headers['content-type'] || 'image/png' })
+          response.setHeader('ETag', '"browser-test-etag"')
+          response.writeHead(200).end()
+        } else if (request.method === 'DELETE') {
+          objects.delete(path)
+          response.writeHead(204).end()
+        } else if (request.method === 'GET' && objects.has(path)) {
+          const object = objects.get(path)!
+          response.setHeader('Content-Type', object.type)
+          response.writeHead(200).end(object.bytes)
+        } else response.writeHead(404).end()
+      })
+      await new Promise<void>((resolve, reject) => {
+        storage.once('error', reject)
+        storage.listen(0, '127.0.0.1', resolve)
+      })
+      const storageAddress = storage.address()
+      if (!storageAddress || typeof storageAddress === 'string') throw new Error('OSS 测试端口分配失败')
       const smtp = createServer((socket) => {
         let buffer = ''
         let recipient = ''
@@ -78,6 +112,9 @@ export const test = base.extend<object, { mailbox: Mailbox }>({
       const log = createWriteStream(`${workerInfo.project.outputDir}/backend-${browserName}.log`)
       try {
         await database.query(`CREATE DATABASE \`${schema}\` CHARACTER SET utf8mb4`)
+        mailbox.promoteAdmin = async (email) => {
+          await database.execute(`UPDATE \`${schema}\`.user_account SET is_admin=1 WHERE email=?`, [email])
+        }
         backend = spawn(
           'java',
           [
@@ -92,8 +129,13 @@ export const test = base.extend<object, { mailbox: Mailbox }>({
             '--spring.mail.properties.mail.smtp.auth=false',
             '--spring.mail.properties.mail.smtp.ssl.enable=false',
             '--app.auth.verification-secret=browser-test-only-secret-at-least-32-bytes',
+            '--app.security.payment-account-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
             // 普通回归固定验证未配置存储，避免读取本地真实凭据后向云端写入测试对象。
-            '--app.oss.endpoint=',
+            ...(storageMode === 'receiver' ? [
+              `--app.oss.endpoint=http://127.0.0.1:${storageAddress.port}`,
+              '--app.oss.region=cn-beijing', '--app.oss.bucket=browser-test',
+              '--app.oss.access-key-id=browser-test-id', '--app.oss.access-key-secret=browser-test-secret',
+            ] : ['--app.oss.endpoint=']),
           ],
           { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
         )
@@ -124,6 +166,7 @@ export const test = base.extend<object, { mailbox: Mailbox }>({
         await database.query(`DROP DATABASE IF EXISTS \`${schema}\``)
         await database.end()
         await new Promise<void>((resolve) => smtp.close(() => resolve()))
+        await new Promise<void>((resolve) => storage.close(() => resolve()))
       }
     },
     { scope: 'worker', auto: true, timeout: 90_000 },

@@ -16,7 +16,7 @@ public final class AccountPrincipal implements java.security.Principal, Serializ
     private final Long userId;
     private final String credentialFingerprint;
     private final Instant expiresAt;
-    private final String activeRole;
+    private volatile String activeRole;
 
     public AccountPrincipal(UserAccount account, Instant issuedAt) {
         this.userId = account.getId();
@@ -40,6 +40,15 @@ public final class AccountPrincipal implements java.security.Principal, Serializ
 
     public String activeRole() {
         return activeRole;
+    }
+
+    /** 仅在服务端校验账号资格后修改当前会话，不创建新凭证或改变截止时间。 */
+    public synchronized void switchRole(String role) { this.activeRole = role; }
+
+    /** 每次请求按最新账号资格校正默认入口，不改变其他设备。 */
+    public synchronized void reconcile(UserAccount account) {
+        var available=roles(account);
+        if(!available.contains(activeRole)) activeRole=available.getFirst();
     }
 
     public boolean matches(String passwordHash) {

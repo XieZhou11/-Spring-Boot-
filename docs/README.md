@@ -17,8 +17,8 @@
 | 技术选型 | 用户已确认采用；账号本地业务集成已验证，QQ/163 公网实收待验收，其他业务能力按任务验证 | [ADR-001](design/decisions/ADR-001-technology-stack.md) |
 | 数据库详细设计 | V1.5 设计草稿；27 表 Flyway SQL 已在本地执行，迁移及失败补偿在 MySQL 8.4 验证 | [数据库表结构](design/数据库表结构.md)，含字段、索引、应用关联与事务回滚 |
 | 架构、领域与 UI 详细设计 | 尚未编写 | [设计约定](design/README.md)，在相关任务中逐步形成 |
-| 前后端工程 | 已有登录、注册、找回密码、会话及个人中心页面，接入真实后端；真实 OSS 云端联调已通过，QQ/163 公网实收待补齐，作品与交易页面尚未实现 | [后端说明](../backend/README.md)、[前端说明](../frontend/README.md)、[T-002](development/tasks/T-002-frontend-auth.md)、[T-003](development/tasks/T-003-personal-center.md) |
-| 业务接口、自动化测试与 CI | 账号和个人中心使用真实 MySQL、HTTP 及协议接收器集成验证，前端有 Playwright 回归；后端测试源码按约定仅保留本地且被 Git 忽略；无 CI 文件，未执行远端 CI | [账号后端测试](testing/T-001-backend-auth.md)、[认证联调测试](testing/T-002-frontend-auth.md)、[个人中心测试](testing/T-003-personal-center.md) |
+| 前后端工程 | 已有账号、个人中心、创作者入驻与后台审核、两级品类、身份切换及系统通知；真实 OSS 云端联调已通过，QQ/163 公网实收待补齐，作品与交易页面尚未实现 | [后端说明](../backend/README.md)、[前端说明](../frontend/README.md)、[T-002](development/tasks/T-002-frontend-auth.md)、[T-003](development/tasks/T-003-personal-center.md)、[T-004](development/tasks/T-004-creator-onboarding.md) |
+| 业务接口、自动化测试与 CI | 账号、个人中心和入驻使用真实 MySQL、HTTP、WebSocket 及协议接收器集成验证，前端有 Playwright 回归；后端测试源码仅保留本地且被 Git 忽略；无 CI 文件，未执行远端 CI | [账号后端测试](testing/T-001-backend-auth.md)、[认证联调测试](testing/T-002-frontend-auth.md)、[个人中心测试](testing/T-003-personal-center.md)、[入驻审核测试](testing/T-004-creator-onboarding.md) |
 
 用户已于 2026-11-12 指定 V1.5 MVP 版为后续需求与开发依据，`requirements.md` 已同步替换。正文保留“待审核”状态；采用为工作依据不等于宣称全部内容已经最终批准。遇到影响实现的歧义或冲突，记录具体问题并澄清，不拼接不同版本的规则。
 
@@ -33,6 +33,8 @@ V1.5 MVP 版正文仅描述完整实现范围，不划分功能优先级，也�
 不保留独立的 `contracts/` 和根目录 `tests/`。接口约定在设计与实现时明确；仅业务功能开发或业务缺陷修复编写测试类；后端 `src/test/java/` 内容仅供本地使用，不纳入 Git。非业务工作通过临时命令或实际运行验证，不新增持久化测试类。本目录的 `testing/` 仅保存任务或功能点的简短测试结果，不再细分子目录。
 
 2026-11-13 T-001 账号后端已实现并通过本地验证：只支持 QQ/163 邮箱，注册填写昵称，验证码五分钟共用，登录七天绝对有效、多端可用，重置撤销旧会话。T-002 接入登录、注册及找回页面、受保护会话首页，复用 Cookie/CSRF/CORS。本机 QQ SMTP 连接认证已通过，QQ/163 公网实收仍待验收。T-003 增加个人资料、独立头像上传与收货地址，用户补齐北京私有 OSS 配置后，真实云端上传、读取与替换联调已通过；订单地址快照随订单功能实现。任务、接口和实际测试入口见上表。
+
+T-004 已实现创作者申请、撤回补正、后台审核及材料比较、两级品类、收款账号加密、私有入驻图片、当前会话身份切换及持久化实时通知。V2 为申请增加用户范围请求键，本机开发库已执行；具体状态及验证以 [T-004](development/tasks/T-004-creator-onboarding.md) 为准。入驻材料不会自动公开，普通聊天、作品发布与交易仍待后续开发。
 
 ## 2. 文档导航
 
@@ -85,12 +87,14 @@ docs/
 │       ├── TASK_TEMPLATE.md          # 业务功能开始开发时使用的模板
 │       ├── T-001-backend-auth.md     # 账号后端接口与验收状态
 │       ├── T-002-frontend-auth.md    # 认证页面与联调验收
-│       └── T-003-personal-center.md  # 个人资料、头像与收货地址
+│       ├── T-003-personal-center.md  # 个人资料、头像与收货地址
+│       └── T-004-creator-onboarding.md # 创作者入驻、审核、品类与通知
 └── testing/                          # 简短测试结果，不存测试代码、不建子目录
     ├── README.md                     # 业务功能测试记录方式与格式示例
     ├── T-001-backend-auth.md          # 账号后端测试与复测结果
     ├── T-002-frontend-auth.md         # 认证浏览器联调与复测结果
-    └── T-003-personal-center.md       # 个人中心测试及本轮回归结果
+    ├── T-003-personal-center.md       # 个人中心测试及本轮回归结果
+    └── T-004-creator-onboarding.md    # 入驻、审核与通知联调结果
 ```
 
 补充说明：
@@ -99,7 +103,7 @@ docs/
 - `prototypes/README.md` 是当前导航，`assets/原型说明.md` 是原始设计说明，两者职责接近；后续若精简，可以合并说明并减少一层目录，本轮未改写原始材料。
 - 原 `design/database.md` 已删除，现有 [数据库表结构](design/数据库表结构.md)为按当前需求编写的新草稿，对应 SQL 位于后端 `src/main/resources/db/migration/`，V1 已执行且包含异常结构补偿；人工结构回退位于相邻 `rollback/`，未执行。
 - `decisions/` 中的 ADR-001 记录已选技术；选型和框架验证不代表全部业务已经实现，SMTP 公网实收仍需按任务确认，OSS 实际结果见 T-003。
-- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端 T-001、认证前端 T-002 和个人中心 T-003。
+- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端 T-001、认证前端 T-002、个人中心 T-003 和入驻审核 T-004。
 - `testing/README.md` 只规定业务功能测试结果如何填写；功能开发时再增加实际记录，复测更新同一文件，任务只保留总体结果和链接。
 
 ## 3. 已有资料迁移对照

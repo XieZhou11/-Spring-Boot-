@@ -30,4 +30,13 @@ public class UserAccount {
 
     /** 创作者认证状态：NONE 未申请、PENDING 待审核、APPROVED 已通过、REJECTED 已拒绝。 */
     private String certificationStatus;
+
+    /** 审核通过的历史申请编号，用于只读收款资料与后续结算快照。 */
+    private Long approvedApplicationId;
+
+    /** 创作者本人暂停接单标记，与管理员限制独立。 */
+    private boolean creatorPaused;
+
+    /** 管理员统一暂停新业务标记，不影响登录和旧单履约。 */
+    private boolean adminBusinessPaused;
 }

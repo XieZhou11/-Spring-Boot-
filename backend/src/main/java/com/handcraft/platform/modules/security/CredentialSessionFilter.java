@@ -58,6 +58,15 @@ public class CredentialSessionFilter extends OncePerRequestFilter {
                     invalidReason = "账号已不存在";
                 } else if (!principal.matches(account.getPasswordHash())) {
                     invalidReason = "密码已变更，旧登录凭证失效";
+                } else {
+                    // 认证或管理员资格变化在旧会话立即生效，避免依赖登录时的权限快照。
+                    principal.reconcile(account);
+                    var refreshed = org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(
+                            principal,null,AccountPrincipal.roles(account).stream()
+                                    .map(role->new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_"+role)).toList());
+                    var context=SecurityContextHolder.createEmptyContext();
+                    context.setAuthentication(refreshed);
+                    SecurityContextHolder.setContext(context);
                 }
             } catch (DataAccessException exception) {
                 // 数据库不可用时拒绝本次访问，不能依赖缓存身份继续放行。

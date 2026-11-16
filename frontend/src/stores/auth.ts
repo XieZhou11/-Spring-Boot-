@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import * as api from '@/api/auth'
+import { switchActiveRole } from '@/api/creator'
 import type { LoginDTO, SessionVO } from '@/types/auth'
 import { advanceAuthenticationRevision, ApiError } from '@/utils/request'
 
@@ -68,5 +69,12 @@ export const useAuthStore = defineStore('auth', () => {
     clearSession()
   }
 
-  return { session, restoreSession, signIn, signOut, clearSession }
+  /** 当前身份由服务端校验资格，不能仅更新页面角色。 */
+  async function switchRole(role: 'BUYER' | 'CREATOR') {
+    const current = await switchActiveRole(role)
+    advanceRevision()
+    session.value = current
+  }
+
+  return { session, restoreSession, signIn, signOut, clearSession, switchRole }
 })

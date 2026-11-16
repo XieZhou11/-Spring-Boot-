@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import BrandLogo from '@/components/BrandLogo.vue'
 import AppIcon from '@/components/AppIcon.vue'
+import SessionTools from '@/components/SessionTools.vue'
 import craftScene from '@/assets/craft-scene.svg'
 
 const auth = useAuthStore()
@@ -30,7 +31,7 @@ async function signOut() {
 <template>
   <div class="member-page">
     <header class="site-header">
-      <BrandLogo /><button
+      <BrandLogo /><SessionTools /><button
         class="button-secondary"
         :disabled="leaving"
         @click="signOut"
@@ -45,9 +46,9 @@ async function signOut() {
       <div>
         <span class="session-badge"><AppIcon name="check" /> 已登录</span>
         <p class="eyebrow">
-          NICE TO SEE YOU HERE
+          {{ auth.session.activeRole === 'CREATOR' ? 'YOUR CREATOR SPACE' : 'NICE TO SEE YOU HERE' }}
         </p>
-        <h1>欢迎，{{ auth.session.nickname }}。</h1>
+        <h1>{{ auth.session.activeRole === 'CREATOR' ? '创作者' : '欢迎' }}，{{ auth.session.nickname }}。</h1>
         <p>很高兴在这里遇见你。<br>让手作，成为生活里特别的一部分。</p>
         <p class="member-email">
           {{ auth.session.email }}
@@ -64,6 +65,11 @@ async function signOut() {
             class="button-secondary"
             to="/account/addresses"
           >收货地址</RouterLink>
+          <RouterLink
+            v-if="!auth.session.roles.includes('ADMIN')"
+            class="button-secondary"
+            to="/account/creator-certification"
+          >{{ auth.session.roles.includes('CREATOR') ? '认证资料' : '创作者入驻' }}</RouterLink>
         </nav>
         <RouterLink
           class="text-link"

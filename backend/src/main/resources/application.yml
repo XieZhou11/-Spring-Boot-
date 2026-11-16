@@ -1,9 +1,9 @@
 spring:
   servlet:
     multipart:
-      # 头像上限 2MiB；请求额外保留 multipart 表单边界空间，服务层仍检查实际字节数。
-      max-file-size: 2MB
-      max-request-size: 3MB
+      # 入驻图片上限 5MiB，头像业务仍限制 2MiB；请求额外保留 multipart 边界空间。
+      max-file-size: 5MB
+      max-request-size: 6MB
   application:
     name: handcraft-platform
   # 后端配置统一在本文件显式维护，不加载额外本地配置。
@@ -54,6 +54,16 @@ mybatis-plus:
     map-underscore-to-camel-case: true
 
 app:
+  security:
+    # 收款账号 AES-256-GCM 密钥：本地填写 Base64 编码的 32 字节随机密钥，需保留以解密历史资料。
+    payment-account-key: ""
+  # 私有 OSS 由后端使用；真实访问凭据仅保留本地，不纳入提交。
+  oss:
+    endpoint: ""
+    region: ""
+    bucket: ""
+    access-key-id: ""
+    access-key-secret: ""
   auth:
     # 本地填写至少 32 字节随机密钥，用于验证码 HMAC；留空时验证码接口明确不可用。
     # 保持密钥稳定，轮换会使未消费验证码失效；真实密钥不进入提交。

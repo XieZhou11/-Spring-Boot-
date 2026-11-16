@@ -34,4 +34,11 @@ public interface FileAssetMapper {
     /** SDK 最长单次请求为 30 秒；保留两分钟稳定窗口，覆盖远端迟到 PUT 后再次删除。 */
     @Select("SELECT updated_at <= DATE_SUB(CURRENT_TIMESTAMP(3), INTERVAL 2 MINUTE) FROM file_asset WHERE id=#{fileId}")
     boolean cleanupWindowElapsed(Long fileId);
+
+    /** 仅扫描入驻临时资源，所有历史材料的引用在清理事务中再次检查。 */
+    @Select("SELECT "+COLUMNS+" FROM file_asset f WHERE object_key LIKE 'creator-applications/%' AND (upload_status='CLEANUP_PENDING' OR (upload_status='UPLOADING' AND updated_at < DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 1 HOUR)) OR (upload_status='AVAILABLE' AND updated_at < DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 24 HOUR) AND NOT EXISTS (SELECT 1 FROM creator_application a WHERE a.user_id=f.uploader_id AND JSON_SEARCH(a.original_works,'one',CAST(f.id AS CHAR),NULL,'$[*].finished_image_ids[*]','$[*].process_image_ids[*]') IS NOT NULL))) ORDER BY updated_at,id LIMIT 50")
+    List<FileAsset> findInterruptedApplications();
+
+    @Select("SELECT (upload_status='CLEANUP_PENDING' OR (upload_status='UPLOADING' AND updated_at < DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 1 HOUR)) OR (upload_status='AVAILABLE' AND updated_at < DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 24 HOUR))) FROM file_asset WHERE id=#{fileId}")
+    boolean applicationCleanupDue(Long fileId);
 }

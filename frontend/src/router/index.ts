@@ -24,6 +24,36 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '收货地址' },
     },
     {
+      path: '/account/creator-certification',
+      name: 'creator-certification',
+      component: () => import('@/views/CreatorCertificationView.vue'),
+      meta: { requiresAuth: true, title: '创作者入驻' },
+    },
+    {
+      path: '/account/notifications',
+      name: 'notifications',
+      component: () => import('@/views/NotificationsView.vue'),
+      meta: { requiresAuth: true, title: '系统通知' },
+    },
+    {
+      path: '/admin/creator-applications',
+      name: 'admin-creator-applications',
+      component: () => import('@/views/AdminCreatorApplicationsView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true, title: '入驻审核' },
+    },
+    {
+      path: '/admin/creator-applications/:id',
+      name: 'admin-creator-review',
+      component: () => import('@/views/AdminCreatorReviewView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true, title: '入驻材料审核' },
+    },
+    {
+      path: '/admin/categories',
+      name: 'admin-categories',
+      component: () => import('@/views/AdminCategoriesView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true, title: '品类管理' },
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
@@ -58,6 +88,7 @@ router.beforeEach(async (to) => {
   }
   if (to.meta.requiresAuth && !auth.session)
     return { path: '/login', query: { redirect: to.fullPath } }
+  if (to.meta.requiresAdmin && !auth.session?.roles.includes('ADMIN')) return '/'
   if (to.meta.guestOnly && auth.session) {
     const target = safeRedirect(to.query.redirect)
     return router.resolve(target).meta.requiresAuth ? target : '/'

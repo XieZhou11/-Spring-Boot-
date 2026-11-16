@@ -127,6 +127,16 @@ public class SessionServiceImpl implements SessionService {
     }
 
     @Override
+    public SessionVO switchRole(AccountPrincipal principal, com.handcraft.platform.modules.dto.ActiveRoleDTO input) {
+        return com.handcraft.platform.common.logging.BusinessLog.run(LOGGER,"当前会话身份切换",principal.userId(),()->{
+            var account=accounts.findById(principal.userId());
+            if(account==null||!principal.matches(account.getPasswordHash()))throw new BusinessException(CommonErrorCode.UNAUTHORIZED);
+            if(!AccountPrincipal.roles(account).contains(input.getActiveRole()))throw new BusinessException(CommonErrorCode.FORBIDDEN,"当前账号不具备所选身份");
+            principal.switchRole(input.getActiveRole());return current(principal);
+        });
+    }
+
+    @Override
     public void logout(HttpServletRequest request, HttpServletResponse response) {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         Long userId = authentication != null && authentication.getPrincipal() instanceof AccountPrincipal principal

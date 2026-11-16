@@ -16,6 +16,9 @@ public interface SessionService {
     /** 根据服务端认证主体读取本人会话视图，不接受客户端自报身份。 */
     SessionVO current(AccountPrincipal principal);
 
+    /** 校验现有资格后切换当前会话默认入口，保留原登录截止时间。 */
+    SessionVO switchRole(AccountPrincipal principal, com.handcraft.platform.modules.dto.ActiveRoleDTO input);
+
     /** 退出当前会话并清除浏览器会话 Cookie，其他设备不受影响。 */
     void logout(HttpServletRequest request, HttpServletResponse response);
 }

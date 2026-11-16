@@ -17,9 +17,11 @@ public class AccountSessionRegistry implements HttpSessionListener {
 
     private final ConcurrentHashMap<String, Entry> sessions = new ConcurrentHashMap<>();
     private final Clock clock;
+    private final org.springframework.context.ApplicationEventPublisher events;
 
-    public AccountSessionRegistry(Clock clock) {
+    public AccountSessionRegistry(Clock clock,org.springframework.context.ApplicationEventPublisher events) {
         this.clock = clock;
+        this.events = events;
     }
 
     public void register(HttpSession session, AccountPrincipal principal) {
@@ -31,6 +33,7 @@ public class AccountSessionRegistry implements HttpSessionListener {
             return;
         }
         try {
+            events.publishEvent(new SessionRevokedEvent(session.getId()));
             sessions.remove(session.getId());
             session.invalidate();
         } catch (IllegalStateException ignored) {
@@ -51,6 +54,7 @@ public class AccountSessionRegistry implements HttpSessionListener {
 
     @Override
     public void sessionDestroyed(HttpSessionEvent event) {
+        events.publishEvent(new SessionRevokedEvent(event.getSession().getId()));
         sessions.remove(event.getSession().getId());
     }
 

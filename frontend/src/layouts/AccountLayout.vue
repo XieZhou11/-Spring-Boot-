@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import BrandLogo from '@/components/BrandLogo.vue'
+import SessionTools from '@/components/SessionTools.vue'
 import '@/assets/styles/account.css'
 
 defineProps<{ title: string; subtitle: string; number: string }>()
@@ -9,6 +10,7 @@ defineProps<{ title: string; subtitle: string; number: string }>()
   <div class="member-page account-page">
     <header class="site-header">
       <BrandLogo />
+      <SessionTools />
       <RouterLink
         to="/"
         class="account-back"
@@ -29,6 +31,14 @@ defineProps<{ title: string; subtitle: string; number: string }>()
             to="/account/addresses"
             active-class="active"
           ><span>02</span> 收货地址 <i aria-hidden="true">↗</i></RouterLink>
+          <RouterLink
+            to="/account/creator-certification"
+            active-class="active"
+          ><span>03</span> 创作者入驻 <i aria-hidden="true">↗</i></RouterLink>
+          <RouterLink
+            to="/account/notifications"
+            active-class="active"
+          ><span>04</span> 系统通知 <i aria-hidden="true">↗</i></RouterLink>
         </nav>
         <p class="sidebar-note">
           每一份用心，<br>都有它的归处。

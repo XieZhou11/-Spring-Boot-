@@ -1,6 +1,6 @@
 # 前端工程
 
-Vue 3 + TypeScript + Vite 工程。登录、注册、找回密码、本人会话页及个人资料、收货地址页面接入后端，沿用原型“拾作”的纸张底色、深绿主操作和手作插画。实施及验收见 [T-002](../docs/development/tasks/T-002-frontend-auth.md)、[T-003](../docs/development/tasks/T-003-personal-center.md)；作品与交易页面尚未实现，不填充演示业务数据。
+Vue 3 + TypeScript + Vite 工程。登录注册、个人中心、创作者入驻、管理员审核、两级品类管理及系统通知已接入后端，沿用原型“拾作”的纸张底色、深绿主操作和手作插画。实施及验收见 [T-002](../docs/development/tasks/T-002-frontend-auth.md)、[T-003](../docs/development/tasks/T-003-personal-center.md)、[T-004](../docs/development/tasks/T-004-creator-onboarding.md)；作品与交易页面尚未实现。
 
 ## 环境与依赖
 
@@ -82,7 +82,15 @@ npm run preview
 
 `build` 包含类型检查，产物写入被 Git 忽略的 `dist/`。`preview` 用于预览本机构建，不是部署方案。网络必须经代理时，在当前终端设置 `HTTP_PROXY`、`HTTPS_PROXY` 或个人 npm 配置，不把个人代理写入项目。
 
-## 账号与个人中心浏览器回归
+## 创作者入驻与审核
+
+普通买家从首页或个人中心进入 `/account/creator-certification`，提交资料及 3—5 件作品的成品、过程图；图片独立上传，表单只保存在内存。待审核可撤回，驳回及撤回后复制原材料补正并新增申请，历史结论和材料可查；通过后姓名与收款资料只读。提交或撤回响应未知时重新查询服务端结果，材料保留用于核对或重试。
+
+管理员登录后从“管理后台”进入 `/admin/creator-applications`，按状态查询队列，在详情比较上次材料并通过或填写理由驳回；`/admin/categories` 维护两级品类及启停。开发库没有演示品类时，先由管理员新增启用的一级品类，再由普通买家申请。管理员不申请创作者资格。
+
+`/account/notifications` 查看审核通知、已读状态及未读数；全应用共享原生 WebSocket，多端同步未读，断线最多自动重试 5 次，失败后可手动连接，持久化列表始终独立查询。通过后页首可切换买家/创作者，仅改变当前会话入口，不延长登录有效期。作品发布和普通聊天随后续功能实现。
+
+## 账号、个人中心与入驻浏览器回归
 
 前提：Node/npm 版本符合工程要求，JDK 21 可从 PATH 启动，本机 MySQL 在 3306 可连接，账号与开发配置一致并有创建/删除测试库权限。先在 `backend/` 执行 `.\mvnw.cmd -B -ntp verify` 生成最新可执行 JAR，再回本目录执行：
 
@@ -92,8 +100,12 @@ npx playwright install msedge
 npm run test:e2e
 # 仅复测个人中心
 npx playwright test e2e/personal-center.spec.ts
+# 仅复测入驻与审核
+npx playwright test e2e/creator-onboarding.spec.ts
 ```
 
 已安装 Microsoft Edge 时无需执行安装命令。测试使用 Edge 的 Chromium 内核，自动启动 5173 的 Vite 和 18080 的真实后端；运行前释放这两个端口。夹具创建随机 `handcraft_browser_` 测试库、运行原有 Flyway、启动本地 SMTP 接收端，正常结束后停止测试服务并仅删除自己的测试库。生产 `application.yml` 不会改写，不使用假 API 或生产测试接口。只有断网、响应延迟用例使用浏览器网络故障注入。
 
 测试源码位于 `e2e/`，截图、失败 trace 和后端日志写入被忽略的 `test-results/`。个人中心覆盖资料保存/刷新、Unicode 与长度校验、头像本地格式/大小拒绝及真实服务不可用反馈、地区联动与手动补全、字段错误及断网重试、默认地址维护和删除确认、十条容量与他人地址拒绝，并检查 1366/1440 及窄屏布局。常规夹具显式禁用 OSS，保证配置真实凭据后也不会向云端写测试对象；云端上传、签名读取、替换及浏览器计时器续签已单独联调，详见 [T-003 测试记录](../docs/testing/T-003-personal-center.md)。认证结果见 [T-002 测试记录](../docs/testing/T-002-frontend-auth.md)。本地 SMTP 只证明邮件协议与页面闭环，不代表 QQ/163 公网收件；公网收件仍须有效平台 SMTP 配置及真实收件验证。
+
+入驻套件以 `storageMode: 'receiver'` 启动本地 OSS HTTP 接收器，真实 SDK 执行上传、签名读取和删除；管理员提权只作用于夹具随机库，无生产测试接口。用例覆盖撤回重提、驳回补正、丢失提交响应、审核通过、实时通知、已读保持、多会话身份及两级品类，结果见 [T-004 测试记录](../docs/testing/T-004-creator-onboarding.md)。

@@ -15,6 +15,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -44,6 +45,13 @@ public class SessionController {
     @GetMapping("/current")
     public Result<SessionVO> current(@AuthenticationPrincipal AccountPrincipal principal) {
         return Result.ok(sessions.current(principal));
+    }
+
+    /** 切换当前会话可用身份，保持原有绝对过期时间。 */
+    @PutMapping("/current/active-role")
+    public Result<SessionVO> switchRole(@AuthenticationPrincipal AccountPrincipal principal,
+            @Valid @RequestBody com.handcraft.platform.modules.dto.ActiveRoleDTO input) {
+        return Result.ok(sessions.switchRole(principal,input));
     }
 
     /** 退出当前设备，其他设备会话继续有效。 */

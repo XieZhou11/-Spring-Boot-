@@ -12,7 +12,7 @@ import org.apache.ibatis.annotations.Update;
 /** 显式参数化账号 SQL；权限字段只由服务端写入。 */
 @Mapper
 public interface UserAccountMapper {
-    String COLUMNS = "id,email,password_hash,nickname,avatar_file_id,bio,is_admin AS admin,certification_status";
+    String COLUMNS = "id,email,password_hash,nickname,avatar_file_id,bio,is_admin AS admin,certification_status,approved_application_id,creator_paused,admin_business_paused";
 
     @Select("SELECT " + COLUMNS + " FROM user_account WHERE email=#{email}")
     UserAccount findByEmail(String email);
@@ -43,4 +43,8 @@ public interface UserAccountMapper {
 
     @Update("UPDATE user_account SET password_hash=#{passwordHash} WHERE id=#{id}")
     int updatePassword(@Param("id") Long id, @Param("passwordHash") String passwordHash);
+
+    /** 认证结论及通过申请引用由审核事务统一维护。 */
+    @Update("UPDATE user_account SET certification_status=#{status},approved_application_id=#{applicationId} WHERE id=#{id}")
+    int updateCertification(@Param("id")Long id,@Param("status")String status,@Param("applicationId")Long applicationId);
 }
