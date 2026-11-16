@@ -6,6 +6,8 @@ import WorkCard from '@/components/WorkCard.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
 import { getCreator, getWorks } from '@/api/work'
 import type { CreatorPublicVO, WorkVO } from '@/types/work'
+import { useAuthStore } from '@/stores/auth'
+const auth = useAuthStore()
 const route = useRoute()
 const creator = ref<CreatorPublicVO>()
 const works = ref<WorkVO[]>([])
@@ -71,7 +73,11 @@ onBeforeUnmount(() => { revision++; clearTimeout(timer) })
         </div><dl class="creator-public-stats">
           <div><dt>口碑评分</dt><dd>{{ creator.averageRating || '暂无评价' }}</dd></div><div><dt>真实评价</dt><dd>{{ creator.reviewCount }}</dd></div><div><dt>已完成订单</dt><dd>{{ creator.completedOrderCount }}</dd></div>
         </dl>
-      </section><header class="work-section-heading">
+      </section><RouterLink
+        v-if="!creator.paused && creator.id !== auth.session?.userId && !auth.session?.roles.includes('ADMIN')"
+        class="button-primary"
+        :to="{ path: '/account/requests/new', query: { creatorId: creator.id } }"
+      >邀请定制 ↗</RouterLink><header class="work-section-heading">
         <h2>手作作品</h2><span class="muted">{{ total }} 件已上架作品</span>
       </header><div
         v-if="!works.length && !loading"

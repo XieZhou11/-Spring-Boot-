@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
-import { test, expect } from './fixtures'
+import { test, expect, frontendOrigin } from './fixtures'
 
 const api = 'http://localhost:18080/api'
 const image = readFileSync(new URL('./avatar.png', import.meta.url))
@@ -27,6 +27,9 @@ test('买家进入作品发现首页，保留当前账号、搜索及退出入�
   await expect(page.getByRole('heading', { name: '发现手作之美' })).toBeVisible()
   await expect(page.getByRole('link', { name: /作品访客/ })).toBeVisible()
   await expect(page.getByRole('searchbox', { name: '搜索作品' })).toBeVisible()
+  // 其他业务套件可先发布作品；使用无匹配关键词验证空态，不依赖共享库执行顺序。
+  await page.getByRole('searchbox', { name: '作品关键词', exact: true }).fill(`无匹配作品${randomBytes(6).toString('hex')}`)
+  await page.getByRole('button', { name: '筛选', exact: true }).click()
   await expect(page.getByText('还没有符合条件的作品')).toBeVisible()
   await page.getByRole('button', { name: '退出登录' }).click()
   await expect(page).toHaveURL(/\/login/)
@@ -74,8 +77,8 @@ async function fillWork(page: Page, categoryId: string, title = '原木手工杯
 
 test('创作者草稿、驳回补正通过、即时交易设置、买家浏览、重审下架完整链路', async ({ page, browser, mailbox }, testInfo) => {
   test.setTimeout(240_000)
-  const adminContext = await browser.newContext({ baseURL: 'http://localhost:5173' })
-  const buyerContext = await browser.newContext({ baseURL: 'http://localhost:5173' })
+  const adminContext = await browser.newContext({ baseURL: frontendOrigin })
+  const buyerContext = await browser.newContext({ baseURL: frontendOrigin })
   page.on('dialog', dialog => dialog.accept())
   try {
     const admin = await adminContext.newPage()
@@ -187,7 +190,7 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
 
 test('草稿响应丢失、断网保留、续签、撤回删除与初始化失败保护', async ({ page, browser, mailbox }) => {
   test.setTimeout(180_000)
-  const adminContext = await browser.newContext({ baseURL: 'http://localhost:5173' })
+  const adminContext = await browser.newContext({ baseURL: frontendOrigin })
   page.on('dialog', dialog => dialog.accept())
   try {
     const admin = await adminContext.newPage()
@@ -275,7 +278,7 @@ test('作品详情、创作者主页与管理页均要求真实登录，安全�
 
 test('编辑未保存或上传中仍可退出，会话过期不能被离开确认阻挡', async ({ page, browser, mailbox }) => {
   test.setTimeout(120_000)
-  const adminContext = await browser.newContext({ baseURL: 'http://localhost:5173' })
+  const adminContext = await browser.newContext({ baseURL: frontendOrigin })
   let releaseUpload: (() => void) | undefined
   // 身份失效后的跳转不应再询问是否留在受保护表单。
   page.on('dialog', dialog => dialog.dismiss())

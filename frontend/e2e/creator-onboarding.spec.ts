@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
-import { test, expect } from './fixtures'
+import { test, expect, frontendOrigin } from './fixtures'
 
 const api = 'http://localhost:18080/api'
 const portfolioImage = readFileSync(new URL('./avatar.png', import.meta.url))
@@ -85,8 +85,8 @@ test('普通买家可填写入驻材料且错误保留输入，不能访问后�
 test('入驻撤回重提、管理员驳回补正通过、实时通知及会话身份切换', async ({ page, browser, mailbox }, testInfo) => {
   test.setTimeout(180_000)
   await page.setViewportSize({ width: 1366, height: 1000 })
-  const adminContext = await browser.newContext({ baseURL: 'http://localhost:5173', viewport: { width: 1366, height: 1000 } })
-  const secondContext = await browser.newContext({ baseURL: 'http://localhost:5173' })
+  const adminContext = await browser.newContext({ baseURL: frontendOrigin, viewport: { width: 1366, height: 1000 } })
+  const secondContext = await browser.newContext({ baseURL: frontendOrigin })
   try {
     const admin = await adminContext.newPage()
     const adminEmail = await createApplicant(admin, mailbox.codes)

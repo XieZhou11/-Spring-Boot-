@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { test, expect } from './fixtures'
+import { test, expect, frontendOrigin } from './fixtures'
 
 const api = 'http://localhost:18080/api'
 // 自有纯色 PNG 夹具，真实图片解码后再验证服务不可用，不使用损坏图片碰巧失败。
@@ -195,7 +195,7 @@ test('十条地址上限及他人地址统一拒绝', async ({ page, browser, ma
     const options = { headers: { [otherCsrf.headerName]: otherCsrf.token } }
     expect((await other.request.delete(`${api}/me/addresses/${addressId}`, options)).status()).toBe(404)
     expect((await other.request.put(`${api}/me/addresses/${addressId}/default`, options)).status()).toBe(404)
-    await other.goto('http://localhost:5173/account/addresses')
+    await other.goto(`${frontendOrigin}/account/addresses`)
     await expect(other.getByRole('article')).toHaveCount(0)
   } finally {
     await otherContext.close()

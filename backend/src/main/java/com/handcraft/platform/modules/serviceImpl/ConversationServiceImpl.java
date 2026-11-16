@@ -1,0 +1,73 @@
+package com.handcraft.platform.modules.serviceImpl;
+import com.handcraft.platform.common.content.PlainTextPolicy;
+import com.handcraft.platform.common.exception.*;
+import com.handcraft.platform.common.logging.*;
+import com.handcraft.platform.modules.dto.ChatMessageDTO;
+import com.handcraft.platform.modules.entity.*;
+import com.handcraft.platform.modules.exception.ChatRateLimitException;
+import com.handcraft.platform.modules.mapper.*;
+import com.handcraft.platform.modules.security.NotificationSocketHandler;
+import com.handcraft.platform.modules.service.*;
+import com.handcraft.platform.modules.vo.*;
+import java.time.*;
+import java.util.*;
+import org.slf4j.*;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.*;
+import org.springframework.transaction.support.*;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
+/** 需求→会话行锁保证发送与关闭互斥，发送账号锁维护跨会话幂等键。 */
+@Service
+public class ConversationServiceImpl implements ConversationService {
+    private static final Logger LOGGER=LoggerFactory.getLogger(ConversationServiceImpl.class);
+    private final ConversationMapper conversations;private final CustomRequestMapper requests;private final UserAccountMapper users;private final FileAssetMapper files;private final CustomRequestPolicyService policy;private final NotificationSocketHandler socket;private final ObjectMapper json;
+    public ConversationServiceImpl(ConversationMapper conversations,CustomRequestMapper requests,UserAccountMapper users,FileAssetMapper files,CustomRequestPolicyService policy,NotificationSocketHandler socket,ObjectMapper json){this.conversations=conversations;this.requests=requests;this.users=users;this.files=files;this.policy=policy;this.socket=socket;this.json=json;}
+    @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
+    public Creation create(Long userId,Long requestId){return BusinessLog.run(LOGGER,"需求沟通会话创建",userId,()->{
+        var initial=requests.find(requestId);policy.visible(userId,initial,false);Long creator=userId.equals(initial.getBuyerId())?initial.getInvitedCreatorId():userId;if(creator==null||creator.equals(initial.getBuyerId()))throw forbidden("公开需求由合资格创作者发起咨询，请在消息中心查看已建立的会话");
+        // 已建关系优先返回，即使暂停或需求结束，也能进入历史和必要订单沟通。
+        var prior=conversations.byRequest(requestId,creator);if(prior!=null){participant(userId,prior);return new Creation(view(prior,userId),false);}
+        policy.lockCategory(initial.getCategoryId());policy.lockUsers(initial.getBuyerId(),creator);var r=requests.lock(requestId);policy.visible(userId,r,false);var existing=conversations.byRequest(requestId,creator);if(existing!=null){participant(userId,existing);return new Creation(view(existing,userId),false);}policy.open(r);
+        if("DIRECTED".equals(r.getVisibility())&&!creator.equals(r.getInvitedCreatorId()))throw missing();var buyer=policy.user(r.getBuyerId());if(buyer.isAdminBusinessPaused())throw forbidden("需求买家已暂停新业务，不能新建咨询");String reason=policy.creatorReason(users.findById(creator),r.getCategoryId());if(reason!=null)throw forbidden(reason);
+        var c=new Conversation();c.setBuyerId(r.getBuyerId());c.setCreatorId(creator);c.setRequestId(requestId);c.setLastMessageAt(policy.now());c.setCreatedAt(policy.now());conversations.insert(c);var saved=conversations.find(c.getId());afterCommit(()->both(saved,Map.of("type","CONVERSATION_UPDATED","conversationId",saved.getId().toString())));LOGGER.info("会话关系已校验：requestId={}, conversationId={}",requestId,c.getId());return new Creation(view(saved,userId),true);
+    });}
+    public PageVO<ConversationVO> list(Long userId,int page,int size){return BusinessLog.run(LOGGER,"本人会话列表查询",userId,()->{policy.user(userId);page(page,size);return new PageVO<>(conversations.list(userId,(page-1)*size,size).stream().map(c->view(c,userId)).toList(),conversations.count(userId),page,size);});}
+    public ConversationVO detail(Long userId,Long id){return BusinessLog.run(LOGGER,"会话详情查询",userId,()->{policy.user(userId);var c=conversations.find(id);participant(userId,c);return view(c,userId);});}
+    public long unread(Long userId){return BusinessLog.run(LOGGER,"会话未读总数查询",userId,()->{policy.user(userId);return conversations.unread(userId);});}
+    public ChatMessagePageVO messages(Long userId,Long id,Long before,Long after,int size){return BusinessLog.run(LOGGER,"会话消息补拉",userId,()->{
+        policy.user(userId);participant(userId,conversations.find(id));if(size<1||size>50||before!=null&&before<1||after!=null&&after<0||before!=null&&after!=null)throw invalid("消息分页参数无效，前后游标不能同时提供");var selected=new ArrayList<>(conversations.messages(id,before,after,size+1));boolean more=selected.size()>size;if(more)selected.removeLast();selected.sort(Comparator.comparing(ChatMessage::getSeqNo));return new ChatMessagePageVO(selected.stream().map(this::message).toList(),more);
+    });}
+    @Transactional(rollbackFor=Exception.class,noRollbackFor=ChatRateLimitException.class,isolation=Isolation.READ_COMMITTED)
+    public Sent send(Long userId,Long id,ChatMessageDTO in){return BusinessLog.run(LOGGER,"会话消息发送",userId,()->{
+        policy.user(userId);var initial=conversations.find(id);participant(userId,initial);policy.lockUsers(userId);if(initial.getRequestId()!=null)requests.lock(initial.getRequestId());var c=conversations.lock(id);participant(userId,c);String content=normalize(in.getContent());String imageIds=json.writeValueAsString(in.getImageIds());
+        var previous=conversations.messageKey(userId,in.getClientMessageKey());if(previous!=null){if(!id.equals(previous.getConversationId())||!Objects.equals(content,previous.getContent())||!ids(previous.getImageIds()).equals(in.getImageIds()))throw conflict("同一消息请求键不能更改会话、文字或图片");return new Sent(message(previous),false);}
+        String disabled=disabled(c);if(disabled!=null)throw conflict(disabled);if(content==null&&in.getImageIds().isEmpty())throw invalid("文字和图片不能同时为空");if(!PlainTextPolicy.safe(content))throw invalid("消息不能包含脚本、联系方式、外链、站外引流或不当内容");
+        LocalDateTime now=policy.now();boolean buyer=userId.equals(c.getBuyerId());var until=buyer?c.getBuyerCooldownUntil():c.getCreatorCooldownUntil();if(until!=null&&now.isBefore(until))throw new ChatRateLimitException(Math.max(1,(int)Math.ceil(Duration.between(now,until).toMillis()/1000d)));
+        if(conversations.sentSince(id,userId,now.minusSeconds(60))>=20){if(buyer)c.setBuyerCooldownUntil(now.plusSeconds(60));else c.setCreatorCooldownUntil(now.plusSeconds(60));c.setUpdatedAt(now);conversations.update(c);LOGGER.warn("会话发送限流，冷却将提交：userId={}, conversationId={}, stage=成功消息窗口计数",userId,id);throw new ChatRateLimitException(60);}
+        if(content!=null&&conversations.repeatedText(id,userId,now.minusSeconds(10),content)>0)throw conflict("十秒内不能重复发送相同文字");checkImages(userId,id,in.getImageIds());
+        var m=new ChatMessage();m.setConversationId(id);m.setSeqNo(c.getLastMessageSeq()+1);m.setSenderId(userId);m.setClientMessageKey(in.getClientMessageKey());m.setContent(content);m.setImageIds(imageIds);m.setCreatedAt(now);conversations.insertMessage(m);c.setLastMessageSeq(m.getSeqNo());c.setLastMessageAt(now);c.setUpdatedAt(now);conversations.update(c);var saved=message(m);afterCommit(()->{both(c,Map.of("type","CHAT_MESSAGE","message",saved));publishUnread(c.getBuyerId());publishUnread(c.getCreatorId());});LOGGER.info("消息已持久化，等待事务提交：userId={}, conversationId={}, messageId={}, seqNo={}",userId,id,m.getId(),m.getSeqNo());return new Sent(saved,true);
+    });}
+    @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
+    public ConversationVO read(Long userId,Long id,Long seq){return BusinessLog.run(LOGGER,"会话已读游标推进",userId,()->{
+        policy.user(userId);policy.lockUsers(userId);var c=conversations.lock(id);participant(userId,c);if(seq==null||seq<0||seq>c.getLastMessageSeq())throw invalid("已读序号不能超过已有消息");boolean buyer=userId.equals(c.getBuyerId());long current=buyer?c.getBuyerReadSeq():c.getCreatorReadSeq();if(seq>current){if(buyer)c.setBuyerReadSeq(seq);else c.setCreatorReadSeq(seq);c.setUpdatedAt(policy.now());conversations.update(c);afterCommit(()->{both(c,Map.of("type","CHAT_READ","conversationId",id.toString(),"userId",userId.toString(),"readSeq",seq.toString()));publishUnread(userId);});}return view(c,userId);
+    });}
+    private ConversationVO view(Conversation c,Long userId){var r=c.getRequestId()==null?null:requests.find(c.getRequestId());boolean buyer=userId.equals(c.getBuyerId());Long otherId=buyer?c.getCreatorId():c.getBuyerId();var other=users.findById(otherId);long seq=buyer?c.getBuyerReadSeq():c.getCreatorReadSeq();String disabled=disabled(c);return new ConversationVO(c.getId().toString(),text(c.getRequestId()),text(c.getOrderId()),r==null?null:r.getTitle(),policy.effectiveStatus(r),otherId.toString(),other==null?"已注销用户":other.getNickname(),conversations.unreadIn(c.getId(),userId,seq),time(c.getLastMessageAt()),c.getLastMessageSeq().toString(),Long.toString(seq),disabled==null,disabled,time(c.getArchivedAt()),c.getArchiveReason());}
+    private String disabled(Conversation c){if(c.getOrderId()!=null)return null;if(c.getArchivedAt()!=null)return "未形成订单的会话已归档，仅可查看历史消息";var r=c.getRequestId()==null?null:requests.find(c.getRequestId());if(r==null)return "会话关联需求不存在";String status=policy.effectiveStatus(r);if(!Set.of("OPEN","QUOTING").contains(status))return "需求已关闭、过期或已定标，未成单会话仅可查看历史";return null;}
+    private ChatMessageVO message(ChatMessage m){return new ChatMessageVO(m.getId().toString(),m.getConversationId().toString(),m.getSeqNo().toString(),m.getSenderId().toString(),m.getClientMessageKey(),m.getContent(),ids(m.getImageIds()),time(m.getCreatedAt()));}
+    private void checkImages(Long userId,Long conversationId,List<String> imageIds){if(new HashSet<>(imageIds).size()!=imageIds.size())throw invalid("消息图片不能重复");imageIds.stream().map(this::number).sorted().forEach(id->{var f=files.lockById(id);if(f==null||!userId.equals(f.getUploaderId())||!f.getObjectKey().startsWith("conversations/"+conversationId+"/"+userId+"/")||!"AVAILABLE".equals(f.getUploadStatus()))throw invalid("消息图片须为本人在当前会话上传的图片");});}
+    private void participant(Long userId,Conversation c){if(c==null||!userId.equals(c.getBuyerId())&&!userId.equals(c.getCreatorId()))throw missing();}
+    private void publishUnread(Long userId){socket.publish(userId,Map.of("type","CHAT_UNREAD_UPDATED","count",conversations.unread(userId)));}
+    private void both(Conversation c,Object event){socket.publish(c.getBuyerId(),event);socket.publish(c.getCreatorId(),event);}
+    private void afterCommit(Runnable action){TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){public void afterCommit(){try{action.run();}catch(RuntimeException e){LOGGER.error("会话事件推送失败：stage=事务提交后，消息可补拉",SafeLog.exception(e));}}});}
+    private List<String> ids(String raw){return raw==null?List.of():json.readValue(raw,new TypeReference<List<String>>(){});}
+    private Long number(String value){try{long id=Long.parseLong(value);if(id>0)return id;}catch(NumberFormatException ignored){}throw invalid("图片编号无效");}
+    private static String normalize(String s){return s==null||s.isBlank()?null:s.strip();}
+    private static String text(Long value){return value==null?null:value.toString();}
+    private static OffsetDateTime time(LocalDateTime value){return value==null?null:value.atOffset(ZoneOffset.ofHours(8));}
+    private static void page(int page,int size){if(page<1||page>1000000||size<1||size>50)throw invalid("分页参数无效");}
+    private static BusinessException invalid(String m){return new BusinessException(CommonErrorCode.INVALID_REQUEST,m);}
+    private static BusinessException conflict(String m){return new BusinessException(CommonErrorCode.CONFLICT,m);}
+    private static BusinessException forbidden(String m){return new BusinessException(CommonErrorCode.FORBIDDEN,m);}
+    private static BusinessException missing(){return new BusinessException(CommonErrorCode.NOT_FOUND);}
+}

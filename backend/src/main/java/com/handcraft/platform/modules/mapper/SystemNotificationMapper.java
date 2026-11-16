@@ -11,6 +11,8 @@ public interface SystemNotificationMapper {
     @Insert("INSERT INTO system_notification(recipient_id,event_type,event_key,title,content,business_reference) VALUES(#{recipientId},#{eventType},#{eventKey},#{title},#{content},#{businessReference})")
     @Options(useGeneratedKeys=true,keyProperty="id") int insert(SystemNotification value);
     @Select("SELECT "+COLUMNS+" FROM system_notification WHERE id=#{id}") SystemNotification find(Long id);
+    @Select("SELECT "+COLUMNS+" FROM system_notification WHERE recipient_id=#{recipientId} AND event_key=#{key}")
+    SystemNotification event(@Param("recipientId")Long recipientId,@Param("key")String key);
     @Select("SELECT "+COLUMNS+" FROM system_notification WHERE recipient_id=#{userId} ORDER BY created_at DESC,id DESC LIMIT #{size} OFFSET #{offset}")
     List<SystemNotification> list(@Param("userId")Long userId,@Param("offset")int offset,@Param("size")int size);
     @Select("SELECT COUNT(*) FROM system_notification WHERE recipient_id=#{userId}") long count(Long userId);

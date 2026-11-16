@@ -29,6 +29,8 @@ public interface WorkService {
     WorkPublicationQuotaVO quota(Long userId);
     /** 公开创作者主页不返回认证私密材料。 */
     CreatorPublicVO creator(Long userId,Long creatorId);
+    /** 定向需求表单按末级品类选择同主品类且可接单的非本人创作者。 */
+    PageVO<CreatorPublicVO> customCandidates(Long userId,Long categoryId,String keyword,int page,int size);
     /** @param work 草稿视图 @param created 是否首次创建 */
     record Creation(WorkVO work,boolean created) {}
 }

@@ -31,6 +31,13 @@ public class GlobalExceptionHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /** 消息冷却已在事务内持久化，向客户端返回准确的重试等待时间。 */
+    @ExceptionHandler(com.handcraft.platform.modules.exception.ChatRateLimitException.class)
+    public ResponseEntity<Result<Void>> handleChatRateLimit(com.handcraft.platform.modules.exception.ChatRateLimitException exception,HttpServletRequest request) {
+        logFailure(request,429,exception.getErrorCode().code(),exception.getMessage());
+        return ResponseEntity.status(429).header("Retry-After",Integer.toString(exception.retryAfter())).body(Result.error(exception.getErrorCode().code(),exception.getMessage()));
+    }
+
     /** 容器先于业务解析拒绝超大文件时，仍提供一致且可理解的响应。 */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Result<Void>> handleUploadSize(HttpServletRequest request) {

@@ -14,8 +14,6 @@ import java.io.*;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import javax.imageio.ImageIO;
 import org.slf4j.*;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -35,20 +33,20 @@ public class WorkImageServiceImpl implements WorkImageService {
     private final OssProperties properties;
     private final ObjectProvider<OSS> clients;
     private final Clock clock;
+    private final PrivateImageStorage storage;
     private final TransactionTemplate tx;
     private final Set<Long> active=ConcurrentHashMap.newKeySet();
-    public WorkImageServiceImpl(UserAccountMapper accounts,FileAssetMapper files,WorkMapper works,OssProperties properties,ObjectProvider<OSS> clients,Clock clock,PlatformTransactionManager manager){
-        this.accounts=accounts;this.files=files;this.works=works;this.properties=properties;this.clients=clients;this.clock=clock;
+    public WorkImageServiceImpl(UserAccountMapper accounts,FileAssetMapper files,WorkMapper works,OssProperties properties,ObjectProvider<OSS> clients,Clock clock,PlatformTransactionManager manager,PrivateImageStorage storage){
+        this.accounts=accounts;this.files=files;this.works=works;this.properties=properties;this.clients=clients;this.clock=clock;this.storage=storage;
         tx=new TransactionTemplate(manager);tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);tx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
     public ImageVO upload(Long userId,MultipartFile input){
         LOGGER.info("作品图片上传开始：userId={}",userId);FileAsset file=null;String stage="校验图片";
         try {
-            Image image=image(input);stage="检查存储配置";OSS oss=client();
+            var image=storage.image(input);stage="检查存储配置";OSS oss=client();
             stage="预留文件";file=tx.execute(s->{var user=accounts.lockById(userId);if(user==null)throw new BusinessException(CommonErrorCode.UNAUTHORIZED);if(user.isAdmin()||!"APPROVED".equals(user.getCertificationStatus()))throw new BusinessException(CommonErrorCode.FORBIDDEN,"仅认证创作者可上传作品图片");
-                var f=new FileAsset();f.setUploaderId(userId);f.setObjectKey("works/"+userId+"/"+UUID.randomUUID()+image.extension);f.setContentType(image.type);f.setByteSize(image.bytes.length);files.insert(f);return f;});
-            active.add(file.getId());stage="上传私有OSS对象";var metadata=new ObjectMetadata();metadata.setContentType(image.type);metadata.setContentLength(image.bytes.length);metadata.setObjectAcl(CannedAccessControlList.Private);metadata.setCacheControl("private, max-age=300");
-            oss.putObject(properties.getBucket(),file.getObjectKey(),new ByteArrayInputStream(image.bytes),metadata);
+                var f=new FileAsset();f.setUploaderId(userId);f.setObjectKey("works/"+userId+"/"+UUID.randomUUID()+image.extension());f.setContentType(image.type());f.setByteSize(image.bytes().length);files.insert(f);return f;});
+            active.add(file.getId());stage="上传私有OSS对象";storage.put(file,image);
             FileAsset reserved=file;stage="确认上传结果";tx.executeWithoutResult(s->{accounts.lockById(userId);var current=files.lockById(reserved.getId());if(current==null||!"UPLOADING".equals(current.getUploadStatus()))throw new BusinessException(CommonErrorCode.CONFLICT,"图片状态已变化，请重新上传");files.updateStatus(current.getId(),"AVAILABLE");});
             LOGGER.info("作品图片上传完成：userId={}, fileId={}",userId,file.getId());return signed(file);
         } catch(RuntimeException e) {
@@ -86,26 +84,6 @@ public class WorkImageServiceImpl implements WorkImageService {
             LOGGER.info("作品临时图片清理已执行：userId={}, fileId={}",cleanup.getUploaderId(),cleanup.getId());
         }catch(RuntimeException e){LOGGER.error("作品临时图片清理失败：stage=删除OSS对象，保留重试, fileId={}",cleanup.getId(),SafeLog.exception(e));}
     }
-    private OSS client(){OSS client=properties.configured()?clients.getIfAvailable():null;if(client==null)throw new BusinessException(WorkImageErrorCode.STORAGE_UNAVAILABLE);return client;}
-    private ImageVO signed(FileAsset file){try{OffsetDateTime expires=OffsetDateTime.now(clock).plusMinutes(15);return new ImageVO(file.getId().toString(),client().generatePresignedUrl(properties.getBucket(),file.getObjectKey(),Date.from(expires.toInstant())).toExternalForm(),expires);}catch(BusinessException e){throw e;}catch(RuntimeException e){throw new BusinessException(WorkImageErrorCode.STORAGE_UNAVAILABLE);}}
-    private Image image(MultipartFile input){
-        if(input==null||input.isEmpty())throw new BusinessException(WorkImageErrorCode.INVALID_IMAGE);
-        if(input.getSize()>MAX_BYTES)throw new BusinessException(WorkImageErrorCode.IMAGE_TOO_LARGE);
-        try(var source=input.getInputStream()){
-            byte[] bytes=source.readNBytes(MAX_BYTES+1);if(bytes.length>MAX_BYTES)throw new BusinessException(WorkImageErrorCode.IMAGE_TOO_LARGE);
-            try(var stream=ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))){
-                var readers=ImageIO.getImageReaders(stream);if(!readers.hasNext())throw new BusinessException(WorkImageErrorCode.INVALID_IMAGE);
-                var reader=readers.next();try{reader.setInput(stream);String format=reader.getFormatName().toLowerCase(Locale.ROOT);
-                    if(!Set.of("png","jpeg","webp").contains(format))throw new BusinessException(WorkImageErrorCode.INVALID_IMAGE);
-                    long width=reader.getWidth(0),height=reader.getHeight(0);
-                    // 限制解码内存，避免压缩率极高的图片耗尽JVM，不按文件名或客户端MIME判型。
-                    if(width<=0||height<=0||width*height>40_000_000)throw new BusinessException(WorkImageErrorCode.INVALID_IMAGE);
-                    AtomicBoolean warning=new AtomicBoolean();reader.addIIOReadWarningListener((r,w)->warning.set(true));
-                    if(reader.read(0)==null||warning.get())throw new BusinessException(WorkImageErrorCode.INVALID_IMAGE);
-                    return new Image(bytes,"image/"+format,format.equals("jpeg")?".jpg":"."+format);
-                }finally{reader.dispose();}
-            }
-        }catch(IOException e){throw new BusinessException(WorkImageErrorCode.INVALID_IMAGE);}
-    }
-    private record Image(byte[] bytes,String type,String extension){}
+    private OSS client(){return storage.client();}
+    private ImageVO signed(FileAsset file){return storage.signed(file);}
 }

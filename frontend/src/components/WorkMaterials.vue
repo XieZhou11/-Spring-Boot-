@@ -4,6 +4,8 @@ import WorkImage from './WorkImage.vue'
 import type { WorkVO } from '@/types/work'
 import { priceLabel } from '@/utils/work'
 import { getCreator } from '@/api/work'
+import { useAuthStore } from '@/stores/auth'
+const auth = useAuthStore()
 const props = defineProps<{ work: WorkVO }>()
 // 缩略图切换只影响当前展示，不改变持久化图片顺序。
 const selected = ref(0)
@@ -79,6 +81,10 @@ onBeforeUnmount(() => { avatarRevision++; clearTimeout(avatarTimer) })
           另行制作，具体价格和工期以独立报价为准。
         </p>
       </section><RouterLink
+        v-if="work.customizable && work.creatorId !== auth.session?.userId && !auth.session?.roles.includes('ADMIN')"
+        class="button-primary"
+        :to="{ path: '/account/requests/new', query: { sourceWorkId: work.id } }"
+      >发起同类定制 ↗</RouterLink><RouterLink
         :to="`/creators/${work.creatorId}`"
         class="work-creator-link"
       ><img

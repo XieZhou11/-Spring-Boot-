@@ -32,6 +32,14 @@ defineProps<{ title: string; subtitle: string; number: string }>()
             to="/account/notifications"
             active-class="active"
           ><span>04</span> 系统通知 <i aria-hidden="true">↗</i></RouterLink>
+          <RouterLink
+            to="/account/requests"
+            active-class="active"
+          ><span>05</span> 我的需求 <i aria-hidden="true">↗</i></RouterLink>
+          <RouterLink
+            to="/account/conversations"
+            active-class="active"
+          ><span>06</span> 需求沟通 <i aria-hidden="true">↗</i></RouterLink>
         </nav>
         <p class="sidebar-note">
           每一份用心，<br>都有它的归处。

@@ -66,4 +66,18 @@ public interface FileAssetMapper {
         ) ORDER BY updated_at,id LIMIT 100
         """)
     List<FileAsset> findInterruptedWorks();
+
+    /** 扫描排除全部历史引用；事务内仍需复查，避免保存与清理竞争。 */
+    @Select("SELECT "+COLUMNS+" "+"""
+        FROM file_asset f WHERE (object_key LIKE 'custom-requests/%' OR object_key LIKE 'conversations/%') AND (
+            upload_status='CLEANUP_PENDING'
+            OR (upload_status='UPLOADING' AND updated_at<DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 1 HOUR))
+            OR (upload_status='AVAILABLE' AND updated_at<DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 24 HOUR)
+                AND NOT EXISTS (SELECT 1 FROM custom_request r WHERE JSON_CONTAINS(r.reference_image_ids,JSON_QUOTE(CAST(f.id AS CHAR))))
+                AND NOT EXISTS (SELECT 1 FROM operation_log l WHERE l.target_type='CUSTOM_REQUEST' AND JSON_SEARCH(l.detail,'one',CAST(f.id AS CHAR),NULL,'$.snapshot.referenceImageIds[*]') IS NOT NULL)
+                AND NOT EXISTS (SELECT 1 FROM chat_message m WHERE JSON_CONTAINS(m.image_ids,JSON_QUOTE(CAST(f.id AS CHAR))))
+            )
+        ) ORDER BY updated_at,id LIMIT 100
+        """)
+    List<FileAsset> findInterruptedRequests();
 }

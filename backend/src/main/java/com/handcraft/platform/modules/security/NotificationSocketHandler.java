@@ -35,7 +35,7 @@ public class NotificationSocketHandler extends TextWebSocketHandler {
     }
     @Override protected void handleTextMessage(WebSocketSession socket,TextMessage message)throws Exception {
         Connection connection=connections.get(socket.getId());if(connection==null||!valid(connection)){socket.close(CloseStatus.POLICY_VIOLATION);return;}
-        // 本阶段只接受心跳，通知已读使用有CSRF保护的HTTP接口，不提供任意发送功能。
+        // 长连接只接受心跳，通知/消息写入及已读均使用有CSRF保护的HTTP接口。
         if(message.getPayloadLength()>256){socket.close(CloseStatus.TOO_BIG_TO_PROCESS);return;}
         if("PING".equals(message.getPayload())||"PING".equals(json.readTree(message.getPayload()).path("type").asText()))send(connection,Map.of("type","PONG"));
     }

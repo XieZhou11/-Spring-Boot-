@@ -157,7 +157,7 @@ export interface NotificationVO {
   /** 关联申请。 */
   businessReference: {
     /** 当前任务支持创作者申请通知。 */
-    type: 'CREATOR_APPLICATION' | 'WORK'
+    type: 'CREATOR_APPLICATION' | 'WORK' | 'CUSTOM_REQUEST'
     /** 作品审核轮次，申请通知不含此字段。 */
     version?: string
     /** 关联申请编号。 */

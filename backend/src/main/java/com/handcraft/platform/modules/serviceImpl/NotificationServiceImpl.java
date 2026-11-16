@@ -24,6 +24,15 @@ public class NotificationServiceImpl implements NotificationService {
     private final ObjectMapper json;
     public NotificationServiceImpl(SystemNotificationMapper notices,NotificationSocketHandler socket,ObjectMapper json){this.notices=notices;this.socket=socket;this.json=json;}
     @Transactional(propagation=Propagation.MANDATORY)
+    public void customRequestChanged(Long recipientId,Long requestId,String eventType){BusinessLog.run(LoggerFactory.getLogger(getClass()),"定制需求通知保存",recipientId,()->{
+        String key=eventType+":"+requestId;if(notices.event(recipientId,key)!=null)return null;
+        var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType(eventType);n.setEventKey(key);
+        n.setTitle(switch(eventType){case "REQUEST_INVITED"->"收到定向需求邀约";case "REQUEST_CLOSED"->"定制需求已关闭";default->"定制需求已过期";});
+        n.setContent(switch(eventType){case "REQUEST_INVITED"->"你被指定为该需求的唯一受邀创作者，请查看需求详情。";case "REQUEST_CLOSED"->"需求已关闭，未形成订单的相关会话已归档，可查看历史记录。";default->"需求发布已满七天且无有效报价，已过期；未成单会话已归档。";});
+        n.setBusinessReference(json.writeValueAsString(Map.of("type","CUSTOM_REQUEST","id",requestId.toString())));notices.insert(n);
+        afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(n.getId()))));publishUnread(recipientId);});return null;
+    });}
+    @Transactional(propagation=Propagation.MANDATORY)
     public void workChanged(Long recipientId,Long workId,Long submittedVersion,String eventType,String decision,String reason){BusinessLog.run(LoggerFactory.getLogger(getClass()),"作品状态通知保存",recipientId,()->{
         var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType(eventType);n.setEventKey(eventType+":"+workId+":"+submittedVersion);
         boolean offline="WORK_OFFLINED".equals(eventType);boolean approved="APPROVED".equals(decision);

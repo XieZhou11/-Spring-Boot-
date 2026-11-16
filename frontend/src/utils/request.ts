@@ -9,6 +9,8 @@ export class ApiError extends Error {
     readonly status: number = 0,
     readonly code: number = 0,
     readonly fieldErrors: Record<string, string> = {},
+    /** 服务端建议的剩余冷却秒数，只有限流响应提供。 */
+    readonly retryAfter: number = 0,
   ) {
     super(message)
   }
@@ -28,7 +30,7 @@ export function setUnauthorizedHandler(handler: () => void) {
   unauthorizedHandler = handler
 }
 
-function responseError(result: ApiResult<unknown> | undefined, status: number) {
+function responseError(result: ApiResult<unknown> | undefined, status: number, retryAfter = 0) {
   const fields: Record<string, string> = {}
   const data = result?.data as { fieldErrors?: { field: string; message: string }[] } | undefined
   if (Array.isArray(data?.fieldErrors)) {
@@ -36,7 +38,7 @@ function responseError(result: ApiResult<unknown> | undefined, status: number) {
       if (!fields[violation.field]) fields[violation.field] = violation.message
     }
   }
-  return new ApiError(result?.message || '服务暂时不可用，请稍后重试', status, result?.code, fields)
+  return new ApiError(result?.message || '服务暂时不可用，请稍后重试', status, result?.code, fields, retryAfter)
 }
 
 /** 直连后端；跨域由后端白名单处理，Cookie 用于原生 HttpSession。 */
@@ -87,7 +89,8 @@ request.interceptors.response.use(
           ),
         )
       }
-      return Promise.reject(responseError(error.response.data, status))
+      const seconds = Number(error.response.headers['retry-after'])
+      return Promise.reject(responseError(error.response.data, status, Number.isFinite(seconds) && seconds > 0 ? seconds : 0))
     }
     return Promise.reject(error)
   },

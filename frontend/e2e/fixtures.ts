@@ -7,6 +7,9 @@ import { randomBytes } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
 import { resolve } from 'node:path'
 
+/** 所有浏览器上下文使用同一测试来源，可与开发服务器并行。 */
+export const frontendOrigin = `http://localhost:${process.env.HANDCRAFT_E2E_PORT || '5173'}`
+
 interface Mailbox {
   codes: Map<string, string>
   rejectNext: boolean
@@ -28,7 +31,7 @@ export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabl
       const storage = createHttpServer(async (request, response) => {
         const path = new URL(request.url || '/', 'http://localhost').pathname
         response.setHeader('x-oss-request-id', 'browser-test-request')
-        response.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173')
+        response.setHeader('Access-Control-Allow-Origin', frontendOrigin)
         if (request.method === 'PUT') {
           const chunks: Buffer[] = []
           for await (const chunk of request) chunks.push(Buffer.from(chunk))
@@ -121,6 +124,7 @@ export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabl
             '-jar',
             resolve('../backend/target/handcraft-platform-0.0.1-SNAPSHOT.jar'),
             '--server.port=18080',
+            `--app.cors.allowed-origins=${frontendOrigin}`,
             `--spring.datasource.url=jdbc:mysql://localhost:3306/${schema}?serverTimezone=Asia/Shanghai`,
             '--spring.mail.host=127.0.0.1',
             `--spring.mail.port=${smtpAddress.port}`,

@@ -20,8 +20,15 @@ public interface UserAccountMapper {
     @Select("SELECT " + COLUMNS + " FROM user_account WHERE id=#{id}")
     UserAccount findById(Long id);
 
-    /** 用户行锁串行化个人资料、地址数量及头像绑定。 */
+    /** 需求定向选择器仅列出同主品类可接单的认证创作者，昵称按字面包含匹配。 */
+    @Select("SELECT "+COLUMNS+" FROM user_account u WHERE u.id!=#{userId} AND u.is_admin=0 AND u.certification_status='APPROVED' AND u.creator_paused=0 AND u.admin_business_paused=0 AND EXISTS(SELECT 1 FROM creator_application_category c WHERE c.application_id=u.approved_application_id AND c.category_id=#{rootId}) AND (#{keyword} IS NULL OR LOCATE(#{keyword},u.nickname)>0) ORDER BY u.id DESC LIMIT #{size} OFFSET #{offset}")
+    java.util.List<UserAccount> customCandidates(@Param("userId")Long userId,@Param("rootId")Long rootId,@Param("keyword")String keyword,@Param("offset")int offset,@Param("size")int size);
+    @Select("SELECT COUNT(*) FROM user_account u WHERE u.id!=#{userId} AND u.is_admin=0 AND u.certification_status='APPROVED' AND u.creator_paused=0 AND u.admin_business_paused=0 AND EXISTS(SELECT 1 FROM creator_application_category c WHERE c.application_id=u.approved_application_id AND c.category_id=#{rootId}) AND (#{keyword} IS NULL OR LOCATE(#{keyword},u.nickname)>0)")
+    long customCandidateCount(@Param("userId")Long userId,@Param("rootId")Long rootId,@Param("keyword")String keyword);
+
+    /** 用户行锁串行化资格和额度；清除事务内锁前快照，取锁后重新查询必须看到最新提交。 */
     @Select("SELECT " + COLUMNS + " FROM user_account WHERE id=#{id} FOR UPDATE")
+    @Options(flushCache=Options.FlushCachePolicy.TRUE)
     UserAccount lockById(Long id);
 
     /** 仅更新用户可维护的公开资料，不接受权限或凭证字段。 */

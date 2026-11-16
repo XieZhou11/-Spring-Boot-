@@ -6,6 +6,7 @@ import { getNotifications, readNotification } from '@/api/creator'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { NotificationVO } from '@/types/creator'
 import { formatTime } from '@/utils/creator'
+import MessageCenterTabs from '@/components/MessageCenterTabs.vue'
 
 const notifications = useNotificationsStore()
 const router = useRouter()
@@ -49,6 +50,7 @@ async function openApplication(notification: NotificationVO) {
   await markRead(notification)
   if (notification.businessReference?.type === 'CREATOR_APPLICATION') await router.push({ path: '/account/creator-certification', query: { applicationId: notification.businessReference.id } })
   if (notification.businessReference?.type === 'WORK') await router.push(`/creator/works/${notification.businessReference.id}/edit`)
+  if (notification.businessReference?.type === 'CUSTOM_REQUEST') await router.push(`/requests/${notification.businessReference.id}`)
 }
 function refreshOnFocus() {
   void load()
@@ -65,6 +67,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('focus', refreshO
     subtitle="每一次进展，都好好告诉你。"
     number="04"
   >
+    <MessageCenterTabs />
     <div class="queue-toolbar">
       <p>
         未读 <strong>{{ notifications.unreadCount }}</strong> 条 <span
@@ -136,7 +139,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('focus', refreshO
               class="inline-button"
               @click="openApplication(notification)"
             >
-              {{ notification.businessReference?.type === 'WORK' ? '查看作品' : '查看申请' }} ↗
+              {{ notification.businessReference?.type === 'WORK' ? '查看作品' : notification.businessReference?.type === 'CUSTOM_REQUEST' ? '查看需求' : '查看申请' }} ↗
             </button>
           </div>
         </footer>

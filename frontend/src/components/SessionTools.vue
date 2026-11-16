@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
+import { countLabel } from '@/utils/customRequest'
 
 const auth = useAuthStore()
 const notifications = useNotificationsStore()
@@ -47,10 +48,22 @@ async function switchRole() {
     <RouterLink
       to="/account/notifications"
       class="notification-link"
-    >系统通知 <span
-      v-if="notifications.unreadCount"
+    >消息中心 <span
+      v-if="notifications.unreadCount + notifications.chatUnreadCount"
       class="unread-badge"
-    >{{ notifications.unreadCount > 99 ? '99+' : notifications.unreadCount }}</span></RouterLink>
+    >{{ countLabel(notifications.unreadCount + notifications.chatUnreadCount) }}</span></RouterLink>
+    <RouterLink
+      v-if="!auth.session?.roles.includes('ADMIN')"
+      to="/account/requests"
+    >我的需求</RouterLink>
+    <RouterLink
+      v-if="auth.session?.roles.includes('CREATOR')"
+      to="/requests"
+    >需求大厅</RouterLink>
+    <RouterLink
+      v-if="auth.session?.roles.includes('CREATOR')"
+      to="/creator/invitations"
+    >收到的邀约</RouterLink>
     <RouterLink
       v-if="auth.session?.roles.includes('ADMIN')"
       to="/admin/creator-applications"

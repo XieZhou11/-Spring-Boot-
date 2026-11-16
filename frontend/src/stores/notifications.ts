@@ -1,12 +1,15 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { getUnreadCount } from '@/api/creator'
+import { getChatUnread } from '@/api/customRequest'
 import type { NotificationVO } from '@/types/creator'
 import { useAuthStore } from '@/stores/auth'
 
 /** 全应用共享一个原生 WebSocket，断线后重连并从持久化接口核对未读。 */
 export const useNotificationsStore = defineStore('notifications', () => {
   const unreadCount = ref(0)
+  const chatUnreadCount = ref(0)
+  const chatRevision = ref(0)
   const revision = ref(0)
   const connected = ref(false)
   const connectionMessage = ref('')
@@ -16,6 +19,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
   let stableTimer: ReturnType<typeof setTimeout> | undefined
   let retry = 0
   let generation = 0
+  let chatUnreadRevision = 0
 
   async function refreshUnread() {
     const expected = generation
@@ -25,6 +29,13 @@ export const useNotificationsStore = defineStore('notifications', () => {
     } catch {
       // 通知读取失败不阻断当前业务表单，通知页仍显示具体请求错误。
     }
+  }
+
+  async function refreshChatUnread() {
+    const expected = generation
+    const expectedUnread = ++chatUnreadRevision
+    try { const result = await getChatUnread(); if (expected === generation && expectedUnread === chatUnreadRevision && userId) chatUnreadCount.value = result.count }
+    catch { /* 聊天未读查询失败不阻断当前表单，消息中心提供重试。 */ }
   }
 
   function disconnect() {
@@ -37,6 +48,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
     connected.value = false
     connectionMessage.value = ''
     unreadCount.value = 0
+    chatUnreadCount.value = 0
+    chatUnreadRevision++
   }
 
   function connect(id: string) {
@@ -79,7 +92,9 @@ export const useNotificationsStore = defineStore('notifications', () => {
       // 短暂建立后立即断开的连接，不能无限刷新重试额度。
       stableTimer = setTimeout(() => { if (expected === generation && socket === current) retry = 0 }, 30_000)
       revision.value++
+      chatRevision.value++
       void refreshUnread()
+      void refreshChatUnread()
     }
     current.onmessage = (event: MessageEvent<string>) => {
       if (expected !== generation || socket !== current) return
@@ -94,7 +109,13 @@ export const useNotificationsStore = defineStore('notifications', () => {
           void refreshUnread()
           // 资料页自行重新核验资格，不把推送内容当作认证权威数据。
           if (payload.notification?.businessReference?.type === 'WORK') window.dispatchEvent(new Event('work-updated'))
-          else window.dispatchEvent(new Event('creator-certification-updated'))
+          else if (payload.notification?.businessReference?.type === 'CUSTOM_REQUEST') window.dispatchEvent(new Event('custom-request-updated'))
+          else if (payload.notification?.businessReference?.type === 'CREATOR_APPLICATION') window.dispatchEvent(new Event('creator-certification-updated'))
+        }
+        if (payload.type === 'CHAT_UNREAD_UPDATED' && typeof payload.count === 'number') { chatUnreadRevision++; chatUnreadCount.value = payload.count }
+        if (['CHAT_MESSAGE', 'CHAT_READ', 'CONVERSATION_UPDATED'].includes(payload.type)) {
+          chatRevision.value++
+          if (payload.type === 'CONVERSATION_UPDATED') window.dispatchEvent(new Event('custom-request-updated'))
         }
       } catch {
         // 忽略无法识别的推送，不影响离线列表读取。
@@ -130,7 +151,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
     }
     current.onerror = () => current.close()
     void refreshUnread()
+    void refreshChatUnread()
   }
 
-  return { unreadCount, revision, connected, connectionMessage, connect, disconnect, reconnect, refreshUnread }
+  return { unreadCount, chatUnreadCount, revision, chatRevision, connected, connectionMessage, connect, disconnect, reconnect, refreshUnread, refreshChatUnread }
 })
