@@ -14,16 +14,22 @@ const route = useRoute()
 const notifications = useNotificationsStore()
 const rows = ref<ConversationVO[]>([]); const page = ref(1); const total = ref(0); const error = ref(''); const loading = ref(false)
 let revision = 0
+let pending = false; let disposed = false
 async function load(next = page.value) {
-  const current = ++revision; page.value = next; loading.value = true; error.value = ''
-  try { const result = await getConversations(next); if (current === revision) { rows.value = result.items; total.value = result.total }; void notifications.refreshChatUnread() }
+  if (disposed) return
+  page.value = next
+  // 在途期间收到推送只补做一次，翻页仍采用最后一次选择的页码。
+  if (loading.value) { pending = true; return }
+  const current = ++revision; loading.value = true; error.value = ''
+  try { const result = await getConversations(next); if (current === revision && page.value === next) { rows.value = result.items; total.value = result.total } }
   catch (failure) { if (current === revision) error.value = failure instanceof Error ? failure.message : '会话读取失败' }
-  finally { if (current === revision) loading.value = false }
+  finally { if (current === revision) { loading.value = false; if (pending) { pending = false; void load() } } }
 }
-function focus() { void load(); if (!notifications.connected) void notifications.reconnect() }
+function focus() { void load(); void notifications.refreshChatUnread(); if (!notifications.connected) void notifications.reconnect() }
+function manualRefresh() { void load(); void notifications.refreshChatUnread() }
 watch(() => notifications.chatRevision, () => void load())
 onMounted(() => { focus(); window.addEventListener('focus', focus) })
-onBeforeUnmount(() => { revision++; window.removeEventListener('focus', focus) })
+onBeforeUnmount(() => { disposed = true; revision++; window.removeEventListener('focus', focus) })
 </script>
 <template>
   <MessageLayout>
@@ -39,7 +45,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('focus', focus) }
           <h2>全部会话</h2><button
             class="inline-button"
             :disabled="loading"
-            @click="load()"
+            @click="manualRefresh"
           >
             刷新会话
           </button>

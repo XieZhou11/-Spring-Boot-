@@ -99,7 +99,9 @@ async function send() {
   } finally { sending.value = false }
 }
 function focused() { if (document.visibilityState === 'visible') { void refresh(); void observe(false); if (!notifications.connected) void notifications.reconnect() } }
-watch(() => notifications.chatRevision, () => void refresh())
+watch(() => notifications.chatUpdate, update => {
+  if (update.all || update.conversationIds.includes(id())) void refresh()
+})
 watch(() => route.params.id, () => { generation++; observer?.disconnect(); clearTimeout(readTimer); syncCursor = undefined; messages.value = []; conversation.value = undefined; content.value = ''; imageIds.value = []; uploading.value = false; error.value = ''; loadError.value = ''; readError.value = ''; attempt = undefined; uncertain.value = false; desiredRead = '0'; acknowledgedRead = '0'; void refresh(true) }, { immediate: true })
 function canLeave() {
   if (!auth.session) return true

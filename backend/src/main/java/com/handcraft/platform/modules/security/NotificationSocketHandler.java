@@ -1,10 +1,13 @@
 package com.handcraft.platform.modules.security;
 
 import com.handcraft.platform.common.logging.SafeLog;
+import com.handcraft.platform.modules.entity.UserAccount;
 import com.handcraft.platform.modules.mapper.*;
 import jakarta.servlet.http.HttpSession;
 import java.time.Clock;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,7 +18,7 @@ import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.*;
 import tools.jackson.databind.ObjectMapper;
 
-/** 单机多端通知连接；每次收发检查服务端凭证，长连接不能绕过退出、重置或到期。 */
+/** 单机多端实时连接；凭证查询仅在当轮共享，逐连接检查退出、重置和到期。 */
 @Component
 public class NotificationSocketHandler extends TextWebSocketHandler {
     private static final Logger LOGGER=LoggerFactory.getLogger(NotificationSocketHandler.class);
@@ -29,33 +32,48 @@ public class NotificationSocketHandler extends TextWebSocketHandler {
     @Override public void afterConnectionEstablished(WebSocketSession socket)throws Exception {
         var principal=(AccountPrincipal)socket.getAttributes().get("principal");var session=(HttpSession)socket.getAttributes().get("httpSession");
         var connection=new Connection(new ConcurrentWebSocketSessionDecorator(socket,10000,1024*1024),session,principal);
-        if(!valid(connection)){socket.close(CloseStatus.POLICY_VIOLATION);return;}
+        var credentials=new HashMap<Long,Optional<UserAccount>>();
+        if(!valid(connection,credentials)){socket.close(CloseStatus.POLICY_VIOLATION);return;}
         connections.put(socket.getId(),connection);LOGGER.info("系统通知连接建立：userId={}",principal.userId());
-        send(connection,Map.of("type","UNREAD_UPDATED","count",notices.unread(principal.userId())));
+        send(connection,Map.of("type","UNREAD_UPDATED","count",notices.unread(principal.userId())),credentials);
     }
     @Override protected void handleTextMessage(WebSocketSession socket,TextMessage message)throws Exception {
-        Connection connection=connections.get(socket.getId());if(connection==null||!valid(connection)){socket.close(CloseStatus.POLICY_VIOLATION);return;}
+        var credentials=new HashMap<Long,Optional<UserAccount>>();
+        Connection connection=connections.get(socket.getId());if(connection==null||!valid(connection,credentials)){socket.close(CloseStatus.POLICY_VIOLATION);return;}
         // 长连接只接受心跳，通知/消息写入及已读均使用有CSRF保护的HTTP接口。
         if(message.getPayloadLength()>256){socket.close(CloseStatus.TOO_BIG_TO_PROCESS);return;}
-        if("PING".equals(message.getPayload())||"PING".equals(json.readTree(message.getPayload()).path("type").asText()))send(connection,Map.of("type","PONG"));
+        if("PING".equals(message.getPayload())||"PING".equals(json.readTree(message.getPayload()).path("type").asText()))send(connection,Map.of("type","PONG"),credentials);
     }
     @Override protected void handlePongMessage(WebSocketSession socket,PongMessage message)throws Exception {
-        Connection connection=connections.get(socket.getId());if(connection==null||!valid(connection))socket.close(CloseStatus.POLICY_VIOLATION);
+        Connection connection=connections.get(socket.getId());if(connection==null||!valid(connection,new HashMap<>()))socket.close(CloseStatus.POLICY_VIOLATION);
     }
     @Override public void afterConnectionClosed(WebSocketSession socket,CloseStatus status){connections.remove(socket.getId());}
     @Override public void handleTransportError(WebSocketSession socket,Throwable error)throws Exception {connections.remove(socket.getId());socket.close(CloseStatus.SERVER_ERROR);}
     /** 事务提交后向同一用户全部有效连接推送，单端失败不影响其他端。 */
-    public void publish(Long userId,Object event){connections.values().stream().filter(c->c.principal.userId().equals(userId)).forEach(c->send(c,event));}
+    public void publish(Long userId,Object event){
+        // 同一用户多个端只查一次；不跨推送缓存，下一次发送重新核验改密等变化。
+        var credentials=new HashMap<Long,Optional<UserAccount>>();
+        connections.values().stream().filter(c->c.principal.userId().equals(userId)).forEach(c->send(c,event,credentials));
+    }
     @EventListener public void revoked(SessionRevokedEvent event){connections.values().stream().filter(c->{try{return c.session.getId().equals(event.sessionId());}catch(IllegalStateException e){return true;}}).forEach(this::close);}
-    @Scheduled(fixedDelay=1000) public void checkCredentials(){connections.values().forEach(c->{if(!valid(c))close(c);});}
-    private boolean valid(Connection c){
+    @Scheduled(fixedDelay=1000) public void checkCredentials(){
+        var credentials=new HashMap<Long,Optional<UserAccount>>();
+        connections.values().forEach(c->{if(!valid(c,credentials))close(c);});
+    }
+    private boolean valid(Connection c,Map<Long,Optional<UserAccount>> credentials){
         try {
             c.session.getCreationTime();if(!clock.instant().isBefore(c.principal.expiresAt()))return false;
-            var user=accounts.findById(c.principal.userId());return user!=null&&c.principal.matches(user.getPasswordHash());
-        }catch(IllegalStateException e){return false;}catch(RuntimeException e){LOGGER.error("通知连接凭证检查异常：userId={}",c.principal.userId(),SafeLog.exception(e));return false;}
+            var user=credentials.computeIfAbsent(c.principal.userId(),this::credential);
+            return user.isPresent()&&c.principal.matches(user.get().getPasswordHash());
+        }catch(IllegalStateException e){return false;}
     }
-    private void send(Connection c,Object event){
-        if(!valid(c)){close(c);return;}
+    /** 查询失败按无效凭证处理，当轮其他端复用失败结果，避免反复访问故障数据库。 */
+    private Optional<UserAccount> credential(Long userId){
+        try{return Optional.ofNullable(accounts.findById(userId));}
+        catch(RuntimeException e){LOGGER.error("实时连接凭证检查异常：stage=查询用户凭证, userId={}",userId,SafeLog.exception(e));return Optional.empty();}
+    }
+    private void send(Connection c,Object event,Map<Long,Optional<UserAccount>> credentials){
+        if(!valid(c,credentials)){close(c);return;}
         try{c.socket.sendMessage(new TextMessage(json.writeValueAsString(event)));}
         catch(Exception e){LOGGER.warn("系统通知推送失败：stage=网络发送, userId={}, reason=连接已中断，通知可重新查询",c.principal.userId());close(c);}
     }

@@ -19,6 +19,7 @@
 | 架构、领域与 UI 详细设计 | 尚未编写 | [设计约定](design/README.md)，在相关任务中逐步形成 |
 | 前后端工程 | 已有账号、个人中心、创作者入驻与后台审核、两级品类、身份切换、系统通知、作品链路、定制需求/图文会话及报价定标待付款订单；真实 OSS 云端联调已通过，QQ/163 公网收件及找回密码补充验收用户明确暂缓；支付、履约及互动待后续实现 | [后端说明](../backend/README.md)、[前端说明](../frontend/README.md)、[T-002](development/tasks/T-002-frontend-auth.md)、[T-003](development/tasks/T-003-personal-center.md)、[T-004](development/tasks/T-004-creator-onboarding.md)、[T-005](development/tasks/T-005-work-publication.md)、[T-007](development/tasks/T-007-custom-requests.md)、[T-009](development/tasks/T-009-quote-award.md) |
 | 前后台导航与工作区 | T-008 已完成独立后台、审核双栏、前台一级导航、创作者工作台与消息双栏；需求和沟通移出个人中心，旧链接兼容跳转 | [T-008](development/tasks/T-008-navigation-layout.md)、[测试记录](testing/T-008-navigation-layout.md) |
+| 聊天连接与查询优化 | T-010 已完成心跳检测、有限重连、按会话合并刷新和每轮凭证查询复用；握手失败仍查询持久化未读，已完成隔离回归及失败项复测 | [T-010](development/tasks/T-010-chat-reliability.md)、[测试记录](testing/T-010-chat-reliability.md) |
 | 报价对比与定标建单 | T-009已完成：报价/撤回、私有图片、对比、唯一待付款订单、取消/超时及关联会话；独立审查与最终回归通过 | [T-009](development/tasks/T-009-quote-award.md)、[测试记录](testing/T-009-quote-award.md) |
 | 业务接口、自动化测试与 CI | 已交付业务用真实 MySQL、HTTP、WebSocket 及协议接收器验证，真实 OSS 单独验证；T-009最终后端verify 188项、0失败/错误、4项云端开关跳过，报价图真实OSS另行1项通过；Playwright全量44/44，前端类型/lint/构建通过；后端测试源码仅本地保留且被Git忽略；无CI文件，未执行远端CI | [当前报价订单回归](testing/T-009-quote-award.md)、[全部业务测试记录](testing/README.md) |
 
@@ -47,6 +48,8 @@ T-005 已完成作品草稿、发布额度、版本冲突、审核历史、作�
 [T-009 报价对比与定标建单](development/tasks/T-009-quote-award.md)沿用需求及会话，实现报价、定标快照与唯一订单，买家取消或超时关闭需求，中标会话继续可用。V5追加报价请求键，V1—V5迁移已在隔离MySQL验证，本轮未主动迁移开发库，下次启动新版后端由Flyway追加尚未执行版本。下一步可接入定制订单模拟支付；现货建单、履约及资金流程仍待实现。
 
 [T-008 导航与工作区修复](development/tasks/T-008-navigation-layout.md)沿用现有接口：管理员默认进入固定左栏的后台，作品和入驻审核保留队列/详情上下文；普通用户从一级导航管理需求，从独立消息中心沟通，个人中心只保留资料、地址与入驻。当前页面路径以[前端说明](../frontend/README.md)为准，旧个人中心需求/消息路径兼容跳转。
+
+[T-010 聊天连接可靠性与查询优化](development/tasks/T-010-chat-reliability.md)沿用原有 HTTP 写入、消息先存后推及鉴权规则，补齐无响应连接恢复，减少无关会话刷新和同用户多端凭证查询。为避开同时进行的报价/订单开发，使用独立快照及端口验收；结果与限制见[测试记录](testing/T-010-chat-reliability.md)。
 
 | 目录 | 放什么 | 入口 |
 | --- | --- | --- |
@@ -102,7 +105,8 @@ docs/
 │       ├── T-005-work-publication.md # 作品发布、审核与浏览
 │       ├── T-007-custom-requests.md # 定制需求、定向邀约与图文会话
 │       ├── T-008-navigation-layout.md # 前后台导航、审核与消息双栏修复
-│       └── T-009-quote-award.md        # 报价对比、定标及待付款订单
+│       ├── T-009-quote-award.md        # 报价对比、定标及待付款订单
+│       └── T-010-chat-reliability.md  # 聊天心跳、有限重连与查询优化
 └── testing/                          # 简短测试结果，不存测试代码、不建子目录
     ├── README.md                     # 业务功能测试记录方式与格式示例
     ├── T-001-backend-auth.md          # 账号后端测试与复测结果
@@ -112,7 +116,8 @@ docs/
     ├── T-005-work-publication.md       # 作品、审核、浏览及完整回归结果
     ├── T-007-custom-requests.md         # 需求、会话、真实OSS及完整回归结果
     ├── T-008-navigation-layout.md      # 导航与双栏交互修复及回归结果
-    └── T-009-quote-award.md             # 报价订单、真实OSS及完整回归结果
+    ├── T-009-quote-award.md             # 报价订单、真实OSS及完整回归结果
+    └── T-010-chat-reliability.md        # 聊天可靠性及查询优化回归结果
 ```
 
 补充说明：
@@ -121,7 +126,7 @@ docs/
 - `prototypes/README.md` 是当前导航，`assets/原型说明.md` 是原始设计说明，两者职责接近；后续若精简，可以合并说明并减少一层目录，本轮未改写原始材料。
 - 原 `design/database.md` 已删除，现有 [数据库表结构](design/数据库表结构.md)为按当前需求编写的新草稿，对应 SQL 位于后端 `src/main/resources/db/migration/`，V1 已执行且包含异常结构补偿；人工结构回退位于相邻 `rollback/`，未执行。
 - `decisions/` 中的 ADR-001 记录已选技术；选型和框架验证不代表全部业务已经实现，SMTP 公网实收补充验收已由用户明确暂缓，OSS 实际结果见 T-003。
-- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端T-001、认证前端T-002、个人中心T-003、入驻审核T-004、作品链路T-005、定制需求/会话T-007、导航交互修复T-008、报价/待付款订单T-009，互动T-006尚未出现在本工作区。
+- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端T-001、认证前端T-002、个人中心T-003、入驻审核T-004、作品链路T-005、定制需求/会话T-007、导航交互修复T-008、报价/待付款订单T-009及聊天优化T-010，互动T-006尚未出现在本工作区。
 - `testing/README.md` 只规定业务功能测试结果如何填写；功能开发时再增加实际记录，复测更新同一文件，任务只保留总体结果和链接。
 
 ## 3. 已有资料迁移对照

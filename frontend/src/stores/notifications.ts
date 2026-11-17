@@ -10,16 +10,49 @@ export const useNotificationsStore = defineStore('notifications', () => {
   const unreadCount = ref(0)
   const chatUnreadCount = ref(0)
   const chatRevision = ref(0)
+  // 批次只保存本轮受影响会话，避免长期积累每个会话的版本状态。
+  const chatUpdate = ref<{ all: boolean; conversationIds: string[] }>({ all: false, conversationIds: [] })
   const revision = ref(0)
   const connected = ref(false)
   const connectionMessage = ref('')
   let socket: WebSocket | undefined
   let userId: string | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
-  let stableTimer: ReturnType<typeof setTimeout> | undefined
+  let heartbeatTimer: ReturnType<typeof setTimeout> | undefined
+  let heartbeatTimeout: ReturnType<typeof setTimeout> | undefined
+  let chatTimer: ReturnType<typeof setTimeout> | undefined
+  const changedConversations = new Set<string>()
+  let refreshAllConversations = false
+  let requestChanged = false
   let retry = 0
   let generation = 0
   let chatUnreadRevision = 0
+
+  /** 连续推送合并为一次列表刷新，详情仅补拉当前会话；重连要求所有已打开页面核对。 */
+  function queueChatUpdate(conversationId?: string, all = false, requestUpdated = false) {
+    if (conversationId) changedConversations.add(conversationId)
+    refreshAllConversations ||= all
+    requestChanged ||= requestUpdated
+    if (chatTimer !== undefined) return
+    const expected = generation
+    chatTimer = setTimeout(() => {
+      chatTimer = undefined
+      if (expected !== generation || !userId) return
+      chatUpdate.value = { all: refreshAllConversations, conversationIds: [...changedConversations] }
+      chatRevision.value++
+      if (requestChanged) window.dispatchEvent(new Event('custom-request-updated'))
+      changedConversations.clear()
+      refreshAllConversations = false
+      requestChanged = false
+    }, 100)
+  }
+
+  function clearHeartbeat() {
+    clearTimeout(heartbeatTimer)
+    clearTimeout(heartbeatTimeout)
+    heartbeatTimer = undefined
+    heartbeatTimeout = undefined
+  }
 
   async function refreshUnread() {
     const expected = generation
@@ -42,7 +75,12 @@ export const useNotificationsStore = defineStore('notifications', () => {
     generation++
     userId = undefined
     clearTimeout(timer)
-    clearTimeout(stableTimer)
+    clearHeartbeat()
+    clearTimeout(chatTimer)
+    chatTimer = undefined
+    changedConversations.clear()
+    refreshAllConversations = false
+    requestChanged = false
     socket?.close()
     socket = undefined
     connected.value = false
@@ -57,6 +95,9 @@ export const useNotificationsStore = defineStore('notifications', () => {
     disconnect()
     userId = id
     retry = 0
+    // 持久化未读独立于实时握手，连接失败时首页仍能显示已有消息。
+    void refreshUnread()
+    void refreshChatUnread()
     open()
   }
 
@@ -73,7 +114,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
       connectionMessage.value = ''
       open()
     } catch {
-      connectionMessage.value = '暂时无法核验连接，请稍后重新连接。已保存的通知仍可查询。'
+      if (expected === generation && userId) connectionMessage.value = '暂时无法核验连接，请稍后重新连接。已保存的消息仍可查询。'
     }
   }
 
@@ -85,21 +126,70 @@ export const useNotificationsStore = defineStore('notifications', () => {
     endpoint.pathname = `${endpoint.pathname.replace(/\/$/, '')}/ws`
     const current = new WebSocket(endpoint)
     socket = current
+    let openedAt = 0
+    /** 主动释放失联连接，不等待可能永远无法完成的关闭握手；旧事件不再参与重试。 */
+    const lost = (code?: number) => {
+      if (expected !== generation || !userId || socket !== current) return
+      socket = undefined
+      connected.value = false
+      clearHeartbeat()
+      current.onopen = null
+      current.onmessage = null
+      current.onclose = null
+      current.onerror = null
+      current.close()
+      if (code === 1008) {
+        connectionMessage.value = '实时连接已关闭，请核对登录状态或重新连接。'
+        void useAuthStore().restoreSession(true).catch(() => { /* 保持关闭，等待手动核验。 */ })
+        return
+      }
+      if (retry >= 5) {
+        connectionMessage.value = '实时连接暂时不可用，已停止自动重试。可刷新或重新连接，已保存的消息仍可查询。'
+        return
+      }
+      connectionMessage.value = '实时连接中断，正在尝试恢复。已保存的消息仍可查询。'
+      timer = setTimeout(async () => {
+        try {
+          const session = await useAuthStore().restoreSession(true)
+          if (expected !== generation || !userId) return
+          if (!session || session.userId !== userId) return disconnect()
+          open()
+        } catch {
+          if (expected === generation && userId) connectionMessage.value = '暂时无法核验连接，请刷新或重新连接。已保存的消息仍可查询。'
+        }
+      }, Math.min(16_000, 1000 * 2 ** retry++))
+    }
+    // 浏览器不暴露协议层Ping；应用心跳用于识别未触发onclose的无响应连接。
+    const ping = () => {
+      if (expected !== generation || socket !== current) return
+      try {
+        current.send('PING')
+        heartbeatTimeout = setTimeout(() => lost(), 10_000)
+      } catch { lost() }
+    }
     current.onopen = () => {
       if (expected !== generation || socket !== current) return current.close()
       connected.value = true
       connectionMessage.value = ''
-      // 短暂建立后立即断开的连接，不能无限刷新重试额度。
-      stableTimer = setTimeout(() => { if (expected === generation && socket === current) retry = 0 }, 30_000)
+      openedAt = Date.now()
       revision.value++
-      chatRevision.value++
+      queueChatUpdate(undefined, true)
       void refreshUnread()
       void refreshChatUnread()
+      ping()
     }
     current.onmessage = (event: MessageEvent<string>) => {
       if (expected !== generation || socket !== current) return
       try {
-        const payload = JSON.parse(event.data) as { type: string; count?: number; notification?: NotificationVO }
+        const payload = JSON.parse(event.data) as { type: string; count?: number; notification?: NotificationVO; conversationId?: string; userId?: string; message?: { conversationId?: string } }
+        if (payload.type === 'PONG' && heartbeatTimeout !== undefined) {
+          clearTimeout(heartbeatTimeout)
+          heartbeatTimeout = undefined
+          // 必须在持续连接后收到有效回应才恢复额度，避免仅握手成功的故障反复归零。
+          if (Date.now() - openedAt >= 30_000) retry = 0
+          heartbeatTimer = setTimeout(ping, 20_000)
+          return
+        }
         if (payload.type === 'UNREAD_UPDATED' && typeof payload.count === 'number') {
           unreadCount.value = payload.count
           revision.value++
@@ -114,45 +204,18 @@ export const useNotificationsStore = defineStore('notifications', () => {
         }
         if (payload.type === 'CHAT_UNREAD_UPDATED' && typeof payload.count === 'number') { chatUnreadRevision++; chatUnreadCount.value = payload.count }
         if (['CHAT_MESSAGE', 'CHAT_READ', 'CONVERSATION_UPDATED'].includes(payload.type)) {
-          chatRevision.value++
-          if (payload.type === 'CONVERSATION_UPDATED') window.dispatchEvent(new Event('custom-request-updated'))
+          // 对方已读不改变本人的游标或未读；本人其他端的已读仍须刷新。
+          if (payload.type === 'CHAT_READ' && payload.userId !== userId) return
+          const conversationId = payload.type === 'CHAT_MESSAGE' ? payload.message?.conversationId : payload.conversationId
+          if (typeof conversationId === 'string') queueChatUpdate(conversationId, false, payload.type === 'CONVERSATION_UPDATED')
         }
       } catch {
         // 忽略无法识别的推送，不影响离线列表读取。
       }
     }
-    current.onclose = (event) => {
-      if (expected !== generation || !userId || socket !== current) return
-      connected.value = false
-      clearTimeout(stableTimer)
-      socket = undefined
-      // 服务端明确撤销凭证时停止自动重连，防止旧会话持续请求。
-      if (event.code === 1008) {
-        connectionMessage.value = '实时连接已关闭，请核对登录状态或重新连接。'
-        void useAuthStore().restoreSession(true).catch(() => { /* 保持关闭，等待手动核验。 */ })
-        return
-      }
-      if (retry >= 5) {
-        connectionMessage.value = '实时连接暂时不可用，已停止自动重试。可刷新或重新连接，已保存的通知仍可查询。'
-        return
-      }
-      connectionMessage.value = '实时连接中断，正在尝试恢复。已保存的通知仍可查询。'
-      timer = setTimeout(async () => {
-        try {
-          const session = await useAuthStore().restoreSession(true)
-          if (expected !== generation || !userId) return
-          if (!session || session.userId !== userId) return disconnect()
-          open()
-        } catch {
-          // 会话查询失败也消耗一次重试，不绕过凭证核验建立新连接。
-          connectionMessage.value = '暂时无法核验连接，请刷新或重新连接。已保存的通知仍可查询。'
-        }
-      }, Math.min(16_000, 1000 * 2 ** retry++))
-    }
-    current.onerror = () => current.close()
-    void refreshUnread()
-    void refreshChatUnread()
+    current.onclose = event => lost(event.code)
+    current.onerror = () => lost()
   }
 
-  return { unreadCount, chatUnreadCount, revision, chatRevision, connected, connectionMessage, connect, disconnect, reconnect, refreshUnread, refreshChatUnread }
+  return { unreadCount, chatUnreadCount, revision, chatRevision, chatUpdate, connected, connectionMessage, connect, disconnect, reconnect, refreshUnread, refreshChatUnread }
 })

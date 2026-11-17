@@ -134,6 +134,8 @@ npx playwright test e2e/creator-onboarding.spec.ts
 
 消息中心并列展示系统通知与 `/messages/conversations` 需求沟通，分别统计未读，页首显示两者总数，超过99显示99+。`/messages/conversations/:id` 支持文字、最多3张私有图片、历史分页、只读归档、未知发送结果的幂等重试；复用唯一 `/api/ws` 连接，断线后HTTP按游标补拉。已读只推进到当前可见区域实际展示的消息，后台标签页和屏幕外消息保留未读。
 
+[T-010 聊天可靠性优化](../docs/development/tasks/T-010-chat-reliability.md)增加应用心跳：连接建立即发送 PING，收到 PONG 后20秒再次发送，10秒未回应则主动释放旧连接，按1/2/4/8/16秒最多自动重试5次；连接持续至少30秒且再次收到有效 PONG 才恢复重试额度。退出或切换账号时清理旧计时器。首次未读查询独立于实时握手，连接失败时仍显示已保存消息的未读数，重连成功再核对遗漏。聊天事件在100毫秒内合并，详情只补拉当前会话，列表合并在途刷新；重新激活页面和手动刷新仍查询持久化未读。专项复测：`npm run test:e2e -- e2e/chat-reliability.spec.ts`，实际结果见 [T-010 测试记录](../docs/testing/T-010-chat-reliability.md)。
+
 复测：`npm run test:e2e -- custom-requests.spec.ts`。若5173正用于开发，可在PowerShell先设置 `$env:HANDCRAFT_E2E_PORT='5174'` 再执行测试；配置、所有浏览器上下文、测试后端CORS及本地OSS接收器使用同一来源，不停止开发服务器。18080仍须空闲。真实OSS云端验证在后端单独显式启用，浏览器常规测试只操作隔离库和本地协议接收器。
 
 导航与双栏复测：`npm run test:e2e -- e2e/navigation-layout.spec.ts`；同时保留作品、入驻、需求与图文会话套件验证实际操作，结果见 [T-008 测试记录](../docs/testing/T-008-navigation-layout.md)。

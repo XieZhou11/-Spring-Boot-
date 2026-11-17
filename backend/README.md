@@ -167,6 +167,8 @@ MySQL DDL 隐式提交，整批建表不能靠 ROLLBACK 撤销。V1 使用临时
 
 消息经带CSRF的HTTP写入，先查幂等结果，再校验状态、文本、图片、成功消息频次及冷却；第21条返回429并持久化60秒冷却，Retry-After提供剩余秒数。消息与关闭共用需求、会话锁；提交后通过现有 `/api/ws` 推送 `CHAT_MESSAGE`、`CHAT_READ`、`CHAT_UNREAD_UPDATED`、`CONVERSATION_UPDATED`，保留原通知协议，客户端可HTTP补拉。参考图与会话图复用作品底层解码、私有OSS及短时签名，清理排除草稿、发布需求和历史消息引用。
 
+[T-010 聊天可靠性优化](../docs/development/tasks/T-010-chat-reliability.md)在每轮凭证扫描、每次用户推送中按用户共享一次数据库查询，结果仅保留于当前调用；每个连接仍独立检查 HttpSession 和登录绝对有效期，下次收发/扫描重新查询密码指纹。应用心跳沿用 `PING` / `{"type":"PONG"}`。三端连接的一轮扫描及推送均从3次用户查询降至1次，退出、改密和到期关闭已在真实 MySQL/WebSocket 验证，见 [T-010 测试记录](../docs/testing/T-010-chat-reliability.md)。
+
 会话临时图片仅上传者可预览，写入本会话消息后双方才可读取；归档后保留历史读取权限。本地业务验证使用隔离MySQL、HTTP、WebSocket及OSS协议接收器；云端验证须显式设置 `HANDCRAFT_TEST_REAL_OSS=1`，只操作测试生成的对象，不覆盖本地配置或清理其他对象。详细结果见 [T-007测试记录](../docs/testing/T-007-custom-requests.md)，后端测试源码按仓库约定不纳入Git。
 
 ## 报价对比与待付款订单（T-009）
