@@ -50,6 +50,8 @@ async function openApplication(notification: NotificationVO) {
   if (notification.businessReference?.type === 'CREATOR_APPLICATION') await router.push({ path: '/account/creator-certification', query: { applicationId: notification.businessReference.id } })
   if (notification.businessReference?.type === 'WORK') await router.push(`/creator/works/${notification.businessReference.id}/edit`)
   if (notification.businessReference?.type === 'CUSTOM_REQUEST') await router.push(`/requests/${notification.businessReference.id}`)
+  if (notification.businessReference?.type === 'QUOTE' && notification.businessReference.requestId) await router.push(`/requests/${notification.businessReference.requestId}#quotes`)
+  if (notification.businessReference?.type === 'ORDER') await router.push(`/orders/${notification.businessReference.id}`)
 }
 function refreshOnFocus() {
   void load()
@@ -133,7 +135,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('focus', refreshO
               class="inline-button"
               @click="openApplication(notification)"
             >
-              {{ notification.businessReference?.type === 'WORK' ? '查看作品' : notification.businessReference?.type === 'CUSTOM_REQUEST' ? '查看需求' : '查看申请' }} ↗
+              {{ notification.businessReference?.type === 'WORK' ? '查看作品' : notification.businessReference?.type === 'CUSTOM_REQUEST' ? '查看需求' : notification.businessReference?.type === 'QUOTE' ? '查看报价' : notification.businessReference?.type === 'ORDER' ? '查看订单' : '查看申请' }} ↗
             </button>
           </div>
         </footer>

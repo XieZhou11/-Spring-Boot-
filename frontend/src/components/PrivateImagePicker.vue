@@ -2,7 +2,8 @@
 import { nextTick, ref } from 'vue'
 import PrivateImage from './PrivateImage.vue'
 import { uploadPrivateImage } from '@/api/customRequest'
-const props = defineProps<{ modelValue: string[]; label: string; max: number; conversationId?: string; disabled?: boolean }>()
+import { uploadQuoteImage } from '@/api/quote'
+const props = defineProps<{ modelValue: string[]; label: string; max: number; conversationId?: string; scope?: 'quote'; disabled?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [ids: string[]]; uploading: [value: boolean] }>()
 const error = ref(''); const busy = ref(false)
 /** 逐张真实上传，失败保留已完成的图片和表单；服务端再次解码并校验归属。 */
@@ -16,7 +17,7 @@ async function upload(event: Event) {
   try {
     for (const file of files) {
       if (file.size > 5 * 1024 * 1024) throw new Error('每张图片不能超过 5MB')
-      const result = await uploadPrivateImage(file, props.conversationId)
+      const result = props.scope === 'quote' ? await uploadQuoteImage(file) : await uploadPrivateImage(file, props.conversationId)
       emit('update:modelValue', [...props.modelValue, result.id])
       // 父级v-model更新后再开始下一张，避免多选覆盖前一张。
       await nextTick()
@@ -50,7 +51,7 @@ async function upload(event: Event) {
       >
         <PrivateImage
           :image-id="id"
-          :scope="conversationId ? 'chat' : 'request'"
+          :scope="scope || (conversationId ? 'chat' : 'request')"
           :label="`${label} ${index + 1}`"
         /><button
           type="button"

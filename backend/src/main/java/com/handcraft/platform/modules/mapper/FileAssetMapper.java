@@ -80,4 +80,17 @@ public interface FileAssetMapper {
         ) ORDER BY updated_at,id LIMIT 100
         """)
     List<FileAsset> findInterruptedRequests();
+
+    /** 报价历史和订单快照一并排除，防止旧引用占满扫描批次或被误清理。 */
+    @Select("SELECT "+COLUMNS+" "+"""
+        FROM file_asset f WHERE object_key LIKE 'quotes/%' AND (
+            upload_status='CLEANUP_PENDING'
+            OR (upload_status='UPLOADING' AND updated_at<DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 1 HOUR))
+            OR (upload_status='AVAILABLE' AND updated_at<DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 24 HOUR))
+        )
+        AND NOT EXISTS (SELECT 1 FROM quote q WHERE JSON_CONTAINS(q.image_ids,JSON_QUOTE(CAST(f.id AS CHAR))))
+        AND NOT EXISTS (SELECT 1 FROM trade_order o WHERE JSON_CONTAINS(o.agreement_snapshot,JSON_QUOTE(CAST(f.id AS CHAR)),'$.imageIds'))
+        ORDER BY updated_at,id LIMIT 100
+        """)
+    List<FileAsset> findInterruptedQuotes();
 }

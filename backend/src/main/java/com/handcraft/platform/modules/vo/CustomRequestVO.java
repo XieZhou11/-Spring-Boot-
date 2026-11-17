@@ -33,5 +33,7 @@ import java.time.*;
  * @param canCopy 是否可复制新建
  * @param canConsult 是否可发起或进入会话
  * @param consultationReason 不能发起会话的原因
+ * @param canQuote 是否可以提交新报价
+ * @param quoteDisabledReason 报价资格、状态或额度限制原因
  */
-public record CustomRequestVO(String id,String buyerNickname,String title,String categoryId,List<String> categoryPath,String purpose,String materialPreference,String specification,String budgetMin,String budgetMax,LocalDate expectedShipDate,List<String> referenceImageIds,String description,String visibility,String invitedCreatorId,String invitedCreatorNickname,String sourceWorkId,String status,String version,OffsetDateTime publishedAt,OffsetDateTime noQuoteExpireAt,OffsetDateTime closedAt,OffsetDateTime createdAt,OffsetDateTime updatedAt,boolean owned,boolean canEdit,boolean canPublish,boolean canClose,boolean canCopy,boolean canConsult,String consultationReason) {}
+public record CustomRequestVO(String id,String buyerNickname,String title,String categoryId,List<String> categoryPath,String purpose,String materialPreference,String specification,String budgetMin,String budgetMax,LocalDate expectedShipDate,List<String> referenceImageIds,String description,String visibility,String invitedCreatorId,String invitedCreatorNickname,String sourceWorkId,String status,String version,OffsetDateTime publishedAt,OffsetDateTime noQuoteExpireAt,OffsetDateTime closedAt,OffsetDateTime createdAt,OffsetDateTime updatedAt,boolean owned,boolean canEdit,boolean canPublish,boolean canClose,boolean canCopy,boolean canConsult,String consultationReason,boolean canQuote,String quoteDisabledReason) {}

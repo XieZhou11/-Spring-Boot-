@@ -1,0 +1,42 @@
+/* 报价沿用纸色与墨绿；比较表保持同一行内的信息可读，定标确认独立成区。 */
+.request-quote-panel { margin-top: 38px; padding-top: 30px; border-top: 1px solid var(--border); }
+.request-quote-panel h2 { font: 500 27px var(--serif); }
+.quote-form { max-width: 860px; margin: 24px 0; }
+.quote-form fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.quote-record { border: 1px solid var(--border); padding: 24px; margin: 15px 0; background: #fffdf8; }
+.quote-record header, .quote-record footer, .quote-record-terms { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.quote-record-terms { justify-content: flex-start; margin: 18px 0; }
+.quote-record summary, .quote-comparison summary { cursor: pointer; color: var(--green); }
+.quote-record footer { margin-top: 18px; justify-content: flex-end; }
+.quote-amount { font: 500 26px var(--serif); color: var(--green); white-space: nowrap; }
+.quote-images { display: flex; flex-wrap: wrap; gap: 8px; margin: 15px 0; }
+.quote-image-card { width: 110px; text-align: center; }
+.quote-image-card .work-image { height: 100px; aspect-ratio: 1; border: 1px solid var(--border); }
+.quote-image-card img { object-fit: contain; }
+.quote-image-card > button { padding: 7px; cursor: zoom-in; }
+.quote-image-dialog { width: min(850px, 90vw); padding: 20px; border: 1px solid var(--border); background: #fffdf8; }
+.quote-image-dialog::backdrop { background: #182920bb; }
+.quote-image-dialog .work-image { margin-top: 15px; max-height: 75vh; }
+.quote-image-dialog img { width: 100%; max-height: 72vh; object-fit: contain; }
+.quote-table-scroll { overflow-x: auto; border: 1px solid var(--border); }
+.quote-comparison { width: 100%; min-width: 1000px; border-collapse: collapse; font-size: 13px; }
+.quote-comparison th { text-align: left; padding: 18px 16px; background: #edf0e8; font-weight: 600; }
+.quote-comparison td { padding: 22px 16px; vertical-align: top; border-top: 1px solid var(--border); }
+.quote-comparison .proposal-cell { min-width: 240px; max-width: 340px; }
+.quote-comparison .request-description { max-height: 350px; overflow-y: auto; }
+.quote-comparison .field-help { display: block; margin: 7px 0; }
+.quote-comparison .quote-amount { font-size: 23px; }
+.quote-badge { display: inline-block; color: #355744; background: #e4ebdf; padding: 3px 6px; font-size: 11px; margin: 7px 4px 0 0; }
+.award-panel { margin-top: 28px; border: 1px solid #58735d; background: #f7f8f0; padding: 30px; }
+.award-panel h2 { font: 500 26px var(--serif); }
+.award-confirmation { display: flex; gap: 10px; align-items: flex-start; line-height: 1.8; margin: 20px 0; }
+.award-confirmation input { margin-top: 7px; accent-color: var(--green); }
+.award-address { font-style: normal; line-height: 1.9; padding: 18px; background: #fffdf8; border-left: 3px solid #58735d; }
+.shipping-warning { color: #895b2e; line-height: 1.8; }
+.quote-history { margin-top: 30px; }
+.order-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 28px; align-items: start; }
+.order-detail-grid .editor-section { margin-bottom: 24px; }
+.order-timeline { padding-left: 20px; }
+.order-timeline li { padding: 8px 0 18px; }
+.order-timeline time { display: block; color: var(--muted); font-size: 12px; margin-top: 6px; }
+@media (max-width: 900px) { .order-detail-grid { grid-template-columns: 1fr; } .award-panel { padding: 20px; } .quote-record { padding: 18px; } }

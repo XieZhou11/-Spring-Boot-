@@ -24,6 +24,30 @@ public class NotificationServiceImpl implements NotificationService {
     private final ObjectMapper json;
     public NotificationServiceImpl(SystemNotificationMapper notices,NotificationSocketHandler socket,ObjectMapper json){this.notices=notices;this.socket=socket;this.json=json;}
     @Transactional(propagation=Propagation.MANDATORY)
+    public void tradeChanged(Long recipientId,String eventType,String businessType,Long businessId,Long requestId){
+        BusinessLog.run(LoggerFactory.getLogger(getClass()),"报价订单通知保存",recipientId,()->{
+            String eventKey=eventType+":"+businessId;
+            if(notices.event(recipientId,eventKey)!=null)return null;
+            String title=switch(eventType){
+                case "QUOTE_SUBMITTED" -> "报价已提交";
+                case "QUOTE_WITHDRAWN" -> "报价已撤回";
+                case "QUOTE_EXPIRED" -> "报价已失效";
+                case "QUOTE_AWARDED" -> "报价已中标";
+                case "QUOTE_LOST" -> "报价未中标";
+                case "ORDER_CREATED" -> "定制订单已创建";
+                case "ORDER_CANCELLED" -> "定制订单已取消";
+                default -> throw new IllegalArgumentException("不支持的交易通知事件");
+            };
+            var notice=new SystemNotification();notice.setRecipientId(recipientId);notice.setEventType(eventType);notice.setEventKey(eventKey);
+            notice.setTitle(title);notice.setContent("QUOTE_LOST".equals(eventType)?"买家已选择其他方案，可查看本人报价及历史沟通。":title+"，请查看对应业务详情。");
+            var reference=new LinkedHashMap<String,String>();reference.put("type",businessType);reference.put("id",businessId.toString());
+            if(requestId!=null)reference.put("requestId",requestId.toString());
+            notice.setBusinessReference(json.writeValueAsString(reference));notices.insert(notice);
+            afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(notice.getId()))));publishUnread(recipientId);});
+            return null;
+        });
+    }
+    @Transactional(propagation=Propagation.MANDATORY)
     public void customRequestChanged(Long recipientId,Long requestId,String eventType){BusinessLog.run(LoggerFactory.getLogger(getClass()),"定制需求通知保存",recipientId,()->{
         String key=eventType+":"+requestId;if(notices.event(recipientId,key)!=null)return null;
         var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType(eventType);n.setEventKey(key);

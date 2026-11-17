@@ -66,6 +66,10 @@ export interface CustomRequestVO extends RequestContent {
   canConsult: boolean
   /** 不能咨询的原因。 */
   consultationReason: string | null
+  /** 服务端综合资格、状态和额度后的报价权限。 */
+  canQuote: boolean
+  /** 不能报价的具体原因。 */
+  quoteDisabledReason: string | null
 }
 export type RequestQuotaVO = PublicationQuotaVO
 export interface ConversationVO {
@@ -73,8 +77,12 @@ export interface ConversationVO {
   id: string
   /** 关联需求。 */
   requestId: string
-  /** 后续关联订单。 */
+  /** 定标后关联订单，无订单时为空。 */
   orderId: string | null
+  /** 关联订单标题，无订单时为空。 */
+  orderTitle: string | null
+  /** 关联订单当前状态，无订单时为空。 */
+  orderStatus: string | null
   /** 需求标题。 */
   requestTitle: string
   /** 需求状态。 */

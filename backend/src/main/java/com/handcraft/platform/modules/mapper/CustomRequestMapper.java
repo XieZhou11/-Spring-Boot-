@@ -7,7 +7,7 @@ import org.apache.ibatis.annotations.*;
 /** 需求行锁保护发布、关闭与会话创建；有效过期同时用于只读列表和写入校验。 */
 @Mapper
 public interface CustomRequestMapper {
-    String EFFECTIVE="CASE WHEN r.status IN ('OPEN','QUOTING') AND r.no_quote_expire_at &lt;= #{now} AND NOT EXISTS (SELECT 1 FROM quote z WHERE z.request_id=r.id AND z.status='ACTIVE' AND z.expires_at &gt; #{now}) THEN 'EXPIRED' ELSE r.status END";
+    String EFFECTIVE="CASE WHEN r.status IN ('OPEN','QUOTING') THEN CASE WHEN EXISTS (SELECT 1 FROM quote z WHERE z.request_id=r.id AND z.status='ACTIVE' AND z.expires_at &gt; #{now}) THEN 'QUOTING' WHEN r.no_quote_expire_at &lt;= #{now} THEN 'EXPIRED' ELSE 'OPEN' END ELSE r.status END";
     @Select("SELECT * FROM custom_request WHERE id=#{id}") CustomRequest find(Long id);
     /** 锁后不复用锁前可见性或有效报价的一级缓存快照。 */
     @Select("SELECT * FROM custom_request WHERE id=#{id} FOR UPDATE") @Options(flushCache=Options.FlushCachePolicy.TRUE) CustomRequest lock(Long id);

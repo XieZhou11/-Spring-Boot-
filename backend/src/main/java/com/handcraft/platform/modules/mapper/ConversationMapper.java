@@ -10,8 +10,15 @@ public interface ConversationMapper {
     /** 并发锁等待结束后，游标和状态必须重新读取，不复用之前快照。 */
     @Select("SELECT * FROM conversation WHERE id=#{id} FOR UPDATE") @Options(flushCache=Options.FlushCachePolicy.TRUE) Conversation lock(Long id);
     @Select("SELECT * FROM conversation WHERE request_id=#{requestId} AND creator_id=#{creatorId}") Conversation byRequest(@Param("requestId")Long requestId,@Param("creatorId")Long creatorId);
-    @Insert("INSERT INTO conversation(buyer_id,creator_id,request_id,last_message_at,created_at) VALUES(#{buyerId},#{creatorId},#{requestId},#{lastMessageAt},#{createdAt})")
+    @Insert("INSERT INTO conversation(buyer_id,creator_id,request_id,order_id,last_message_at,created_at) VALUES(#{buyerId},#{creatorId},#{requestId},#{orderId},#{lastMessageAt},#{createdAt})")
     @Options(useGeneratedKeys=true,keyProperty="id") int insert(Conversation c);
+    /** 查询不可变订单快照与期限，展示有效状态时不触发取消写操作。 */
+    @Select("SELECT * FROM trade_order WHERE id=#{id}") TradeOrder order(Long id);
+    /** 调用前已锁会话；保留原消息、序号和游标，只建立不可变订单关联。 */
+    @Update("UPDATE conversation SET order_id=#{orderId},archived_at=NULL,archive_reason=NULL,updated_at=#{now} WHERE id=#{id} AND (order_id IS NULL OR order_id=#{orderId})")
+    int linkOrder(@Param("id")Long id,@Param("orderId")Long orderId,@Param("now")LocalDateTime now);
+    @Update("UPDATE conversation SET archived_at=#{now},archive_reason='LOST',updated_at=#{now} WHERE id=#{id} AND order_id IS NULL AND archived_at IS NULL")
+    int archiveLoser(@Param("id")Long id,@Param("now")LocalDateTime now);
     @Select("SELECT * FROM conversation WHERE buyer_id=#{userId} OR creator_id=#{userId} ORDER BY last_message_at DESC,id DESC LIMIT #{size} OFFSET #{offset}")
     List<Conversation> list(@Param("userId")Long userId,@Param("offset")int offset,@Param("size")int size);
     @Select("SELECT COUNT(*) FROM conversation WHERE buyer_id=#{id} OR creator_id=#{id}") long count(Long id);

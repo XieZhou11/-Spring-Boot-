@@ -1,10 +1,14 @@
 package com.handcraft.platform.modules.service;
 import com.handcraft.platform.modules.dto.ChatMessageDTO;
+import com.handcraft.platform.modules.entity.CustomRequest;
+import com.handcraft.platform.modules.entity.TradeOrder;
 import com.handcraft.platform.modules.vo.*;
 /** 需求和订单关系限定的图文沟通业务入口。 */
 public interface ConversationService {
     /** 从需求和登录身份推导双方，创建唯一会话或返回已有会话。 */
     Creation create(Long userId,Long requestId);
+    /** 调用者锁定账号、需求及订单后，在同一事务关联中标会话并归档未成单的落选会话。 */
+    Long linkOrder(CustomRequest request,TradeOrder order);
     /** 查询本人参与的最近会话。 */
     PageVO<ConversationVO> list(Long userId,int page,int size);
     /** 只返回本人关联会话详情，不以身份切换代替归属校验。 */

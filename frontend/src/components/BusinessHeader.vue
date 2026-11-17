@@ -40,6 +40,11 @@ async function signOut() {
         active-class="active"
       >我的需求</RouterLink>
       <RouterLink
+        v-if="!auth.session?.roles.includes('ADMIN')"
+        to="/orders"
+        active-class="active"
+      >我的订单</RouterLink>
+      <RouterLink
         v-if="auth.session?.roles.includes('CREATOR') && !auth.session.roles.includes('ADMIN')"
         to="/requests"
         :class="{ active: route.path === '/requests' }"

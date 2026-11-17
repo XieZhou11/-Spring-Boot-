@@ -45,7 +45,4 @@ public interface WorkMapper {
     int countImageReferences(@Param("userId")Long userId,@Param("fileId")Long fileId);
     @Select("SELECT COUNT(*) FROM work WHERE deleted_at IS NULL AND review_status='ONLINE' AND (JSON_CONTAINS(main_image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))) OR JSON_CONTAINS(specification_image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))))") int countPublicImageReferences(Long fileId);
     @Select("SELECT COUNT(*) FROM work WHERE creator_id=#{id} AND deleted_at IS NULL AND review_status='ONLINE'") long publicCount(Long id);
-    @Select("SELECT COUNT(*) FROM order_review WHERE creator_id=#{id} AND moderation_status='VISIBLE'") long reviewCount(Long id);
-    @Select("SELECT CAST(ROUND(AVG(rating),2) AS CHAR) FROM order_review WHERE creator_id=#{id} AND moderation_status='VISIBLE'") String averageRating(Long id);
-    @Select("SELECT COUNT(*) FROM trade_order WHERE creator_id=#{id} AND status='COMPLETED'") long completedCount(Long id);
 }

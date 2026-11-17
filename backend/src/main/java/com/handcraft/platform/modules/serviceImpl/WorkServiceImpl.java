@@ -26,7 +26,8 @@ public class WorkServiceImpl implements WorkService {
     private final FileAssetMapper files; private final CreatorApplicationMapper applications;
     private final OperationLogService logs; private final NotificationService notifications;
     private final WorkImageService images; private final AvatarService avatars; private final ObjectMapper json; private final Clock clock;
-    public WorkServiceImpl(WorkMapper works,UserAccountMapper users,CategoryMapper categories,FileAssetMapper files,CreatorApplicationMapper applications,OperationLogService logs,NotificationService notifications,WorkImageService images,AvatarService avatars,ObjectMapper json,Clock clock){this.works=works;this.users=users;this.categories=categories;this.files=files;this.applications=applications;this.logs=logs;this.notifications=notifications;this.images=images;this.avatars=avatars;this.json=json;this.clock=clock;}
+    private final CreatorReputationService reputations;
+    public WorkServiceImpl(WorkMapper works,UserAccountMapper users,CategoryMapper categories,FileAssetMapper files,CreatorApplicationMapper applications,OperationLogService logs,NotificationService notifications,WorkImageService images,AvatarService avatars,ObjectMapper json,Clock clock,CreatorReputationService reputations){this.works=works;this.users=users;this.categories=categories;this.files=files;this.applications=applications;this.logs=logs;this.notifications=notifications;this.images=images;this.avatars=avatars;this.json=json;this.clock=clock;this.reputations=reputations;}
     private <T>T run(String name,Long user,Supplier<T> action){return BusinessLog.run(LOGGER,name,user,action);}
 
     @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
@@ -108,7 +109,9 @@ public class WorkServiceImpl implements WorkService {
     public CreatorPublicVO creator(Long userId,Long creatorId){return run("创作者公开资料查询",userId,()->{
         requireUser(userId);UserAccount u=users.findById(creatorId);if(u==null||u.isAdmin()||!"APPROVED".equals(u.getCertificationStatus()))throw missing();var a=u.getApprovedApplicationId()==null?null:applications.find(u.getApprovedApplicationId());var avatar=avatars.view(creatorId,u.getAvatarFileId());
         var all=categories.all();List<CategoryVO> main=a==null?List.of():applications.categoryIds(a.getId()).stream().map(categories::find).filter(Objects::nonNull).map(c->new CategoryVO(c.getId().toString(),text(c.getParentId()),c.getName(),c.isEnabled(),c.getSortOrder(),List.of(),c.isEnabled()&&all.stream().noneMatch(x->Objects.equals(x.getParentId(),c.getId())))).toList();
-        return new CreatorPublicVO(creatorId.toString(),u.getNickname(),u.getBio(),avatar==null?null:avatar.url(),avatar==null?null:avatar.expiresAt(),main,a==null?null:a.getProvince(),a==null?null:a.getCity(),u.isCreatorPaused()||u.isAdminBusinessPaused(),works.averageRating(creatorId),works.reviewCount(creatorId),works.completedCount(creatorId),works.publicCount(creatorId));
+        // 主页与报价对比共用退款、治理状态及历史完成事实的统计口径。
+        var reputation=reputations.summary(creatorId);
+        return new CreatorPublicVO(creatorId.toString(),u.getNickname(),u.getBio(),avatar==null?null:avatar.url(),avatar==null?null:avatar.expiresAt(),main,a==null?null:a.getProvince(),a==null?null:a.getCity(),u.isCreatorPaused()||u.isAdminBusinessPaused(),reputation.averageRating(),reputation.reviewCount(),reputation.completedOrderCount(),works.publicCount(creatorId));
     });}
     public PageVO<CreatorPublicVO> customCandidates(Long userId,Long categoryId,String keyword,int page,int size){return run("定向需求创作者选择",userId,()->{
         var current=requireUser(userId);if(current.isAdmin())throw new BusinessException(CommonErrorCode.FORBIDDEN,"管理员不能作为交易主体");if(page<1||page>1000000||size<1||size>50||keyword!=null&&keyword.length()>30)throw invalid("筛选参数无效");

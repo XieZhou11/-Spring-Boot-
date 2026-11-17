@@ -8,6 +8,7 @@ import { getConversations } from '@/api/customRequest'
 import { useNotificationsStore } from '@/stores/notifications'
 import { countLabel, requestStatus } from '@/utils/customRequest'
 import { formatTime } from '@/utils/creator'
+import { orderStatus } from '@/utils/quote'
 import type { ConversationVO } from '@/types/customRequest'
 const route = useRoute()
 const notifications = useNotificationsStore()
@@ -89,7 +90,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('focus', focus) }
           <div class="conversation-copy"><h2>{{ row.otherNickname }} <span
             v-if="row.unreadCount"
             class="unread-badge"
-          >{{ countLabel(row.unreadCount) }}</span></h2><p>{{ row.requestTitle }}</p><small>{{ requestStatus[row.requestStatus] || row.requestStatus }} · {{ row.canSend ? '沟通中' : '已归档' }}</small><time v-if="row.lastMessageAt">{{ formatTime(row.lastMessageAt) }}</time></div>
+          >{{ countLabel(row.unreadCount) }}</span></h2><p>{{ row.orderTitle || row.requestTitle }}</p><small>{{ row.orderId ? (orderStatus[row.orderStatus || ''] || row.orderStatus) : (requestStatus[row.requestStatus] || row.requestStatus) }} · {{ row.canSend ? '沟通中' : '已归档' }}</small><time v-if="row.lastMessageAt">{{ formatTime(row.lastMessageAt) }}</time></div>
         </RouterLink>
         <WorkPagination
           :page="page"

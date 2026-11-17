@@ -4,6 +4,8 @@ import com.handcraft.platform.modules.vo.*;
 
 /** 持久化通知与已读状态，实时推送不替代数据库记录。 */
 public interface NotificationService {
+    /** 报价与订单事件按业务对象去重，与业务同事务保存，提交后推送。 */
+    void tradeChanged(Long recipientId,String eventType,String businessType,Long businessId,Long requestId);
     /** 与需求状态事务一起保存按事件和接收人去重的邀约、关闭或过期通知。 */
     void customRequestChanged(Long recipientId,Long requestId,String eventType);
     /** 审核事务内保存唯一事件，事务提交后才推送。 */

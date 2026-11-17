@@ -154,13 +154,15 @@ export interface NotificationVO {
   title: string
   /** 通知正文。 */
   content: string
-  /** 关联申请。 */
+  /** 通知关联的业务资源。 */
   businessReference: {
-    /** 当前任务支持创作者申请通知。 */
-    type: 'CREATOR_APPLICATION' | 'WORK' | 'CUSTOM_REQUEST'
+    /** 对应的业务资源类型。 */
+    type: 'CREATOR_APPLICATION' | 'WORK' | 'CUSTOM_REQUEST' | 'QUOTE' | 'ORDER'
+    /** 报价所属需求，用于进入有权查看的报价区域。 */
+    requestId?: string
     /** 作品审核轮次，申请通知不含此字段。 */
     version?: string
-    /** 关联申请编号。 */
+    /** 关联业务资源编号。 */
     id: string
   } | null
   /** 已读时间，未读为 null。 */

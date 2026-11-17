@@ -7,6 +7,7 @@ import { getConversation, getMessages, readConversation, sendMessage } from '@/a
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/creator'
+import { orderStatus } from '@/utils/quote'
 import { ApiError } from '@/utils/request'
 import type { ChatMessageVO, ConversationVO } from '@/types/customRequest'
 import '@/assets/styles/custom-request.css'
@@ -121,7 +122,12 @@ onBeforeUnmount(() => { disposed = true; generation++; observer?.disconnect(); c
         <h1>{{ conversation?.otherNickname || '需求沟通' }}</h1><RouterLink
           v-if="conversation"
           :to="`/requests/${conversation.requestId}`"
-        >{{ conversation.requestTitle }} ↗</RouterLink>
+        >{{ conversation.requestTitle }} ↗</RouterLink><p
+          v-if="conversation?.orderId"
+          class="field-help"
+        >
+          <RouterLink :to="`/orders/${conversation.orderId}`">关联订单：{{ conversation.orderTitle }} · {{ orderStatus[conversation.orderStatus || ''] || conversation.orderStatus }} ↗</RouterLink>
+        </p>
       </div>
     </header>
     <p

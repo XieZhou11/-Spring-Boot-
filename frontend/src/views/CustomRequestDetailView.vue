@@ -3,10 +3,12 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import WorkLayout from '@/layouts/WorkLayout.vue'
 import PrivateImage from '@/components/PrivateImage.vue'
+import RequestQuotePanel from '@/components/RequestQuotePanel.vue'
 import { closeRequest, copyRequest, deleteRequest, getCustomRequest, openConversation } from '@/api/customRequest'
 import type { CustomRequestVO } from '@/types/customRequest'
 import { requestStatus } from '@/utils/customRequest'
 import { formatTime } from '@/utils/creator'
+import { ApiError } from '@/utils/request'
 import '@/assets/styles/custom-request.css'
 const route = useRoute(); const router = useRouter(); const value = ref<CustomRequestVO>()
 const loading = ref(false); const busy = ref(false); const error = ref(''); let copyKey = crypto.randomUUID()
@@ -14,7 +16,13 @@ let revision = 0
 async function load() {
   const current = ++revision; loading.value = true; error.value = ''
   try { const result = await getCustomRequest(String(route.params.id)); if (current === revision) value.value = result }
-  catch (failure) { if (current === revision) { value.value = undefined; error.value = failure instanceof Error ? failure.message : '需求读取失败' } }
+  catch (failure) {
+    if (current === revision) {
+      // 临时刷新失败保留同一需求及未知提交上下文；权限或可见性失效仍立即清空。
+      if (failure instanceof ApiError && [401, 403, 404].includes(failure.status)) value.value = undefined
+      error.value = failure instanceof Error ? failure.message : '需求读取失败'
+    }
+  }
   finally { if (current === revision) loading.value = false }
 }
 /** 状态写入结果未知时保留当前详情，重新读取确认；复制始终复用当前请求键。 */
@@ -148,6 +156,11 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('custom-request-u
           </p>
         </aside>
       </div>
+      <RequestQuotePanel
+        :key="value.id"
+        :request="value"
+        @changed="load"
+      />
     </template>
   </WorkLayout>
 </template>

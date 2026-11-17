@@ -17,5 +17,7 @@ import java.time.*;
  * @param sendDisabledReason 禁止发送原因
  * @param archivedAt 归档时间
  * @param archiveReason 归档原因
+ * @param orderTitle 关联订单的标题快照，无订单为空
+ * @param orderStatus 关联订单的当前有效状态，待付款达到截止时显示已取消但不由GET写库
  */
-public record ConversationVO(String id,String requestId,String orderId,String requestTitle,String requestStatus,String otherUserId,String otherNickname,long unreadCount,OffsetDateTime lastMessageAt,String lastMessageSeq,String readSeq,boolean canSend,String sendDisabledReason,OffsetDateTime archivedAt,String archiveReason) {}
+public record ConversationVO(String id,String requestId,String orderId,String requestTitle,String requestStatus,String otherUserId,String otherNickname,long unreadCount,OffsetDateTime lastMessageAt,String lastMessageSeq,String readSeq,boolean canSend,String sendDisabledReason,OffsetDateTime archivedAt,String archiveReason,String orderTitle,String orderStatus) {}

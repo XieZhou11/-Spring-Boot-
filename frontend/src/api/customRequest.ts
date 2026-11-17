@@ -25,7 +25,7 @@ export const getConversation = (id: string) => get<ConversationVO>(`/conversatio
 export const getMessages = (id: string, cursor?: { beforeSeq?: string; afterSeq?: string }) => get<{ items: ChatMessageVO[]; hasMore: boolean }>(`/conversations/${id}/messages`, cursor)
 export const sendMessage = (id: string, data: { clientMessageKey: string; content: string; imageIds: string[] }) => post<ChatMessageVO>(`/conversations/${id}/messages`, data)
 export const readConversation = (id: string, lastReadSeq: string) => put<unknown>(`/conversations/${id}/read-cursor`, { lastReadSeq })
-export const getPrivateImage = (id: string, scope: 'request' | 'chat') => get<ImageVO>(`/${scope === 'request' ? 'custom-request-images' : 'conversation-images'}/${id}`)
+export const getPrivateImage = (id: string, scope: 'request' | 'chat' | 'quote') => get<ImageVO>(`/${scope === 'request' ? 'custom-request-images' : scope === 'quote' ? 'quote-images' : 'conversation-images'}/${id}`)
 export async function uploadPrivateImage(file: File, conversationId?: string) {
   const data = new FormData(); data.append('file', file)
   return (await request.post<ApiResult<ImageVO>>(conversationId ? `/conversations/${conversationId}/images` : '/custom-request-images', data, { timeout: 60_000 })).data.data

@@ -32,6 +32,36 @@ public class ConversationServiceImpl implements ConversationService {
         if("DIRECTED".equals(r.getVisibility())&&!creator.equals(r.getInvitedCreatorId()))throw missing();var buyer=policy.user(r.getBuyerId());if(buyer.isAdminBusinessPaused())throw forbidden("需求买家已暂停新业务，不能新建咨询");String reason=policy.creatorReason(users.findById(creator),r.getCategoryId());if(reason!=null)throw forbidden(reason);
         var c=new Conversation();c.setBuyerId(r.getBuyerId());c.setCreatorId(creator);c.setRequestId(requestId);c.setLastMessageAt(policy.now());c.setCreatedAt(policy.now());conversations.insert(c);var saved=conversations.find(c.getId());afterCommit(()->both(saved,Map.of("type","CONVERSATION_UPDATED","conversationId",saved.getId().toString())));LOGGER.info("会话关系已校验：requestId={}, conversationId={}",requestId,c.getId());return new Creation(view(saved,userId),true);
     });}
+    @Transactional(propagation=Propagation.MANDATORY,rollbackFor=Exception.class)
+    public Long linkOrder(CustomRequest request,TradeOrder order){return BusinessLog.run(LOGGER,"定标订单会话关联",order.getBuyerId(),()->{
+        var persisted=conversations.order(order.getId());
+        if(persisted==null||!"CUSTOM".equals(persisted.getOrderType())||!Objects.equals(request.getId(),persisted.getRequestId())||!Objects.equals(request.getBuyerId(),persisted.getBuyerId())||!Objects.equals(order.getCreatorId(),persisted.getCreatorId()))throw conflict("订单与需求或中标创作者的关联不一致");
+        // 上游账号、需求及订单锁由定标事务持有，再按会话编号升序锁定全部已有咨询。
+        var locked=conversations.forRequest(request.getId()).stream().map(current->conversations.lock(current.getId())).toList();
+        Conversation winner=null;
+        for(var current:locked){
+            if(!Objects.equals(current.getBuyerId(),persisted.getBuyerId()))throw conflict("需求会话买家与订单不一致");
+            if(Objects.equals(current.getCreatorId(),persisted.getCreatorId()))winner=current;
+        }
+        LocalDateTime now=policy.now();
+        if(winner==null){
+            winner=new Conversation();winner.setBuyerId(persisted.getBuyerId());winner.setCreatorId(persisted.getCreatorId());winner.setRequestId(request.getId());winner.setOrderId(persisted.getId());winner.setCreatedAt(now);winner.setLastMessageAt(now);conversations.insert(winner);
+            Conversation created=winner;afterCommit(()->both(created,Map.of("type","CONVERSATION_UPDATED","conversationId",created.getId().toString())));
+        }else{
+            if(winner.getOrderId()!=null&&!Objects.equals(winner.getOrderId(),persisted.getId()))throw conflict("原需求会话已经关联其他订单");
+            if(winner.getOrderId()==null||winner.getArchivedAt()!=null){
+                if(conversations.linkOrder(winner.getId(),persisted.getId(),now)!=1)throw conflict("订单会话关联状态已变化");
+                Conversation linked=winner;afterCommit(()->both(linked,Map.of("type","CONVERSATION_UPDATED","conversationId",linked.getId().toString())));
+            }
+        }
+        for(var current:locked){
+            if(!current.getId().equals(winner.getId())&&current.getOrderId()==null&&current.getArchivedAt()==null&&conversations.archiveLoser(current.getId(),now)==1){
+                afterCommit(()->both(current,Map.of("type","CONVERSATION_UPDATED","conversationId",current.getId().toString())));
+            }
+        }
+        LOGGER.info("定标会话变更等待提交：requestId={}, orderId={}, conversationId={}",request.getId(),persisted.getId(),winner.getId());
+        return winner.getId();
+    });}
     public PageVO<ConversationVO> list(Long userId,int page,int size){return BusinessLog.run(LOGGER,"本人会话列表查询",userId,()->{policy.user(userId);page(page,size);return new PageVO<>(conversations.list(userId,(page-1)*size,size).stream().map(c->view(c,userId)).toList(),conversations.count(userId),page,size);});}
     public ConversationVO detail(Long userId,Long id){return BusinessLog.run(LOGGER,"会话详情查询",userId,()->{policy.user(userId);var c=conversations.find(id);participant(userId,c);return view(c,userId);});}
     public long unread(Long userId){return BusinessLog.run(LOGGER,"会话未读总数查询",userId,()->{policy.user(userId);return conversations.unread(userId);});}
@@ -52,7 +82,8 @@ public class ConversationServiceImpl implements ConversationService {
     public ConversationVO read(Long userId,Long id,Long seq){return BusinessLog.run(LOGGER,"会话已读游标推进",userId,()->{
         policy.user(userId);policy.lockUsers(userId);var c=conversations.lock(id);participant(userId,c);if(seq==null||seq<0||seq>c.getLastMessageSeq())throw invalid("已读序号不能超过已有消息");boolean buyer=userId.equals(c.getBuyerId());long current=buyer?c.getBuyerReadSeq():c.getCreatorReadSeq();if(seq>current){if(buyer)c.setBuyerReadSeq(seq);else c.setCreatorReadSeq(seq);c.setUpdatedAt(policy.now());conversations.update(c);afterCommit(()->{both(c,Map.of("type","CHAT_READ","conversationId",id.toString(),"userId",userId.toString(),"readSeq",seq.toString()));publishUnread(userId);});}return view(c,userId);
     });}
-    private ConversationVO view(Conversation c,Long userId){var r=c.getRequestId()==null?null:requests.find(c.getRequestId());boolean buyer=userId.equals(c.getBuyerId());Long otherId=buyer?c.getCreatorId():c.getBuyerId();var other=users.findById(otherId);long seq=buyer?c.getBuyerReadSeq():c.getCreatorReadSeq();String disabled=disabled(c);return new ConversationVO(c.getId().toString(),text(c.getRequestId()),text(c.getOrderId()),r==null?null:r.getTitle(),policy.effectiveStatus(r),otherId.toString(),other==null?"已注销用户":other.getNickname(),conversations.unreadIn(c.getId(),userId,seq),time(c.getLastMessageAt()),c.getLastMessageSeq().toString(),Long.toString(seq),disabled==null,disabled,time(c.getArchivedAt()),c.getArchiveReason());}
+    private ConversationVO view(Conversation c,Long userId){var r=c.getRequestId()==null?null:requests.find(c.getRequestId());var order=c.getOrderId()==null?null:conversations.order(c.getOrderId());boolean buyer=userId.equals(c.getBuyerId());Long otherId=buyer?c.getCreatorId():c.getBuyerId();var other=users.findById(otherId);long seq=buyer?c.getBuyerReadSeq():c.getCreatorReadSeq();String disabled=disabled(c);return new ConversationVO(c.getId().toString(),text(c.getRequestId()),text(c.getOrderId()),r==null?null:r.getTitle(),policy.effectiveStatus(r),otherId.toString(),other==null?"已注销用户":other.getNickname(),conversations.unreadIn(c.getId(),userId,seq),time(c.getLastMessageAt()),c.getLastMessageSeq().toString(),Long.toString(seq),disabled==null,disabled,time(c.getArchivedAt()),c.getArchiveReason(),order==null?null:order.getTitleSnapshot(),orderStatus(order));}
+    private String orderStatus(TradeOrder order){if(order==null)return null;return "PENDING_PAY".equals(order.getStatus())&&order.getPayDeadlineAt()!=null&&!policy.now().isBefore(order.getPayDeadlineAt())?"CANCELLED":order.getStatus();}
     private String disabled(Conversation c){if(c.getOrderId()!=null)return null;if(c.getArchivedAt()!=null)return "未形成订单的会话已归档，仅可查看历史消息";var r=c.getRequestId()==null?null:requests.find(c.getRequestId());if(r==null)return "会话关联需求不存在";String status=policy.effectiveStatus(r);if(!Set.of("OPEN","QUOTING").contains(status))return "需求已关闭、过期或已定标，未成单会话仅可查看历史";return null;}
     private ChatMessageVO message(ChatMessage m){return new ChatMessageVO(m.getId().toString(),m.getConversationId().toString(),m.getSeqNo().toString(),m.getSenderId().toString(),m.getClientMessageKey(),m.getContent(),ids(m.getImageIds()),time(m.getCreatedAt()));}
     private void checkImages(Long userId,Long conversationId,List<String> imageIds){if(new HashSet<>(imageIds).size()!=imageIds.size())throw invalid("消息图片不能重复");imageIds.stream().map(this::number).sorted().forEach(id->{var f=files.lockById(id);if(f==null||!userId.equals(f.getUploaderId())||!f.getObjectKey().startsWith("conversations/"+conversationId+"/"+userId+"/")||!"AVAILABLE".equals(f.getUploadStatus()))throw invalid("消息图片须为本人在当前会话上传的图片");});}
