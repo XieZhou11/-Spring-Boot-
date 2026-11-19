@@ -4,13 +4,13 @@
 
 ## 当前状态
 
-后端已实现账号注册、登录、找回密码、会话及真实 SMTP 发送逻辑，详见 [T-001](docs/development/tasks/T-001-backend-auth.md)。前端认证页面见 [T-002](docs/development/tasks/T-002-frontend-auth.md)；个人资料、头像及收货地址前后端见 [T-003](docs/development/tasks/T-003-personal-center.md)。本机 QQ SMTP 连接认证已通过，QQ/163 公网收件及找回密码补充验收用户明确暂缓；头像已完成真实 OSS 上传、私有签名读取与替换联调。作品发布、管理员审核和首页/详情/创作者主页已完成，见 [T-005](docs/development/tasks/T-005-work-publication.md)及[测试记录](docs/testing/T-005-work-publication.md)；定制需求与沟通见T-007，报价建单见T-009，模拟支付初始化见T-011，履约和互动待后续任务，当前不涉及部署。本地开发库已完成27表迁移；后续版本先在隔离库验证，开发库尚未执行的版本在下次启动新版后端时由Flyway追加，启动及验证入口见前后端README。
+后端已实现账号注册、登录、找回密码、会话及真实 SMTP 发送逻辑，详见 [T-001](docs/development/tasks/T-001-backend-auth.md)。前端认证页面见 [T-002](docs/development/tasks/T-002-frontend-auth.md)；个人资料、头像及收货地址前后端见 [T-003](docs/development/tasks/T-003-personal-center.md)。本机 QQ SMTP 连接认证已通过，QQ/163 公网收件及找回密码补充验收用户明确暂缓；头像已完成真实 OSS 上传、私有签名读取与替换联调。作品发布、管理员审核和首页/详情/创作者主页已完成，见 [T-005](docs/development/tasks/T-005-work-publication.md)及[测试记录](docs/testing/T-005-work-publication.md)；作品互动与个人收藏、关注见[T-006](docs/development/tasks/T-006-work-interactions.md)，定制需求与沟通见T-007，报价建单见T-009，模拟支付初始化见T-011，履约待后续任务，当前不涉及部署。本地开发库已完成27表迁移；后续版本先在隔离库验证，开发库尚未执行的版本在下次启动新版后端时由Flyway追加，启动及验证入口见前后端README。
 
 [T-004](docs/development/tasks/T-004-creator-onboarding.md)增加创作者入驻与管理员审核：申请撤回及补正历史、私有材料图片、收款账号加密、两级品类、会话身份切换和持久化实时通知。前后端接口及浏览器联调结果见任务与[测试记录](docs/testing/T-004-creator-onboarding.md)。本地开发库已执行 V2 申请幂等键迁移。管理员先维护启用一级品类，再由普通买家填写申请；入驻作品不自动公开。
 
 用户已指定后续需求与开发统一以 [V1.5 MVP 版需求规格说明书](docs/requirements/requirements.md)为依据，正文文档状态保留“待审核”。[V1.5 中文文件名副本](docs/requirements/archive/手工定制作品分享与交易平台需求规格说明书_V1.5_MVP版.md)与当前正文逐字节一致，每次修改同步更新。[V1.4 MVP 版](docs/requirements/archive/手工定制作品分享与交易平台需求规格说明书_V1.4_MVP版.md)和[修订版归档](docs/requirements/archive/手工定制作品分享与交易平台需求规格说明书_修订版.md)保留为历史资料，展示版本更替，不再同步覆盖。新[数据库表结构](docs/design/数据库表结构.md)已按当前范围编写，待审核；原型基于 V1.3，待适配。独立的[后续功能清单](docs/requirements/archive/手工定制作品分享与交易平台后续功能清单.md)不属于当前验收范围。
 
-[T-007 定制需求与沟通](docs/development/tasks/T-007-custom-requests.md)已完成需求草稿/发布/关闭/复制、仅认证创作者可见的公开大厅、单人定向邀约、私有参考图及图文会话。作品和创作者主页提供定制入口，消息中心复用现有WebSocket连接。V4追加需求幂等键/版本/逻辑删除与会话冷却字段。该阶段后端verify 148项、0失败/错误、3项云端开关跳过；真实OSS另行2项通过，浏览器32/32及前端类型/lint/构建通过，见[测试记录](docs/testing/T-007-custom-requests.md)。作品互动未出现在本次工作区，后续须按其实际交付接口接入与回归，不能把当前缺失的点赞/收藏/评论/关注视为已完成。
+[T-007 定制需求与沟通](docs/development/tasks/T-007-custom-requests.md)已完成需求草稿/发布/关闭/复制、仅认证创作者可见的公开大厅、单人定向邀约、私有参考图及图文会话。作品和创作者主页提供定制入口，消息中心复用现有WebSocket连接。V4追加需求幂等键/版本/逻辑删除与会话冷却字段。该阶段后端verify 148项、0失败/错误、3项云端开关跳过；真实OSS另行2项通过，浏览器32/32及前端类型/lint/构建通过，见[测试记录](docs/testing/T-007-custom-requests.md)。T-006互动已接入当前业务分支，联合回归维护在其[测试记录](docs/testing/T-006-work-interactions.md)。
 
 [T-009 报价对比与定标建单](docs/development/tasks/T-009-quote-award.md)接入报价提交、撤回重报、私有方案图片、买家多方对比和唯一待付款订单；定标保存金额、方案与地址快照，关联中标会话。买家取消或24小时超时关闭需求，原报价不恢复，订单双方仍可沟通。V5追加报价幂等键；实际回归与独立审查结果见[测试记录](docs/testing/T-009-quote-award.md)，不包含付款、履约、退款和结算。
 

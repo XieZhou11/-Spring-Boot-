@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { test, expect, frontendOrigin } from './fixtures'
 
-const api = 'http://localhost:18080/api'
+import { api } from './environment'
 // 自有纯色 PNG 夹具，真实图片解码后再验证服务不可用，不使用损坏图片碰巧失败。
 const avatarPng = readFileSync(new URL('./avatar.png', import.meta.url))
 

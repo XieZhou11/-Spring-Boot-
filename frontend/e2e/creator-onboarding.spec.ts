@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
 import { test, expect, frontendOrigin } from './fixtures'
 
-const api = 'http://localhost:18080/api'
+import { api } from './environment'
 const portfolioImage = readFileSync(new URL('./avatar.png', import.meta.url))
 
 // 入驻验收通过真实 OSS SDK 对接本地协议接收器，不伪造图片上传响应。

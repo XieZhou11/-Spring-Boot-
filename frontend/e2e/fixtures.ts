@@ -1,30 +1,55 @@
 import { test as base, expect } from '@playwright/test'
 import { createConnection } from 'mysql2/promise'
+import type { ResultSetHeader } from 'mysql2/promise'
 import { createServer } from 'node:net'
 import { createServer as createHttpServer } from 'node:http'
 import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
 import { resolve } from 'node:path'
+import { api, backendPort, origin } from './environment'
 
 /** 所有浏览器上下文使用同一测试来源，可与开发服务器并行。 */
-export const frontendOrigin = `http://localhost:${process.env.HANDCRAFT_E2E_PORT || '5173'}`
+export const frontendOrigin = origin
+
+/** 启动前先独占探测端口，避免误把其他服务的健康响应当作隔离后端。 */
+async function requireBackendPortAvailable() {
+  const probe = createServer()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      probe.once('error', reject)
+      probe.listen({ port: backendPort, exclusive: true }, resolve)
+    })
+  } catch (failure) {
+    const reason = failure instanceof Error && 'code' in failure ? failure.code : 'UNKNOWN'
+    throw new Error(`测试后端端口 ${backendPort} 不可用（${reason}），请更换 HANDCRAFT_E2E_BACKEND_PORT；未连接现有服务`, { cause: failure })
+  } finally {
+    if (probe.listening) await new Promise<void>((resolve, reject) => probe.close(error => error ? reject(error) : resolve()))
+  }
+}
 
 interface Mailbox {
   codes: Map<string, string>
   rejectNext: boolean
   /** 仅向本 worker 随机测试库中的指定账号授权，生产服务没有此接口。 */
   promoteAdmin: (email: string) => Promise<void>
+  /** 仅在随机库补足分页规模，模拟已有的下架收藏及认证失效关注。 */
+  seedInteractionHistory: (userId: string, workId: string, creatorId: string) => Promise<void>
 }
 
 /** 只在测试进程使用隔离库和 SMTP 夹具，生产后端无测试接口或假验证码。 */
-export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabled' | 'receiver' }>({
+export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabled' | 'receiver'; databaseGroup: 'shared' | 'interactions' }>({
   storageMode: ['disabled', { scope: 'worker', option: true }],
+  // 公开作品会被其他账号浏览，独立库组避免跨功能空首页用例受前序发布影响。
+  databaseGroup: ['shared', { scope: 'worker', option: true }],
   mailbox: [
-    async ({ browserName, storageMode }, use, workerInfo) => {
+    async ({ browserName, storageMode, databaseGroup }, use, workerInfo) => {
+      // 探测必须早于创建随机测试库及协议接收器，端口冲突不能留下测试资源。
+      await requireBackendPortAvailable()
       const mailbox: Mailbox = {
         codes: new Map(), rejectNext: false,
         promoteAdmin: async () => { throw new Error('测试数据库尚未就绪') },
+        seedInteractionHistory: async () => { throw new Error('测试数据库尚未就绪') },
       }
       // 经过真实 OSS SDK 的 HTTP 协议；仅接收本夹具随机对象，绝不访问真实云端。
       const objects = new Map<string, { bytes: Buffer; type: string }>()
@@ -105,25 +130,37 @@ export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabl
       })
       const smtpAddress = smtp.address()
       if (!smtpAddress || typeof smtpAddress === 'string') throw new Error('SMTP 测试端口分配失败')
-      const schema = `handcraft_browser_${randomBytes(8).toString('hex')}`
+      const schema = `handcraft_browser_${databaseGroup}_${randomBytes(8).toString('hex')}`
       const database = await createConnection({
         host: 'localhost',
         user: 'root',
         password: '123456',
       })
       let backend: ReturnType<typeof spawn> | undefined
+      let startupFailure: Error | undefined
       const log = createWriteStream(`${workerInfo.project.outputDir}/backend-${browserName}.log`)
       try {
         await database.query(`CREATE DATABASE \`${schema}\` CHARACTER SET utf8mb4`)
         mailbox.promoteAdmin = async (email) => {
           await database.execute(`UPDATE \`${schema}\`.user_account SET is_admin=1 WHERE email=?`, [email])
         }
+        mailbox.seedInteractionHistory = async (userId, workId, creatorId) => {
+          // 主流程对象仍由真实发布审核建立；这里只准备20条历史关系，使真实关系落在末页。
+          await database.execute(`UPDATE \`${schema}\`.work_reaction SET created_at='2000-01-01 00:00:00' WHERE user_id=? AND work_id=? AND reaction_type='FAVORITE'`, [userId, workId])
+          await database.execute(`UPDATE \`${schema}\`.creator_follow SET created_at='2000-01-01 00:00:00' WHERE follower_id=? AND creator_id=?`, [userId, creatorId])
+          for (let index = 0; index < 20; index++) {
+            const [work] = await database.execute<ResultSetHeader>(`INSERT INTO \`${schema}\`.work(creator_id,create_request_key,review_status) VALUES(?,UUID(),'OFFLINE')`, [creatorId])
+            await database.execute(`INSERT INTO \`${schema}\`.work_reaction(user_id,work_id,reaction_type) VALUES(?,?,'FAVORITE')`, [userId, work.insertId])
+            const [creator] = await database.execute<ResultSetHeader>(`INSERT INTO \`${schema}\`.user_account(email,password_hash,nickname,certification_status) SELECT ?,password_hash,'历史作者','NONE' FROM \`${schema}\`.user_account WHERE id=?`, [`history-${randomBytes(8).toString('hex')}@qq.com`, creatorId])
+            await database.execute(`INSERT INTO \`${schema}\`.creator_follow(follower_id,creator_id) VALUES(?,?)`, [userId, creator.insertId])
+          }
+        }
         backend = spawn(
           'java',
           [
             '-jar',
             resolve('../backend/target/handcraft-platform-0.0.1-SNAPSHOT.jar'),
-            '--server.port=18080',
+            `--server.port=${backendPort}`,
             `--app.cors.allowed-origins=${frontendOrigin}`,
             `--spring.datasource.url=jdbc:mysql://localhost:3306/${schema}?serverTimezone=Asia/Shanghai`,
             '--spring.mail.host=127.0.0.1',
@@ -143,14 +180,17 @@ export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabl
           ],
           { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
         )
+        // Java缺失等启动错误由事件报告，不能等健康轮询超时或触发未处理异常。
+        backend.once('error', failure => { startupFailure = failure })
         backend.stdout?.pipe(log)
         backend.stderr?.pipe(log)
         let ready = false
         for (let attempt = 0; attempt < 120; attempt++) {
+          if (startupFailure) throw new Error(`测试后端进程无法启动（${startupFailure.name}），请检查 Java 环境`, { cause: startupFailure })
           if (backend.exitCode !== null)
             throw new Error('测试后端启动失败，查看 test-results/backend.log')
           try {
-            ready = (await fetch('http://localhost:18080/api/health')).ok
+            ready = (await fetch(`${api}/health`)).ok
           } catch {
             /* 启动中。 */
           }
@@ -160,7 +200,7 @@ export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabl
         if (!ready) throw new Error('测试后端启动超时')
         await use(mailbox)
       } finally {
-        if (backend && backend.exitCode === null) {
+        if (backend?.pid && backend.exitCode === null) {
           const stopped = new Promise<void>((resolve) => backend?.once('exit', () => resolve()))
           backend.kill()
           await stopped

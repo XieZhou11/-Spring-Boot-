@@ -176,8 +176,15 @@ test('主页单人定向邀约与隐私，作品入口带入作者及来源', as
     const pending = (await (await mutate(creator, `/me/works/${draft.id}/submission`, { ...content, version: draft.version }, 'put')).json()).data
     expect((await mutate(admin, `/admin/works/${draft.id}/review`, { version: pending.version, decision: 'APPROVED', reason: '' }, 'put')).status()).toBe(200)
     await page.goto(`/works/${draft.id}`)
+    // 作品互动与来源定制入口共存，不能因组件接入丢失作者或原作品上下文。
+    await page.getByRole('button', { name: '收藏', exact: true }).click()
+    await expect(page.getByRole('button', { name: '取消收藏', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: '关注创作者', exact: true }).click()
+    await expect(page.getByRole('button', { name: '取消关注', exact: true })).toBeVisible()
     await page.getByRole('link', { name: /发起同类定制/ }).click()
     await expect(page.getByLabel('需求品类', { exact: true })).toHaveValue(categoryId)
+    await expect(page.getByLabel('需求范围', { exact: true })).toHaveValue('DIRECTED')
+    await expect(page.getByText('指定创作者：', { exact: false })).toContainText('山间器物')
     await expect(page.getByText('参考作品：原木刻字参考作品', { exact: false })).toBeVisible()
   } finally { await adminContext.close(); await creatorContext.close(); await outsiderContext.close() }
 })

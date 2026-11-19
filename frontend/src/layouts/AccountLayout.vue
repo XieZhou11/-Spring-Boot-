@@ -39,6 +39,14 @@ const auth = useAuthStore()
             to="/account/creator-certification"
             active-class="active"
           ><span>03</span> 创作者入驻 <i aria-hidden="true">↗</i></RouterLink>
+          <RouterLink
+            to="/account/favorites"
+            active-class="active"
+          ><span>04</span> 收藏作品 <i aria-hidden="true">↗</i></RouterLink>
+          <RouterLink
+            to="/account/following"
+            active-class="active"
+          ><span>05</span> 关注创作者 <i aria-hidden="true">↗</i></RouterLink>
         </nav>
       </aside>
       <section class="account-content">

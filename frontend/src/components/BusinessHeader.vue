@@ -82,6 +82,7 @@ async function signOut() {
       <RouterLink
         to="/account/profile"
         class="current-account"
+        :aria-label="`${auth.session?.nickname || '当前账号'} · 个人中心`"
       ><span
         class="account-initial"
         aria-hidden="true"

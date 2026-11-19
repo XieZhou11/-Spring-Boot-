@@ -2,13 +2,14 @@
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import WorkLayout from '@/layouts/WorkLayout.vue'
+import CreatorFollow from '@/components/CreatorFollow.vue'
 import WorkCard from '@/components/WorkCard.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
 import { getCreator, getWorks } from '@/api/work'
-import type { CreatorPublicVO, WorkVO } from '@/types/work'
 import { useAuthStore } from '@/stores/auth'
-const auth = useAuthStore()
+import type { CreatorPublicVO, WorkVO } from '@/types/work'
 const route = useRoute()
+const auth = useAuthStore()
 const creator = ref<CreatorPublicVO>()
 const works = ref<WorkVO[]>([])
 const page = ref(1)
@@ -32,7 +33,8 @@ async function load(next = page.value) {
   } catch (failure) { if (current === revision) { creator.value = undefined; error.value = failure instanceof Error ? failure.message : '创作者资料读取失败' } }
   finally { if (current === revision) loading.value = false }
 }
-watch(() => route.params.id, () => void load(1), { immediate: true })
+// 同账号凭证回读保留当前作者与分页，实际身份或主页变化仍清理旧内容。
+watch([() => route.params.id, () => auth.session?.userId, () => auth.session?.activeRole], () => { creator.value = undefined; works.value = []; void load(1) }, { immediate: true })
 onBeforeUnmount(() => { revision++; clearTimeout(timer) })
 </script>
 <template>
@@ -56,6 +58,7 @@ onBeforeUnmount(() => { revision++; clearTimeout(timer) })
           v-if="creator.avatarUrl"
           :src="creator.avatarUrl"
           :alt="`${creator.nickname}的头像`"
+          @error="creator.avatarUrl = null"
         ><span
           v-else
           class="creator-public-avatar"
@@ -70,6 +73,7 @@ onBeforeUnmount(() => { revision++; clearTimeout(timer) })
           >
             创作者暂时停止承接新业务
           </p>
+          <CreatorFollow :creator-id="creator.id" />
         </div><dl class="creator-public-stats">
           <div><dt>口碑评分</dt><dd>{{ creator.averageRating || '暂无评价' }}</dd></div><div><dt>真实评价</dt><dd>{{ creator.reviewCount }}</dd></div><div><dt>已完成订单</dt><dd>{{ creator.completedOrderCount }}</dd></div>
         </dl>

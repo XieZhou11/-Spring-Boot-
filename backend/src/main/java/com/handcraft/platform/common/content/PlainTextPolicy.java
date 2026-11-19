@@ -1,6 +1,6 @@
 package com.handcraft.platform.common.content;
 import java.util.regex.Pattern;
-/** 作品、需求与会话共用基础文本治理，不记录或改写用户原文。 */
+/** 作品、评论、需求、会话与报价共用基础文本治理，不记录或改写用户原文。 */
 public final class PlainTextPolicy {
     private PlainTextPolicy() {}
     // 普通公开文案按保守规则阻止脚本、联系方式、外链及明显引流，人工审核处理图片及原创性。

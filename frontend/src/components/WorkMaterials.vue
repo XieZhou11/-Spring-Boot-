@@ -96,7 +96,7 @@ onBeforeUnmount(() => { avatarRevision++; clearTimeout(avatarTimer) })
       ><span
         v-else
         class="creator-initial"
-      >{{ work.creatorNickname?.slice(0, 1) }}</span><span><strong>{{ work.creatorNickname }}</strong><small>认证创作者 · 查看主页</small></span><span aria-hidden="true">↗</span></RouterLink>
+      >{{ work.creatorNickname?.slice(0, 1) }}</span><span><strong>{{ work.creatorNickname }}</strong><small>认证创作者 · 查看主页</small></span><span aria-hidden="true">↗</span></RouterLink><slot name="creator-actions" />
     </div>
   </div>
   <div class="work-prose">

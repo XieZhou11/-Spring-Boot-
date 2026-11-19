@@ -1,10 +1,10 @@
 import { randomUUID, randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
-import { expect, frontendOrigin } from './fixtures'
+import { expect } from './fixtures'
+import { api } from './environment'
 
-export const api = 'http://localhost:18080/api'
-export const origin = frontendOrigin
+export { api, origin } from './environment'
 export const image = readFileSync(new URL('./avatar.png', import.meta.url))
 /** 测试通过真实注册、CSRF和会话准备参与人，绝不复用开发账号。 */
 export async function mutate(page: Page, path: string, data?: object, method: 'post' | 'put' = 'post') {

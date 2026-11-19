@@ -1,3 +1,4 @@
+import { api } from './environment'
 import type { Page } from '@playwright/test'
 import { randomBytes } from 'node:crypto'
 import { test, expect, frontendOrigin } from './fixtures'
@@ -87,7 +88,7 @@ for (const domain of ['qq.com', '163.com']) {
     await expect(page.getByRole('heading', { name: '发现手作之美' })).toBeVisible()
     await page.reload()
     await expect(page.getByRole('link', { name: '手作测试 · 个人中心' })).toBeVisible()
-    expect((await (await page.request.get('http://localhost:18080/api/sessions/current')).json()).data.email).toBe(email)
+    expect((await (await page.request.get(`${api}/sessions/current`)).json()).data.email).toBe(email)
     expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([])
     const session = (await page.context().cookies()).find((cookie) => cookie.name === 'JSESSIONID')
     expect(session?.httpOnly).toBe(true)

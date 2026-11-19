@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
 import { test, expect, frontendOrigin } from './fixtures'
 
-const api = 'http://localhost:18080/api'
+import { api } from './environment'
 const image = readFileSync(new URL('./avatar.png', import.meta.url))
 test.use({ storageMode: 'receiver', actionTimeout: 15_000 })
 

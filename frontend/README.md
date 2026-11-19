@@ -1,6 +1,6 @@
 # 前端工程
 
-Vue 3 + TypeScript + Vite 工程。登录注册、个人中心、创作者入驻、管理员审核、两级品类管理及系统通知已接入后端，沿用原型“拾作”的纸张底色、深绿主操作和手作插画。实施及验收见 [T-002](../docs/development/tasks/T-002-frontend-auth.md)、[T-003](../docs/development/tasks/T-003-personal-center.md)、[T-004](../docs/development/tasks/T-004-creator-onboarding.md)。作品发布、审核与浏览见 [T-005](../docs/development/tasks/T-005-work-publication.md)，报价、定标见 [T-009](../docs/development/tasks/T-009-quote-award.md)，模拟付款及待开工见[T-011](../docs/development/tasks/T-011-order-payment.md)；制作履约及互动随后续任务接入。
+Vue 3 + TypeScript + Vite 工程。登录注册、个人中心、创作者入驻、管理员审核、两级品类管理及系统通知已接入后端，沿用原型“拾作”的纸张底色、深绿主操作和手作插画。实施及验收见 [T-002](../docs/development/tasks/T-002-frontend-auth.md)、[T-003](../docs/development/tasks/T-003-personal-center.md)、[T-004](../docs/development/tasks/T-004-creator-onboarding.md)。作品发布、审核与浏览见 [T-005](../docs/development/tasks/T-005-work-publication.md)，点赞、收藏、评论及关注见[T-006](../docs/development/tasks/T-006-work-interactions.md)，报价、定标见 [T-009](../docs/development/tasks/T-009-quote-award.md)，模拟付款及待开工见[T-011](../docs/development/tasks/T-011-order-payment.md)；制作履约随后续任务接入。
 
 ## 环境与依赖
 
@@ -64,7 +64,7 @@ Axios 默认直连 `http://localhost:8080/api`，可复制 `.env.example` 为 `.
 
 ## 导航与工作区（T-008）
 
-按原型 01、07、08、09 调整已实现业务的入口，范围及验收见 [T-008](../docs/development/tasks/T-008-navigation-layout.md)。前台一级导航包含发现作品、我的需求及 T-009 新增的我的订单；具有创作者资格的账号另有需求大厅和创作者工作台。首页直接发布需求，消息图标进入独立消息中心；个人中心只维护资料、地址和入驻信息。
+按原型 01、07、08、09 调整已实现业务的入口，范围及验收见 [T-008](../docs/development/tasks/T-008-navigation-layout.md)。前台一级导航包含发现作品、我的需求及 T-009 新增的我的订单；具有创作者资格的账号另有需求大厅和创作者工作台。首页直接发布需求，消息图标进入独立消息中心；个人中心维护资料、地址和入驻信息，并由T-006增加收藏作品、关注创作者入口。
 
 后台固定左侧菜单，作品与入驻审核以左队列、右材料详情并排；材料独立滚动，审核操作紧随其后。选择对象、刷新和返回保留 URL 中的筛选及页码，提交结论后同步队列。未提交意见离开须确认，取消后恢复原筛选；退出登录不受草稿确认阻拦。窄屏选择材料后展示详情，通过“返回队列”恢复列表。
 
@@ -98,7 +98,7 @@ npm run preview
 
 `/messages/notifications` 查看审核通知、已读状态及未读数；全应用共享原生 WebSocket，多端同步未读，断线最多自动重试 5 次，失败后可手动连接，持久化列表始终独立查询。通过后页首可切换买家/创作者，仅改变当前会话入口，不延长登录有效期。创作者身份进入“我的作品”；T-007需求沟通入口及规则见下文。
 
-## 账号、个人中心、入驻与作品浏览器回归
+## 账号、个人中心、作品、互动与交易浏览器回归
 
 前提：Node/npm 版本符合工程要求，JDK 21 可从 PATH 启动，本机 MySQL 在 3306 可连接，账号与开发配置一致并有创建/删除测试库权限。先在 `backend/` 执行 `.\mvnw.cmd -B -ntp verify` 生成最新可执行 JAR，再回本目录执行：
 
@@ -112,7 +112,7 @@ npx playwright test e2e/personal-center.spec.ts
 npx playwright test e2e/creator-onboarding.spec.ts
 ```
 
-已安装 Microsoft Edge 时无需执行安装命令。测试使用 Edge 的 Chromium 内核，默认自动启动 5173 的 Vite 和 18080 的真实后端；运行前释放这两个测试端口，或按下文使用5174保留开发服务。夹具创建随机 `handcraft_browser_` 测试库、运行原有 Flyway、启动本地 SMTP 接收端，正常结束后停止测试服务并仅删除自己的测试库。生产 `application.yml` 不会改写，不使用假 API 或生产测试接口。只有断网、响应延迟用例使用浏览器网络故障注入。测试期间固定源码及后端JAR，避免热更新重置表单或替换运行中的包。
+已安装 Microsoft Edge 时无需执行安装命令。测试使用 Edge 的 Chromium 内核，默认自动启动 5173 的 Vite 和 18080 的真实后端；运行前确认测试端口空闲，或按下文设置独立前后端端口。夹具创建随机 `handcraft_browser_` 测试库、运行原有 Flyway、启动本地 SMTP 接收端，正常结束后停止测试服务并仅删除自己的测试库。互动使用独立随机库组，避免其已发布作品污染既有空首页断言。生产 `application.yml` 不会改写，不使用假 API 或生产测试接口。只有断网、响应延迟用例使用浏览器网络故障注入。测试期间固定源码及后端JAR，避免热更新重置表单或替换运行中的包。
 
 测试源码位于 `e2e/`，截图、失败 trace 和后端日志写入被忽略的 `test-results/`。个人中心覆盖资料保存/刷新、Unicode 与长度校验、头像本地格式/大小拒绝及真实服务不可用反馈、地区联动与手动补全、字段错误及断网重试、默认地址维护和删除确认、十条容量与他人地址拒绝，并检查 1366/1440 及窄屏布局。常规夹具显式禁用 OSS，保证配置真实凭据后也不会向云端写测试对象；云端上传、签名读取、替换及浏览器计时器续签已单独联调，详见 [T-003 测试记录](../docs/testing/T-003-personal-center.md)。认证结果见 [T-002 测试记录](../docs/testing/T-002-frontend-auth.md)。本地 SMTP 只证明邮件协议与页面闭环，不代表 QQ/163 公网收件；公网收件及找回密码补充验收用户明确暂缓，恢复后仍须真实收件验证。
 
@@ -122,9 +122,25 @@ npx playwright test e2e/creator-onboarding.spec.ts
 
 首页 `/` 按原型 01 展示横幅、两级品类、关键词、价格及交易属性组合筛选、排序和每页 20 条作品。`/works/:id` 展示图集、规格、创作说明与交易属性；`/creators/:id` 展示必要公开资料和真实口碑统计。上述页面均要求登录；无评价展示“暂无评价”。
 
-认证创作者在 `/creator/works` 管理草稿、撤回、驳回补正和下架；`/creator/works/new`、`/creator/works/:id/edit` 为四段式表单，图片真实上传、排序并按短时签名续签。创建复用请求键，修改携带版本，响应未知时先核验；上传期间禁用提交，失败与版本冲突保留输入，离开未保存内容须确认。已上架作品的交易设置即时更新，图文修改转待审核并立即停止公开。管理员在 `/admin/works` 及详情审核、比较历史、驳回或说明原因下架。定制需求入口见T-007；购买和互动随对应任务实现。
+认证创作者在 `/creator/works` 管理草稿、撤回、驳回补正和下架；`/creator/works/new`、`/creator/works/:id/edit` 为四段式表单，图片真实上传、排序并按短时签名续签。创建复用请求键，修改携带版本，响应未知时先核验；上传期间禁用提交，失败与版本冲突保留输入，离开未保存内容须确认。已上架作品的交易设置即时更新，图文修改转待审核并立即停止公开。管理员在 `/admin/works` 及详情审核、比较历史、驳回或说明原因下架。定制需求入口见T-007；互动见T-006，现货购买随后续任务实现。
 
 复测作品链路：`npx playwright test e2e/work-publication.spec.ts`；完整回归：`npm run test:e2e`。作品套件使用隔离 MySQL、真实后端和本地 OSS 协议接收器，云端 OSS 另行验证，实际结果见 [T-005 测试记录](../docs/testing/T-005-work-publication.md)。QQ/163 公网收件及找回密码补充验收为“用户明确暂缓”，保留认证回归。
+
+## 作品互动与个人收藏、关注（T-006）
+
+作品详情接入点赞、收藏和图文评论；作者区与创作者主页提供关注，并保留“发起同类定制”和“邀请定制”。个人中心 `/account/favorites`、`/account/following` 支持分页和取消，失效收藏显示“已下架”。评论失败保留文字图片；响应未知时先核对结果，由用户确认后再发。图片按原鉴权端点续签，切换账号或作品清除私有草稿并忽略旧响应；管理员仅读公开内容。
+
+互动回归位于`e2e/work-interactions.spec.ts`，包含真实入驻、发布、审核前置及当前需求邀约共存流程。`e2e/environment.ts`统一测试地址：`HANDCRAFT_E2E_FRONTEND_PORT`优先于兼容变量`HANDCRAFT_E2E_PORT`，后端使用`HANDCRAFT_E2E_BACKEND_PORT`；不设置时保持5173/18080。所有浏览器上下文、HTTP请求、CORS及本地OSS接收器使用同一配置，不修改共享开发配置。
+
+```powershell
+$env:HANDCRAFT_E2E_FRONTEND_PORT='15173'
+$env:HANDCRAFT_E2E_BACKEND_PORT='19081'
+npm run test:e2e
+# 只复测互动
+npm run test:e2e -- e2e/work-interactions.spec.ts
+```
+
+接口与集成交接见[T-006](../docs/development/tasks/T-006-work-interactions.md)，实际验证及本轮云端测试边界见[测试记录](../docs/testing/T-006-work-interactions.md)。
 
 ## 定制需求与需求沟通（T-007）
 
@@ -136,7 +152,7 @@ npx playwright test e2e/creator-onboarding.spec.ts
 
 [T-010 聊天可靠性优化](../docs/development/tasks/T-010-chat-reliability.md)增加应用心跳：连接建立即发送 PING，收到 PONG 后20秒再次发送，10秒未回应则主动释放旧连接，按1/2/4/8/16秒最多自动重试5次；连接持续至少30秒且再次收到有效 PONG 才恢复重试额度。退出或切换账号时清理旧计时器。首次未读查询独立于实时握手，连接失败时仍显示已保存消息的未读数，重连成功再核对遗漏。聊天事件在100毫秒内合并，详情只补拉当前会话，列表合并在途刷新；重新激活页面和手动刷新仍查询持久化未读。专项复测：`npm run test:e2e -- e2e/chat-reliability.spec.ts`，实际结果见 [T-010 测试记录](../docs/testing/T-010-chat-reliability.md)。
 
-复测：`npm run test:e2e -- custom-requests.spec.ts`。若5173正用于开发，可在PowerShell先设置 `$env:HANDCRAFT_E2E_PORT='5174'` 再执行测试；配置、所有浏览器上下文、测试后端CORS及本地OSS接收器使用同一来源，不停止开发服务器。18080仍须空闲。真实OSS云端验证在后端单独显式启用，浏览器常规测试只操作隔离库和本地协议接收器。
+复测：`npm run test:e2e -- custom-requests.spec.ts`。若5173正用于开发，可在PowerShell先设置 `$env:HANDCRAFT_E2E_PORT='5174'` 再执行测试；后端端口也可按T-006说明独立设置，所选测试端口须空闲。配置、所有浏览器上下文、测试后端CORS及本地OSS接收器使用同一来源，不停止开发服务器。真实OSS云端验证在后端单独显式启用，浏览器常规测试只操作隔离库和本地协议接收器。
 
 导航与双栏复测：`npm run test:e2e -- e2e/navigation-layout.spec.ts`；同时保留作品、入驻、需求与图文会话套件验证实际操作，结果见 [T-008 测试记录](../docs/testing/T-008-navigation-layout.md)。
 
