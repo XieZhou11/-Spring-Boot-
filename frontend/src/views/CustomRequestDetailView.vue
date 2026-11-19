@@ -16,11 +16,17 @@ const route = useRoute(); const router = useRouter(); const value = ref<CustomRe
 const auth = useAuthStore(); const notifications = useNotificationsStore()
 const loading = ref(false); const busy = ref(false); const error = ref(''); let copyKey = crypto.randomUUID()
 let revision = 0; let deferredRefresh = false
+/** 路由离开时参数会先变化，旧页面与延迟刷新只读取仍属于本页的有效需求。 */
+function currentRequestId() {
+  const id = route.params.id
+  return route.name === 'custom-request-detail' && typeof id === 'string' && /^[1-9]\d*$/.test(id) ? id : undefined
+}
 async function load() {
+  const id = currentRequestId()
+  if (!auth.session || !id) return
   if (busy.value) { deferredRefresh = true; return }
-  if (!auth.session) return
   const current = ++revision; loading.value = true; error.value = ''
-  try { const result = await getCustomRequest(String(route.params.id)); if (current === revision) value.value = result }
+  try { const result = await getCustomRequest(id); if (current === revision) value.value = result }
   catch (failure) {
     if (current === revision) {
       // 临时刷新失败保留同一需求及未知提交上下文；权限或可见性失效仍立即清空。
@@ -37,7 +43,7 @@ async function act(action: 'close' | 'copy' | 'chat' | 'delete') {
   if (action === 'delete' && !window.confirm('确定删除此草稿？')) return
   revision++; busy.value = true; error.value = ''
   const expected = revision; const requestId = value.value.id; const version = value.value.version
-  const stillCurrent = () => expected === revision && requestId === String(route.params.id)
+  const stillCurrent = () => expected === revision && requestId === currentRequestId()
   try {
     if (action === 'close') { const result = await closeRequest(requestId, version); if (stillCurrent()) value.value = result }
     if (action === 'copy') { const result = await copyRequest(requestId, copyKey); if (stillCurrent()) await router.push(`/my-requests/${result.id}/edit`) }
@@ -49,7 +55,7 @@ async function act(action: 'close' | 'copy' | 'chat' | 'delete') {
 /** 提交期间合并恢复事件，完成后再核验持久化状态。 */
 function updated() { void load() }
 function visible() { if (document.visibilityState === 'visible') updated() }
-watch([() => route.params.id, () => auth.session?.userId], () => { revision++; copyKey = crypto.randomUUID(); value.value = undefined; void load() }, { immediate: true, flush: 'sync' })
+watch([() => route.name, () => route.params.id, () => auth.session?.userId], () => { revision++; copyKey = crypto.randomUUID(); value.value = undefined; void load() }, { immediate: true })
 watch(() => notifications.connected, (connected, previous) => { if (connected && !previous) updated() })
 window.addEventListener('custom-request-updated', updated)
 window.addEventListener('focus', updated)
@@ -113,7 +119,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('custom-request-u
           </p><strong class="work-price">{{ value.budgetMin ? `¥ ${value.budgetMin} — ${value.budgetMax || '待定'}` : '预算待填写' }}</strong><p>期望发货：{{ value.expectedShipDate || '待填写' }}</p><p class="field-help">
             {{ value.publishedAt ? `发布于 ${formatTime(value.publishedAt)}` : '尚未发布' }}
           </p><p
-            v-if="value.noQuoteExpireAt"
+            v-if="['OPEN', 'QUOTING'].includes(value.status) && value.noQuoteExpireAt"
             class="field-help"
           >
             {{ formatTime(value.noQuoteExpireAt) }} 后，无有效报价将过期。
@@ -136,7 +142,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('custom-request-u
           >
             进入需求沟通
           </button><p
-            v-else-if="value.consultationReason"
+            v-else-if="['OPEN', 'QUOTING'].includes(value.status) && value.consultationReason"
             class="field-help"
           >
             {{ value.consultationReason }}

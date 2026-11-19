@@ -35,7 +35,12 @@
 .shipping-warning { color: #895b2e; line-height: 1.8; }
 .quote-history { margin-top: 30px; }
 .order-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 28px; align-items: start; }
+.order-detail-grid > * { min-width: 0; }
 .order-detail-grid .editor-section { margin-bottom: 24px; }
+/* 订单金额与日期标签保留完整一行，长流水和金额仍可在窄屏内折行。 */
+.order-detail-grid .work-specifications dt { width: 9em; }
+.order-detail-grid .work-specifications dd { min-width: 0; flex: 1; }
+.order-detail-grid .work-specifications .quote-amount { white-space: normal; }
 .order-timeline { padding-left: 20px; }
 .order-timeline li { padding: 8px 0 18px; }
 .order-timeline time { display: block; color: var(--muted); font-size: 12px; margin-top: 6px; }
@@ -48,3 +53,4 @@
 .order-progress li > div { display: flex; justify-content: space-between; gap: 16px; }
 .order-progress li span, .order-progress li p, .order-progress li time { color: var(--muted); font-size: 13px; }
 @media (max-width: 900px) { .order-detail-grid { grid-template-columns: 1fr; } .award-panel { padding: 20px; } .quote-record { padding: 18px; } }
+@media (max-width: 520px) { .order-detail-grid .work-specifications > div { gap: 12px; } .order-detail-grid .work-specifications dt { width: 7em; } }

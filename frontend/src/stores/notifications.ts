@@ -17,6 +17,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
   const connectionMessage = ref('')
   let socket: WebSocket | undefined
   let userId: string | undefined
+  let chatEnabled = false
   let timer: ReturnType<typeof setTimeout> | undefined
   let heartbeatTimer: ReturnType<typeof setTimeout> | undefined
   let heartbeatTimeout: ReturnType<typeof setTimeout> | undefined
@@ -30,6 +31,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
 
   /** 连续推送合并为一次列表刷新，详情仅补拉当前会话；重连要求所有已打开页面核对。 */
   function queueChatUpdate(conversationId?: string, all = false, requestUpdated = false) {
+    if (!chatEnabled) return
     if (conversationId) changedConversations.add(conversationId)
     refreshAllConversations ||= all
     requestChanged ||= requestUpdated
@@ -37,7 +39,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     const expected = generation
     chatTimer = setTimeout(() => {
       chatTimer = undefined
-      if (expected !== generation || !userId) return
+      if (expected !== generation || !userId || !chatEnabled) return
       chatUpdate.value = { all: refreshAllConversations, conversationIds: [...changedConversations] }
       chatRevision.value++
       if (requestChanged) window.dispatchEvent(new Event('custom-request-updated'))
@@ -65,15 +67,17 @@ export const useNotificationsStore = defineStore('notifications', () => {
   }
 
   async function refreshChatUnread() {
+    if (!userId || !chatEnabled) return
     const expected = generation
     const expectedUnread = ++chatUnreadRevision
-    try { const result = await getChatUnread(); if (expected === generation && expectedUnread === chatUnreadRevision && userId) chatUnreadCount.value = result.count }
+    try { const result = await getChatUnread(); if (expected === generation && expectedUnread === chatUnreadRevision && userId && chatEnabled) chatUnreadCount.value = result.count }
     catch { /* 聊天未读查询失败不阻断当前表单，消息中心提供重试。 */ }
   }
 
   function disconnect() {
     generation++
     userId = undefined
+    chatEnabled = false
     clearTimeout(timer)
     clearHeartbeat()
     clearTimeout(chatTimer)
@@ -90,10 +94,28 @@ export const useNotificationsStore = defineStore('notifications', () => {
     chatUnreadRevision++
   }
 
-  function connect(id: string) {
-    if (userId === id) return
+  function connect(id: string, allowChat: boolean) {
+    if (userId === id) {
+      if (chatEnabled === allowChat) return
+      // 同一账号的管理员资格可在恢复会话时变化，旧聊天响应和合并事件不得泄漏到新范围。
+      chatEnabled = allowChat
+      chatUnreadRevision++
+      chatUnreadCount.value = 0
+      clearTimeout(chatTimer)
+      chatTimer = undefined
+      changedConversations.clear()
+      refreshAllConversations = false
+      requestChanged = false
+      chatUpdate.value = { all: false, conversationIds: [] }
+      if (allowChat) {
+        void refreshChatUnread()
+        queueChatUpdate(undefined, true)
+      }
+      return
+    }
     disconnect()
     userId = id
+    chatEnabled = allowChat
     retry = 0
     // 持久化未读独立于实时握手，连接失败时首页仍能显示已有消息。
     void refreshUnread()
@@ -204,7 +226,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
           else if (payload.notification?.businessReference?.type === 'ORDER') { window.dispatchEvent(new Event('order-updated')); window.dispatchEvent(new Event('quote-updated')); window.dispatchEvent(new Event('custom-request-updated')) }
           else if (payload.notification?.businessReference?.type === 'CREATOR_APPLICATION') window.dispatchEvent(new Event('creator-certification-updated'))
         }
-        if (payload.type === 'CHAT_UNREAD_UPDATED' && typeof payload.count === 'number') { chatUnreadRevision++; chatUnreadCount.value = payload.count }
+        if (payload.type === 'CHAT_UNREAD_UPDATED' && typeof payload.count === 'number' && chatEnabled) { chatUnreadRevision++; chatUnreadCount.value = payload.count }
         if (['CHAT_MESSAGE', 'CHAT_READ', 'CONVERSATION_UPDATED'].includes(payload.type)) {
           // 对方已读不改变本人的游标或未读；本人其他端的已读仍须刷新。
           if (payload.type === 'CHAT_READ' && payload.userId !== userId) return

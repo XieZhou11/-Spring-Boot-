@@ -22,16 +22,18 @@ const selected = ref<QuoteVO>(); const addresses = ref<AddressVO[]>([]); const a
 const lateAccepted = ref(false); const busy = ref(false); const uncertain = ref(false); const error = ref('')
 const history = ref<QuoteVO[]>([]); const historyStatus = ref('EXPIRED'); const historyPage = ref(1); const historyTotal = ref(0); const historyLoading = ref(false); const historyError = ref('')
 let revision = 0; let historyRevision = 0; let addressRevision = 0; let attempt: AwardDTO | undefined; let completed = false
-const id = () => String(route.params.id)
+/** 需求详情与订单也有 id 参数，读取报价前同时确认页面归属，避免导航中误查其他资源。 */
+const id = () => route.name === 'quote-comparison' && typeof route.params.id === 'string' && /^[1-9]\d*$/.test(route.params.id) ? route.params.id : undefined
 const chosenAddress = computed(() => addresses.value.find(address => address.id === addressId.value))
 const isLate = computed(() => !!selected.value && !!comparison.value && selected.value.estimatedShipDate > comparison.value.expectedShipDate)
 const lowestAmount = computed(() => Math.min(...(comparison.value?.items.map(quote => Number(quote.goodsAmount)) || [])))
 const shortestDuration = computed(() => Math.min(...(comparison.value?.items.map(quote => quote.durationDays) || [])))
 async function load() {
-  if (busy.value || uncertain.value) return
+  const requestId = id()
+  if (!requestId || busy.value || uncertain.value) return
   const current = ++revision; loading.value = true; loadError.value = ''
   try {
-    const result = await getQuoteComparison(id(), sort.value)
+    const result = await getQuoteComparison(requestId, sort.value)
     if (current !== revision) return
     comparison.value = result
     if (selected.value) {
@@ -43,15 +45,17 @@ async function load() {
   finally { if (current === revision) loading.value = false }
 }
 async function loadHistory(next = historyPage.value) {
+  const requestId = id()
+  if (!requestId) return
   const current = ++historyRevision; historyPage.value = next; historyLoading.value = true; historyError.value = ''
   try {
-    const result = await getRequestQuotes(id(), { status: historyStatus.value, page: next })
+    const result = await getRequestQuotes(requestId, { status: historyStatus.value, page: next })
     if (current === historyRevision) { history.value = result.items; historyTotal.value = result.total }
   } catch (failure) { if (current === historyRevision) { history.value = []; historyError.value = failure instanceof Error ? failure.message : '历史报价读取失败' } }
   finally { if (current === historyRevision) historyLoading.value = false }
 }
 async function loadAddresses() {
-  if (busy.value || uncertain.value) return
+  if (!id() || busy.value || uncertain.value) return
   const current = ++addressRevision; addressLoading.value = true; addressError.value = ''
   try {
     const result = await getAddresses()
@@ -68,7 +72,8 @@ async function select(quote: QuoteVO) {
 }
 /** 一次确认冻结报价、地址、日期和请求键；失败后不能把新表单拼入旧请求。 */
 async function award() {
-  if (busy.value || !selected.value) return
+  const requestId = id()
+  if (!requestId || busy.value || !selected.value) return
   if (!uncertain.value) {
     if (!chosenAddress.value || !comparison.value?.canAward || !selected.value.canAward || (isLate.value && !lateAccepted.value)) return
     attempt = { requestKey: crypto.randomUUID(), quoteId: selected.value.id, addressId: addressId.value, confirmedEstimatedShipDate: selected.value.estimatedShipDate }
@@ -78,7 +83,7 @@ async function award() {
   revision++; addressRevision++; loading.value = false; addressLoading.value = false
   busy.value = true; error.value = ''
   try {
-    const order = await awardQuote(id(), attempt)
+    const order = await awardQuote(requestId, attempt)
     completed = true; uncertain.value = false; attempt = undefined
     await router.push(`/orders/${order.id}`)
   } catch (failure) {
@@ -96,7 +101,7 @@ function canLeave() {
 }
 function beforeUnload(event: BeforeUnloadEvent) { if (auth.session && (busy.value || uncertain.value)) { event.preventDefault(); event.returnValue = '' } }
 onBeforeRouteLeave(canLeave); onBeforeRouteUpdate(canLeave)
-watch(() => route.params.id, () => { revision++; historyRevision++; addressRevision++; comparison.value = undefined; selected.value = undefined; uncertain.value = false; attempt = undefined; completed = false; history.value = []; historyPage.value = 1; refresh() }, { immediate: true })
+watch([() => route.name, () => route.params.id], () => { revision++; historyRevision++; addressRevision++; comparison.value = undefined; selected.value = undefined; uncertain.value = false; attempt = undefined; completed = false; history.value = []; historyPage.value = 1; refresh() }, { immediate: true })
 onMounted(() => { window.addEventListener('quote-updated', refresh); window.addEventListener('focus', refresh); window.addEventListener('beforeunload', beforeUnload) })
 onBeforeUnmount(() => { revision++; historyRevision++; addressRevision++; window.removeEventListener('quote-updated', refresh); window.removeEventListener('focus', refresh); window.removeEventListener('beforeunload', beforeUnload) })
 </script>

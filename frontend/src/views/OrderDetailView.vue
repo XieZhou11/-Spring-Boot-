@@ -19,18 +19,19 @@ const order = ref<OrderVO>(); const loading = ref(false); const cancelling = ref
 const paymentState = ref<'idle' | 'submitting' | 'unknown'>('idle'); const paymentError = ref(''); const confirmationOpen = ref(false); const agreed = ref(false); const retryChecked = ref(false)
 const busy = computed(() => cancelling.value || paymentState.value === 'submitting')
 let revision = 0; let deferredRefresh = false; let attempt: OrderPaymentDTO | undefined
-const id = () => String(route.params.id)
+/** 订单上下文仅在本详情路由有效，离页与其他资源的同名参数不能触发订单查询。 */
+const id = () => route.name === 'order-detail' && typeof route.params.id === 'string' && /^[1-9]\d*$/.test(route.params.id) ? route.params.id : undefined
 const unknownMessage = '付款结果尚未确认，请刷新订单核验；核验后可重试确认同一笔支付，请勿取消订单。'
 function currentContext() { return { userId: auth.session?.userId, orderId: id() } }
-function sameContext(context: ReturnType<typeof currentContext>) { return !!context.userId && context.userId === auth.session?.userId && context.orderId === id() }
+function sameContext(context: ReturnType<typeof currentContext>) { return !!context.userId && !!context.orderId && context.userId === auth.session?.userId && context.orderId === id() }
 function clearAttempt(context = currentContext()) {
-  if (context.userId) clearPaymentAttempt(context.userId, context.orderId)
+  if (context.userId && context.orderId) clearPaymentAttempt(context.userId, context.orderId)
   attempt = undefined; paymentState.value = 'idle'; retryChecked.value = false; confirmationOpen.value = false; agreed.value = false
 }
 /** 查询始终以当前身份与订单为界，临时故障保留详情；权限失效立即清空。 */
 async function load() {
+  const context = currentContext(); if (!context.userId || !context.orderId) return
   if (busy.value) { deferredRefresh = true; return }
-  const context = currentContext(); if (!context.userId) return
   const current = ++revision; loading.value = true; error.value = ''; retryChecked.value = false
   try {
     const result = await getOrder(context.orderId)
@@ -53,7 +54,8 @@ async function load() {
 async function cancel() {
   if (!order.value?.canCancel || busy.value || paymentState.value === 'unknown' || !window.confirm('确认取消未付款订单？需求将关闭，中标与落选报价不会恢复，重新选择需发布新需求。')) return
   // 取消开始即作废在途旧查询，避免旧待付款快照覆盖已提交的取消结果。
-  const context = currentContext(); const current = ++revision; loading.value = false; cancelling.value = true; error.value = ''
+  const context = currentContext(); if (!context.userId || !context.orderId) return
+  const current = ++revision; loading.value = false; cancelling.value = true; error.value = ''
   try { const result = await cancelOrder(context.orderId); if (current === revision && sameContext(context)) { order.value = result; confirmationOpen.value = false } }
   catch (failure) { if (current === revision && sameContext(context)) error.value = `${failure instanceof Error ? failure.message : '取消请求失败'}。请刷新订单核对结果，再决定是否重试。` }
   finally { if (sameContext(context)) { cancelling.value = false; finishDeferredRefresh() } }
@@ -62,7 +64,7 @@ function openPayment() { if (!busy.value && order.value?.canPay && paymentState.
 /** 首次确认与未知结果重试冻结同一输入；提交前作废所有旧GET，杜绝旧快照回写。 */
 async function pay() {
   if (busy.value || !order.value) return
-  const context = currentContext(); if (!context.userId || order.value.id !== context.orderId || !order.value.owned) return
+  const context = currentContext(); if (!context.userId || !context.orderId || order.value.id !== context.orderId || !order.value.owned) return
   if (paymentState.value === 'unknown') { if (!attempt || !retryChecked.value) return }
   else {
     const preview = order.value.paymentPreview
@@ -103,12 +105,13 @@ function finishDeferredRefresh() { if (deferredRefresh && !busy.value) { deferre
 function refresh() { void load() }
 function visible() { if (document.visibilityState === 'visible') refresh() }
 onBeforeRouteLeave(() => !auth.session || !busy.value); onBeforeRouteUpdate(() => !auth.session || !busy.value)
-watch([() => route.params.id, () => auth.session?.userId], () => {
+watch([() => route.name, () => route.params.id, () => auth.session?.userId], () => {
   revision++; order.value = undefined; loading.value = false; cancelling.value = false; deferredRefresh = false; confirmationOpen.value = false; agreed.value = false; error.value = ''; paymentError.value = ''; retryChecked.value = false
-  const context = currentContext(); attempt = context.userId ? readPaymentAttempt(context.userId, context.orderId) : undefined
+  // 普通离页只重置本页内存，保留原订单的未知付款标记，返回后仍须核验再重试。
+  const context = currentContext(); attempt = context.userId && context.orderId ? readPaymentAttempt(context.userId, context.orderId) : undefined
   paymentState.value = attempt ? 'unknown' : 'idle'; if (attempt) paymentError.value = unknownMessage
   void load()
-}, { immediate: true, flush: 'sync' })
+}, { immediate: true })
 watch(() => notifications.connected, (connected, previous) => { if (connected && !previous) refresh() })
 onMounted(() => { window.addEventListener('order-updated', refresh); window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', visible) })
 onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', visible) })
@@ -176,7 +179,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
               <strong>{{ order.addressSnapshot.recipientName }} · {{ order.addressSnapshot.phone }}</strong><br>{{ order.addressSnapshot.province }} {{ order.addressSnapshot.city }} {{ order.addressSnapshot.district }} {{ order.addressSnapshot.detailAddress }}
             </address>
             <dl class="work-specifications">
-              <div><dt>约定工期</dt><dd>{{ order.durationDays }} 个自然日</dd></div><div><dt>定标时预计发货日</dt><dd>{{ order.agreementSnapshot.confirmedEstimatedShipDate }}</dd></div><div><dt>本次支付约定发货日</dt><dd>{{ order.paymentPreview.shipDate }}</dd></div>
+              <div><dt>约定工期</dt><dd>{{ order.durationDays }} 个自然日</dd></div><div><dt>定标预计发货日</dt><dd>{{ order.agreementSnapshot.confirmedEstimatedShipDate }}</dd></div><div><dt>支付约定发货日</dt><dd>{{ order.paymentPreview.shipDate }}</dd></div>
             </dl><p class="field-help">
               包含开工等待，从支付次日零时起算；以上日期为发货日，不是送达日。
             </p>
@@ -215,7 +218,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
                 <dt>商品成交金额</dt><dd class="quote-amount">
                   ¥ {{ order.totalAmount }}
                 </dd>
-              </div><div><dt>买家实付金额</dt><dd>{{ order.paidAmount === null || order.paidAmount === undefined ? '尚未付款' : `¥ ${order.paidAmount}` }}</dd></div><div><dt>约定工期</dt><dd>{{ order.durationDays }} 个自然日</dd></div><div><dt>期望发货</dt><dd>{{ order.agreementSnapshot.expectedShipDate }}</dd></div><div><dt>定标确认预计发货</dt><dd>{{ order.agreementSnapshot.confirmedEstimatedShipDate }}</dd></div>
+              </div><div><dt>买家实付金额</dt><dd>{{ order.paidAmount === null || order.paidAmount === undefined ? '尚未付款' : `¥ ${order.paidAmount}` }}</dd></div><div><dt>约定工期</dt><dd>{{ order.durationDays }} 个自然日</dd></div><div><dt>期望发货</dt><dd>{{ order.agreementSnapshot.expectedShipDate }}</dd></div><div><dt>定标预计发货日</dt><dd>{{ order.agreementSnapshot.confirmedEstimatedShipDate }}</dd></div>
             </dl><p class="field-help">
               工期含开工等待，自实际支付次日零时起算；最终发货日期由实际支付时间确定，不代表送达日期。
             </p><h3>材料与工艺方案</h3><p class="request-description">
@@ -330,7 +333,15 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
               @click="load"
             >
               刷新订单
-            </button><p class="field-help">
+            </button><p
+              v-if="order.status === 'PAID'"
+              class="field-help"
+            >
+              付款已完成，等待创作者确认开工；可在订单会话继续核对制作安排。
+            </p><p
+              v-else-if="order.status === 'CANCELLED'"
+              class="field-help"
+            >
               订单取消后仍可在原会话核对方案和补充沟通。
             </p>
           </section>

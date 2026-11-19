@@ -32,14 +32,25 @@ test('买家确认模拟条款后付款，双方实时查看金额、固定五�
     const { categoryId } = await prepareCreator(creator, await adminContext.newPage(), mailbox.codes, mailbox.promoteAdmin)
     await register(page, mailbox.codes, '付款买家')
     const order = await pendingOrder(page, creator, categoryId, '原木书签模拟付款验收')
+    // 订单离页也要检查实际请求，不能把其他页面的缺失参数当作订单编号。
+    const invalidOrderRequests: string[] = []
+    page.on('request', request => {
+      const path = new URL(request.url()).pathname
+      if (path.startsWith('/api/orders/') && !/^\/api\/orders\/[1-9]\d*(?:\/|$)/.test(path)) invalidOrderRequests.push(path)
+    })
     await adminContext.close()
     const requests = await page.context().newPage(); await requests.goto('/my-requests')
     await expect(requests.locator('.request-card').filter({ hasText: order.title })).toContainText('已定标')
+    const requestDetail = await page.context().newPage(); await requestDetail.goto(`/requests/${order.requestId}`)
+    await expect(requestDetail.locator('.work-section-heading .work-status')).toHaveText('已定标')
+    // 定标后已退出开放报价阶段，过期和新咨询拒绝文案不应继续误导订单双方。
+    await expect.soft(requestDetail.getByText(/无有效报价将过期|需求未开放或已经结束/)).toHaveCount(0)
     await creator.goto(`/orders/${order.id}`)
     await expect(creator.getByRole('button', { name: '模拟支付', exact: true })).toHaveCount(0)
     const chat = await creatorContext.newPage(); await chat.goto(`/messages/conversations/${order.conversationId}`)
     await expect(chat.locator('.work-section-heading')).toContainText('待付款')
     await page.goto(`/orders/${order.id}`)
+    await expect.soft(page.locator('.request-summary')).not.toContainText('订单取消后')
     await page.getByRole('button', { name: '模拟支付', exact: true }).click()
     const confirmation = page.getByRole('region', { name: '确认模拟支付', exact: true })
     await expect(confirmation).toContainText('180.00')
@@ -50,6 +61,8 @@ test('买家确认模拟条款后付款，双方实时查看金额、固定五�
     await page.getByLabel('我已阅读并同意定制支付条款', { exact: true }).check()
     await page.getByRole('button', { name: '确认模拟支付', exact: true }).click()
     await expect(page.locator('.work-section-heading .work-status')).toHaveText('待开工')
+    await expect.soft(page.locator('.request-summary')).not.toContainText('订单取消后')
+    await expect.soft(page.locator('.request-summary')).toContainText('等待创作者确认开工')
     await expect(page.getByRole('heading', { name: '支付记录', exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: '结算信息', exact: true })).toHaveCount(0)
     await expect(page.getByRole('button', { name: '取消订单', exact: true })).toHaveCount(0)
@@ -60,6 +73,8 @@ test('买家确认模拟条款后付款，双方实时查看金额、固定五�
     await expect(creator.getByRole('heading', { name: '结算信息', exact: true })).toBeVisible()
     await expect(creator.getByText('支付快照测试路一号', { exact: false })).toHaveCount(0)
     await expect(requests.locator('.request-card').filter({ hasText: order.title })).toContainText('交易进行中')
+    await expect(requestDetail.locator('.work-section-heading .work-status')).toHaveText('交易进行中')
+    await expect.soft(requestDetail.getByText(/无有效报价将过期|需求未开放或已经结束/)).toHaveCount(0)
     await expect(chat.locator('.work-section-heading')).toContainText('待开工')
     const paid = (await (await page.request.get(`${api}/orders/${order.id}`)).json()).data
     expect(paid.status).toBe('PAID'); expect(paid.paidAmount).toBe('180.00'); expect(paid.payment.amount).toBe('180.00'); expect(paid.settlement).toBeNull()
@@ -70,10 +85,12 @@ test('买家确认模拟条款后付款，双方实时查看金额、固定五�
     const creatorPaid = (await (await creator.request.get(`${api}/orders/${order.id}`)).json()).data
     expect(creatorPaid.settlement.paidAmount).toBe('180.00'); expect(creatorPaid.settlement.status).toBe('PENDING'); expect(creatorPaid.settlement.maskedPayee).toContain('*')
     await page.screenshot({ path: testInfo.outputPath('paid-order.png'), fullPage: true })
-    await page.goto('/orders'); await page.getByLabel('订单状态', { exact: true }).selectOption('PAID')
+    await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '我的订单', exact: true }).click()
+    await page.getByLabel('订单状态', { exact: true }).selectOption('PAID')
     await expect(page.locator('.request-card').filter({ hasText: order.title })).toContainText('待开工')
     const listed = (await (await page.request.get(`${api}/me/orders?status=PAID`)).json()).data.items[0]
     expect(listed.addressSnapshot).toBeNull(); expect(listed.paymentPreview).toBeNull(); expect(listed.payment).toBeNull(); expect(listed.progressNodes).toEqual([])
+    expect(invalidOrderRequests).toEqual([])
   } finally { await adminContext.close(); await creatorContext.close() }
 })
 

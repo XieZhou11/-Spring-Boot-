@@ -22,6 +22,7 @@
 | 聊天连接与查询优化 | T-010 已完成心跳检测、有限重连、按会话合并刷新和每轮凭证查询复用；握手失败仍查询持久化未读，已完成隔离回归及失败项复测 | [T-010](development/tasks/T-010-chat-reliability.md)、[测试记录](testing/T-010-chat-reliability.md) |
 | 报价对比与定标建单 | T-009已完成：报价/撤回、私有图片、对比、唯一待付款订单、取消/超时及关联会话；独立审查与最终回归通过 | [T-009](development/tasks/T-009-quote-award.md)、[测试记录](testing/T-009-quote-award.md) |
 | 定制模拟支付与初始化 | T-011已完成详情确认、幂等付款、待结算及五节点，进入PAID待开工；未知结果恢复、独立审查与最终回归通过 | [T-011](development/tasks/T-011-order-payment.md)、[测试记录](testing/T-011-order-payment.md) |
+| 主流程演示反馈 | T-012 已完成详情离页请求、管理员聊天未读、状态提示及订单排版修复；相关 25 项用例经复测通过，初次主流程检查和修复复测维护在同一报告 | [T-012](development/tasks/T-012-demo-feedback.md)、[主流程演示报告](testing/demo-main-flow.md) |
 | 业务接口、自动化测试与 CI | 已交付业务用真实MySQL、HTTP、WebSocket及协议接收器验证，真实OSS历史结果单独保留；互动集成最终后端verify230项、实际225项、0失败/错误、5项真实OSS条件跳过，全量浏览器58/58，前端类型/lint/构建通过；后端测试源码仅本地保留且被Git忽略；无CI文件，未执行远端CI | [当前集成回归](testing/T-006-work-interactions.md)、[支付回归](testing/T-011-order-payment.md)、[全部业务测试记录](testing/README.md) |
 
 用户已于 2026-11-12 指定 V1.5 MVP 版为后续需求与开发依据，`requirements.md` 已同步替换。正文保留“待审核”状态；采用为工作依据不等于宣称全部内容已经最终批准。遇到影响实现的歧义或冲突，记录具体问题并澄清，不拼接不同版本的规则。
@@ -113,7 +114,8 @@ docs/
 │       ├── T-008-navigation-layout.md # 前后台导航、审核与消息双栏修复
 │       ├── T-009-quote-award.md        # 报价对比、定标及待付款订单
 │       ├── T-010-chat-reliability.md  # 聊天心跳、有限重连与查询优化
-│       └── T-011-order-payment.md     # 定制付款、待结算及五节点初始化
+│       ├── T-011-order-payment.md     # 定制付款、待结算及五节点初始化
+│       └── T-012-demo-feedback.md     # 主流程演示反馈修复
 └── testing/                          # 简短测试结果，不存测试代码、不建子目录
     ├── README.md                     # 业务功能测试记录方式与格式示例
     ├── T-001-backend-auth.md          # 账号后端测试与复测结果
@@ -126,7 +128,8 @@ docs/
     ├── T-008-navigation-layout.md      # 导航与双栏交互修复及回归结果
     ├── T-009-quote-award.md             # 报价订单、真实OSS及完整回归结果
     ├── T-010-chat-reliability.md        # 聊天可靠性及查询优化回归结果
-    └── T-011-order-payment.md           # 支付事务、并发及付款恢复回归结果
+    ├── T-011-order-payment.md           # 支付事务、并发及付款恢复回归结果
+    └── demo-main-flow.md                # 主流程演示检查与反馈修复复测
 ```
 
 补充说明：
@@ -135,7 +138,7 @@ docs/
 - `prototypes/README.md` 是当前导航，`assets/原型说明.md` 是原始设计说明，两者职责接近；后续若精简，可以合并说明并减少一层目录，本轮未改写原始材料。
 - 原 `design/database.md` 已删除，现有 [数据库表结构](design/数据库表结构.md)为按当前需求编写的新草稿，对应 SQL 位于后端 `src/main/resources/db/migration/`，V1 已执行且包含异常结构补偿；人工结构回退位于相邻 `rollback/`，未执行。
 - `decisions/` 中的 ADR-001 记录已选技术；选型和框架验证不代表全部业务已经实现，SMTP 公网实收补充验收已由用户明确暂缓，OSS 实际结果见 T-003。
-- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端T-001、认证前端T-002、个人中心T-003、入驻审核T-004、作品链路T-005、作品互动T-006、定制需求/会话T-007、导航交互修复T-008、报价/待付款订单T-009、聊天优化T-010及模拟付款T-011。
+- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端T-001、认证前端T-002、个人中心T-003、入驻审核T-004、作品链路T-005、作品互动T-006、定制需求/会话T-007、导航交互修复T-008、报价/待付款订单T-009、聊天优化T-010、模拟付款T-011及演示反馈修复T-012。
 - `testing/README.md` 只规定业务功能测试结果如何填写；功能开发时再增加实际记录，复测更新同一文件，任务只保留总体结果和链接。
 
 ## 3. 已有资料迁移对照
