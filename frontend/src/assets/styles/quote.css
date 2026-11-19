@@ -52,5 +52,39 @@
 .order-progress li { padding: 18px 0; border-bottom: 1px solid var(--border); }
 .order-progress li > div { display: flex; justify-content: space-between; gap: 16px; }
 .order-progress li span, .order-progress li p, .order-progress li time { color: var(--muted); font-size: 13px; }
+/* 履约保持纸白与墨绿，阶段状态、不可变记录和编辑区各自留出呼吸。 */
+.fulfillment-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.fulfillment-heading h2 { margin-bottom: 8px; }
+.fulfillment-heading .progress-count { font: 500 36px var(--serif); color: var(--green); white-space: nowrap; }
+.fulfillment-panel > progress { display: block; width: 100%; height: 6px; border: none; border-radius: 0; margin: 16px 0; accent-color: var(--green); }
+.fulfillment-panel > progress::-webkit-progress-bar { background: #e7e9df; }
+.fulfillment-panel > progress::-webkit-progress-value { background: var(--green); }
+.fulfillment-stage { color: var(--green); }
+.fulfillment-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin: 20px 0; }
+.fulfillment-progress > li { position: relative; border-left: 2px solid var(--border); border-bottom: 0; padding: 12px 0 26px 20px; }
+.fulfillment-progress > li::before { content: ''; position: absolute; width: 9px; height: 9px; top: 19px; left: -6px; border: 1px solid #b4bdad; border-radius: 50%; background: #fffdf8; }
+.fulfillment-progress > .node-handled { border-left-color: #58735d; }
+.fulfillment-progress > .node-handled::before { background: #58735d; border-color: #58735d; }
+.fulfillment-progress .node-heading { align-items: center; }
+.fulfillment-progress .node-heading strong { display: flex; gap: 10px; font-size: 17px; }
+.fulfillment-progress .node-heading small { color: #85917c; font: 400 16px var(--serif); }
+.fulfillment-progress .node-dates { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 6px 14px; }
+.fulfillment-progress .node-dates p { margin: 9px 0; }
+.fulfillment-progress .node-dates .shipping-warning { color: #895b2e; }
+.fulfillment-progress .node-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 14px; margin-top: 14px; font-size: 13px; }
+.progress-record { margin: 16px 0 10px; border: 1px solid var(--border); background: #fbfaf5; padding: 16px; }
+.progress-record header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; }
+.progress-record .request-description { color: var(--green); line-height: 1.9; }
+.fulfillment-progress > li { scroll-margin-top: 24px; }
+.fulfillment-form { margin: 12px 0 24px; padding: 24px; border: 1px solid #8a9b82; background: #f4f5ed; }
+.fulfillment-form .work-field { margin-top: 16px; }
+.fulfillment-form textarea { min-height: 115px; resize: vertical; }
+.shipment-information, .refund-result { margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--border); }
+.tracking-history summary { cursor: pointer; color: var(--green); }
+.tracking-history article { border-left: 2px solid var(--border); margin: 14px 0; padding-left: 16px; }
+.tracking-history small { color: var(--muted); }
+.refund-result { background: #f3f5ed; padding: 22px; }
+.progress-reference { display: flex; align-items: center; gap: 12px; margin: 12px 0; padding: 10px 14px; background: #e8eee3; color: var(--green); font-size: 13px; }
+.chat-message .progress-reference { margin-top: 0; background: #eef1e8; }
 @media (max-width: 900px) { .order-detail-grid { grid-template-columns: 1fr; } .award-panel { padding: 20px; } .quote-record { padding: 18px; } }
 @media (max-width: 520px) { .order-detail-grid .work-specifications > div { gap: 12px; } .order-detail-grid .work-specifications dt { width: 7em; } }

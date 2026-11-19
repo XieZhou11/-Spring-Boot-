@@ -11,5 +11,5 @@ export function invalidQuoteReason(reason: string | null) {
 /** 状态历史保留服务端原因，已知枚举在页面转换为业务文案。 */
 export function orderReason(reason: string | null) {
   if (!reason) return ''
-  return ({ TIMEOUT: '创建后 24 小时未付款，订单已自动取消。', BUYER_CANCELLED: '买家取消未付款订单。', AWARDED: '买家选定报价并创建订单。', SIMULATED_PAYMENT: '买家完成模拟支付。' } as Record<string, string>)[reason] || reason
+  return ({ TIMEOUT: '创建后 24 小时未付款，订单已自动取消。', BUYER_CANCELLED: '买家取消未付款订单。', AWARDED: '买家选定报价并创建订单。', SIMULATED_PAYMENT: '买家完成模拟支付。', PRODUCTION_STARTED: '创作者确认开工，首节点已解锁。', ALL_PRODUCTION_NODES_HANDLED: '前四节点已处理，等待包装发货。', SHIPMENT_CONFIRMED: '包装图文和运单号已提交，订单已发货。', BUYER_RECEIPT: '买家确认收货。', AUTO_RECEIPT: '发货满七天，系统自动确认收货。', NO_START_TIMEOUT: '支付满48小时仍未开工，系统执行无责全额退款。' } as Record<string, string>)[reason] || reason
 }

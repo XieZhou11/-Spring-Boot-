@@ -10,5 +10,7 @@ import java.time.*;
  * @param content 可空文字
  * @param imageIds 图片编号
  * @param createdAt 服务器保存时间
+ * @param referencedNodeId 选填本会话订单的制作节点编号
+ * @param referencedNodeCode 选填制作节点标识，供会话展示引用来源
  */
-public record ChatMessageVO(String id,String conversationId,String seqNo,String senderId,String clientMessageKey,String content,List<String> imageIds,OffsetDateTime createdAt) {}
+public record ChatMessageVO(String id,String conversationId,String seqNo,String senderId,String clientMessageKey,String content,List<String> imageIds,OffsetDateTime createdAt,String referencedNodeId,String referencedNodeCode) {}

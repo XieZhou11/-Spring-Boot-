@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { getPrivateImage } from '@/api/customRequest'
-const props = defineProps<{ imageId: string; scope: 'request' | 'chat' | 'quote'; label: string }>()
+const props = defineProps<{ imageId: string; scope: 'request' | 'chat' | 'quote' | 'progress' | 'refund'; label: string }>()
 const url = ref(''); const error = ref(''); const loading = ref(false)
 let revision = 0; let timer: ReturnType<typeof setTimeout> | undefined
-/** 续签重新核验需求、会话或报价图片的读取权限；失败立即撤下旧签名。 */
+/** 续签重新核验需求、会话、报价或订单图片的读取权限；失败立即撤下旧签名。 */
 async function load() {
   const current = ++revision; clearTimeout(timer); loading.value = true; error.value = ''
   try {

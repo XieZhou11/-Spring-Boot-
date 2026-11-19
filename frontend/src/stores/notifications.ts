@@ -203,7 +203,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     current.onmessage = (event: MessageEvent<string>) => {
       if (expected !== generation || socket !== current) return
       try {
-        const payload = JSON.parse(event.data) as { type: string; count?: number; notification?: NotificationVO; conversationId?: string; userId?: string; message?: { conversationId?: string } }
+        const payload = JSON.parse(event.data) as { type: string; count?: number; notification?: NotificationVO; conversationId?: string; orderId?: string; userId?: string; message?: { conversationId?: string } }
         if (payload.type === 'PONG' && heartbeatTimeout !== undefined) {
           clearTimeout(heartbeatTimeout)
           heartbeatTimeout = undefined
@@ -228,6 +228,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
         }
         if (payload.type === 'CHAT_UNREAD_UPDATED' && typeof payload.count === 'number' && chatEnabled) { chatUnreadRevision++; chatUnreadCount.value = payload.count }
         if (['CHAT_MESSAGE', 'CHAT_READ', 'CONVERSATION_UPDATED'].includes(payload.type)) {
+          // 订单履约推送也发给操作者的其他端，先重新查询订单，不能只刷新会话标题。
+          if (payload.type === 'CONVERSATION_UPDATED' && typeof payload.orderId === 'string') window.dispatchEvent(new Event('order-updated'))
           // 对方已读不改变本人的游标或未读；本人其他端的已读仍须刷新。
           if (payload.type === 'CHAT_READ' && payload.userId !== userId) return
           const conversationId = payload.type === 'CHAT_MESSAGE' ? payload.message?.conversationId : payload.conversationId

@@ -5,6 +5,8 @@ import { switchActiveRole } from '@/api/creator'
 import type { LoginDTO, SessionVO } from '@/types/auth'
 import { advanceAuthenticationRevision, ApiError } from '@/utils/request'
 import { clearUserPaymentAttempts } from '@/utils/orderPayment'
+import { clearUserFulfillmentAttempts } from '@/utils/orderFulfillment'
+import { clearUserConversationDrafts } from '@/utils/conversationDraft'
 
 /** 只在内存缓存本人会话；刷新及业务页导航均向服务端核验 Cookie。 */
 export const useAuthStore = defineStore('auth', () => {
@@ -20,6 +22,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   function clearSession() {
     clearUserPaymentAttempts(session.value?.userId)
+    clearUserFulfillmentAttempts(session.value?.userId)
+    clearUserConversationDrafts(session.value?.userId)
     advanceRevision()
     session.value = null
     initialized = true
@@ -55,7 +59,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function signIn(input: LoginDTO) {
     advanceRevision()
     const current = await api.login(input)
-    if (session.value?.userId !== current.userId) clearUserPaymentAttempts(session.value?.userId)
+    if (session.value?.userId !== current.userId) { clearUserPaymentAttempts(session.value?.userId); clearUserFulfillmentAttempts(session.value?.userId); clearUserConversationDrafts(session.value?.userId) }
     advanceRevision()
     session.value = current
     initialized = true

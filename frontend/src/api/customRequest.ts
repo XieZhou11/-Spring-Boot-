@@ -23,9 +23,10 @@ export const getConversations = (page = 1) => get<PageVO<ConversationVO>>('/me/c
 export const getChatUnread = () => get<{ count: number }>('/me/conversations/unread-count')
 export const getConversation = (id: string) => get<ConversationVO>(`/conversations/${id}`)
 export const getMessages = (id: string, cursor?: { beforeSeq?: string; afterSeq?: string }) => get<{ items: ChatMessageVO[]; hasMore: boolean }>(`/conversations/${id}/messages`, cursor)
-export const sendMessage = (id: string, data: { clientMessageKey: string; content: string; imageIds: string[] }) => post<ChatMessageVO>(`/conversations/${id}/messages`, data)
+export const sendMessage = (id: string, data: { clientMessageKey: string; content: string; imageIds: string[]; referencedNodeId?: string }) => post<ChatMessageVO>(`/conversations/${id}/messages`, data)
 export const readConversation = (id: string, lastReadSeq: string) => put<unknown>(`/conversations/${id}/read-cursor`, { lastReadSeq })
-export const getPrivateImage = (id: string, scope: 'request' | 'chat' | 'quote') => get<ImageVO>(`/${scope === 'request' ? 'custom-request-images' : scope === 'quote' ? 'quote-images' : 'conversation-images'}/${id}`)
+/** 每次续签都由服务端重新验证用途与当前订单/会话参与方。 */
+export const getPrivateImage = (id: string, scope: 'request' | 'chat' | 'quote' | 'progress' | 'refund') => get<ImageVO>(`/${({ request: 'custom-request-images', chat: 'conversation-images', quote: 'quote-images', progress: 'order-progress-images', refund: 'order-refund-images' })[scope]}/${id}`)
 export async function uploadPrivateImage(file: File, conversationId?: string) {
   const data = new FormData(); data.append('file', file)
   return (await request.post<ApiResult<ImageVO>>(conversationId ? `/conversations/${conversationId}/images` : '/custom-request-images', data, { timeout: 60_000 })).data.data

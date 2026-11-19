@@ -20,7 +20,7 @@ import java.time.LocalDate;
  * @param totalAmount 成交金额快照
  * @param durationDays 工期快照
  * @param agreementSnapshot 不可变方案快照
- * @param addressSnapshot 买家可读完整地址，创作者为空
+ * @param addressSnapshot 买家详情及创作者待发货或已发货历史的必要地址快照
  * @param createdAt 建单时间
  * @param payDeadlineAt 付款截止时间
  * @param cancelledAt 取消时间
@@ -39,5 +39,20 @@ import java.time.LocalDate;
  * @param payment 仅订单双方详情的原成功付款信息
  * @param settlement 仅创作者详情的脱敏结算信息
  * @param progressNodes 仅详情的固定节点计划，列表为空数组
+ * @param startedAt 首次开工时间
+ * @param startDeadlineAt 支付后四十八小时边界
+ * @param trackingNo 当前有效运单号
+ * @param shippedAt 首次发货时间
+ * @param autoConfirmAt 当前自动收货时刻
+ * @param originalCompletedAt 首次完成时间，售后不重开窗口
+ * @param serverTime 本次只读快照的北京时刻
+ * @param canStart 当前创作者能否确认开工
+ * @param canShip 当前创作者能否包装发货
+ * @param canCorrectTracking 当前创作者能否更正运单
+ * @param canConfirmReceipt 当前买家能否确认收货
+ * @param canRequestNoStartRefund 当前买家能否无责退款
+ * @param shippingOverdue 当前仍未发货且已达固定发货截止
+ * @param trackingHistory 仅详情的完整运单更正历史
+ * @param noStartRefund 仅详情的已执行无责退款结果
  */
-public record OrderVO(String id, String orderNo, String orderType, String buyerId, String buyerNickname, String creatorId, String creatorNickname, String requestId, String quoteId, String status, String title, String totalAmount, Integer durationDays, Map<String,Object> agreementSnapshot, Map<String,Object> addressSnapshot, OffsetDateTime createdAt, OffsetDateTime payDeadlineAt, OffsetDateTime cancelledAt, String cancelReason, boolean owned, boolean canCancel, String conversationId, List<OrderHistoryVO> history,boolean canPay,String paidAmount,OffsetDateTime paidAt,OffsetDateTime termsConfirmedAt,LocalDate shipDate,OffsetDateTime shipDeadlineAt,OrderPaymentPreviewVO paymentPreview,OrderPaymentVO payment,OrderSettlementVO settlement,List<OrderProgressNodeVO> progressNodes) {}
+public record OrderVO(String id, String orderNo, String orderType, String buyerId, String buyerNickname, String creatorId, String creatorNickname, String requestId, String quoteId, String status, String title, String totalAmount, Integer durationDays, Map<String,Object> agreementSnapshot, Map<String,Object> addressSnapshot, OffsetDateTime createdAt, OffsetDateTime payDeadlineAt, OffsetDateTime cancelledAt, String cancelReason, boolean owned, boolean canCancel, String conversationId, List<OrderHistoryVO> history,boolean canPay,String paidAmount,OffsetDateTime paidAt,OffsetDateTime termsConfirmedAt,LocalDate shipDate,OffsetDateTime shipDeadlineAt,OrderPaymentPreviewVO paymentPreview,OrderPaymentVO payment,OrderSettlementVO settlement,List<OrderProgressNodeVO> progressNodes,OffsetDateTime startedAt,OffsetDateTime startDeadlineAt,String trackingNo,OffsetDateTime shippedAt,OffsetDateTime autoConfirmAt,OffsetDateTime originalCompletedAt,OffsetDateTime serverTime,boolean canStart,boolean canShip,boolean canCorrectTracking,boolean canConfirmReceipt,boolean canRequestNoStartRefund,boolean shippingOverdue,List<OrderTrackingHistoryVO> trackingHistory,OrderNoStartRefundVO noStartRefund) {}

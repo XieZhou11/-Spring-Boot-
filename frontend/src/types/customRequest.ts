@@ -109,6 +109,10 @@ export interface ConversationVO {
   archiveReason: string | null
 }
 export interface ChatMessageVO {
+  /** 手动发送时引用的本订单节点，无引用为空。 */
+  referencedNodeId: string | null
+  /** 引用节点的固定业务编码，用于展示节点名称。 */
+  referencedNodeCode: string | null
   /** 唯一消息编号，用于去重。 */
   id: string
   /** 归属会话。 */

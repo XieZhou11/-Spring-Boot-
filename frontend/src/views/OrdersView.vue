@@ -57,7 +57,11 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
         v-model="status"
         aria-label="订单状态"
         @change="load(1)"
-      ><option value="">全部状态</option><option value="PENDING_PAY">待付款</option><option value="PAID">待开工</option><option value="CANCELLED">已取消</option></select></label><button
+      ><option value="">全部状态</option><option
+        v-for="(label, value) in orderStatus"
+        :key="value"
+        :value="value"
+      >{{ label }}</option></select></label><button
         class="button-secondary"
         :disabled="loading"
       >
@@ -90,6 +94,20 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
         <header><span class="field-help">订单号 {{ order.orderNo }}</span><span class="work-status">{{ orderStatus[order.status] || order.status }}</span></header><h2><RouterLink :to="`/orders/${order.id}`">{{ order.title }}</RouterLink></h2><p class="muted">
           {{ side === 'BUYER' ? `创作者 ${order.creatorNickname}` : `买家 ${order.buyerNickname}` }} · 工期 {{ order.durationDays }} 个自然日
         </p><footer><strong class="quote-amount">¥ {{ order.totalAmount }}</strong><span>{{ order.status === 'PENDING_PAY' ? `付款截止 ${formatTime(order.payDeadlineAt)}` : `创建于 ${formatTime(order.createdAt)}` }}</span><RouterLink :to="`/orders/${order.id}`">查看订单 ↗</RouterLink></footer>
+        <p
+          v-if="order.shippingOverdue"
+          class="shipping-warning"
+        >
+          已超过约定发货截止时间
+        </p>
+        <p
+          v-else-if="order.shipDate"
+          class="field-help"
+        >
+          约定发货日 {{ order.shipDate }}<template v-if="order.shippedAt">
+            · 已于 {{ formatTime(order.shippedAt) }} 发货
+          </template>
+        </p>
       </article>
     </div><WorkPagination
       :page="page"

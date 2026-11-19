@@ -42,6 +42,16 @@ public class TradeOrder {
     private LocalDateTime termsConfirmedAt;
     /** 最终发货日次日零时的排他截止上界。 */
     private LocalDateTime shipDeadlineAt;
+    /** 实际确认开工时间，不随重试变化。 */
+    private LocalDateTime startedAt;
+    /** 当前有效运单号，原值及更正保留操作历史。 */
+    private String trackingNo;
+    /** 第五节点首次提交的原发货时间。 */
+    private LocalDateTime shippedAt;
+    /** 自动收货截止，更正运单不重置。 */
+    private LocalDateTime autoConfirmAt;
+    /** 首次收货时间，售后恢复不得改写。 */
+    private LocalDateTime originalCompletedAt;
     /** 买家范围建单幂等键。 */
     private String createRequestKey;
     /** 建单时间。 */

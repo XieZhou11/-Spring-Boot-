@@ -24,6 +24,26 @@ public class NotificationServiceImpl implements NotificationService {
     private final ObjectMapper json;
     public NotificationServiceImpl(SystemNotificationMapper notices,NotificationSocketHandler socket,ObjectMapper json){this.notices=notices;this.socket=socket;this.json=json;}
     @Transactional(propagation=Propagation.MANDATORY)
+    public void fulfillmentChanged(Long recipientId,String eventType,Long eventId,Long orderId,Long requestId){
+        BusinessLog.run(LoggerFactory.getLogger(getClass()),"订单履约通知保存",recipientId,()->{
+            String key=eventType+":"+eventId;if(notices.event(recipientId,key)!=null)return null;
+            String title=switch(eventType){
+                case "ORDER_STARTED" -> "定制订单已开工";
+                case "ORDER_PROGRESS" -> "制作进度已更新";
+                case "ORDER_SHIPPED" -> "订单已发货";
+                case "ORDER_TRACKING_CORRECTED" -> "订单运单号已更正";
+                case "ORDER_RECEIVED" -> "订单已确认收货";
+                case "ORDER_NO_START_REFUNDED" -> "未开工订单已无责退款";
+                case "ORDER_SHIPPING_OVERDUE" -> "订单发货已超期";
+                default -> throw new IllegalArgumentException("不支持的履约通知事件");
+            };
+            var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType(eventType);n.setEventKey(key);n.setTitle(title);
+            n.setContent(title+"，请查看订单详情。");
+            n.setBusinessReference(json.writeValueAsString(Map.of("type","ORDER","id",orderId.toString(),"requestId",requestId.toString())));
+            notices.insert(n);afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(n.getId()))));publishUnread(recipientId);});return null;
+        });
+    }
+    @Transactional(propagation=Propagation.MANDATORY)
     public void tradeChanged(Long recipientId,String eventType,String businessType,Long businessId,Long requestId){
         BusinessLog.run(LoggerFactory.getLogger(getClass()),"报价订单通知保存",recipientId,()->{
             String eventKey=eventType+":"+businessId;

@@ -2,8 +2,8 @@
 import { nextTick, ref } from 'vue'
 import PrivateImage from './PrivateImage.vue'
 import { uploadPrivateImage } from '@/api/customRequest'
-import { uploadQuoteImage } from '@/api/quote'
-const props = defineProps<{ modelValue: string[]; label: string; max: number; conversationId?: string; scope?: 'quote'; disabled?: boolean }>()
+import { uploadOrderImage, uploadQuoteImage } from '@/api/quote'
+const props = defineProps<{ modelValue: string[]; label: string; max: number; conversationId?: string; orderId?: string; scope?: 'quote' | 'progress' | 'refund'; disabled?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [ids: string[]]; uploading: [value: boolean] }>()
 const error = ref(''); const busy = ref(false)
 /** 逐张真实上传，失败保留已完成的图片和表单；服务端再次解码并校验归属。 */
@@ -17,7 +17,12 @@ async function upload(event: Event) {
   try {
     for (const file of files) {
       if (file.size > 5 * 1024 * 1024) throw new Error('每张图片不能超过 5MB')
-      const result = props.scope === 'quote' ? await uploadQuoteImage(file) : await uploadPrivateImage(file, props.conversationId)
+      if (props.scope === 'progress' || props.scope === 'refund') {
+        if (!props.orderId) throw new Error('请先读取有效订单后上传图片')
+      }
+      const result = props.scope === 'progress' || props.scope === 'refund'
+        ? await uploadOrderImage(props.orderId!, file, props.scope)
+        : props.scope === 'quote' ? await uploadQuoteImage(file) : await uploadPrivateImage(file, props.conversationId)
       emit('update:modelValue', [...props.modelValue, result.id])
       // 父级v-model更新后再开始下一张，避免多选覆盖前一张。
       await nextTick()

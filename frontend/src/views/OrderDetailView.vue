@@ -1,38 +1,49 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import WorkLayout from '@/layouts/WorkLayout.vue'
 import QuoteImages from '@/components/QuoteImages.vue'
 import PrivateImage from '@/components/PrivateImage.vue'
-import { cancelOrder, getOrder, payOrder } from '@/api/quote'
+import OrderFulfillmentPanel from '@/components/OrderFulfillmentPanel.vue'
+import { cancelOrder, checkInProgress, confirmReceipt, correctTracking, getOrder, payOrder, requestNoStartRefund, shipOrder, skipProgress, startProduction, supplementProgress } from '@/api/quote'
 import type { OrderPaymentDTO, OrderVO } from '@/types/quote'
-import { orderReason, orderStatus, progressNodeName, progressNodeStatus, settlementStatus } from '@/utils/quote'
+import { orderReason, orderStatus, settlementStatus } from '@/utils/quote'
 import { formatTime } from '@/utils/creator'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import { ApiError } from '@/utils/request'
 import { clearPaymentAttempt, readPaymentAttempt, savePaymentAttempt } from '@/utils/orderPayment'
+import { clearFulfillmentAttempt, fulfillmentActionName, fulfillmentApplied, readFulfillmentAttempt, saveFulfillmentAttempt } from '@/utils/orderFulfillment'
+import type { FulfillmentAttempt } from '@/utils/orderFulfillment'
 import '@/assets/styles/custom-request.css'
 import '@/assets/styles/quote.css'
 const route = useRoute(); const auth = useAuthStore(); const notifications = useNotificationsStore()
 const order = ref<OrderVO>(); const loading = ref(false); const cancelling = ref(false); const error = ref('')
 const paymentState = ref<'idle' | 'submitting' | 'unknown'>('idle'); const paymentError = ref(''); const confirmationOpen = ref(false); const agreed = ref(false); const retryChecked = ref(false)
-const busy = computed(() => cancelling.value || paymentState.value === 'submitting')
+const fulfillmentState = ref<'idle' | 'submitting' | 'unknown'>('idle'); const fulfillmentAttempt = ref<FulfillmentAttempt>(); const fulfillmentError = ref(''); const fulfillmentRetryChecked = ref(false); const fulfillmentReset = ref(0); const fulfillmentUploading = ref(false)
+const busy = computed(() => cancelling.value || paymentState.value === 'submitting' || fulfillmentState.value === 'submitting' || fulfillmentUploading.value)
+const fulfillmentBlocked = computed(() => fulfillmentState.value === 'unknown' || paymentState.value === 'unknown')
 let revision = 0; let deferredRefresh = false; let attempt: OrderPaymentDTO | undefined
 /** 订单上下文仅在本详情路由有效，离页与其他资源的同名参数不能触发订单查询。 */
 const id = () => route.name === 'order-detail' && typeof route.params.id === 'string' && /^[1-9]\d*$/.test(route.params.id) ? route.params.id : undefined
 const unknownMessage = '付款结果尚未确认，请刷新订单核验；核验后可重试确认同一笔支付，请勿取消订单。'
+const fulfillmentUnknownMessage = computed(() => `${fulfillmentAttempt.value ? fulfillmentActionName[fulfillmentAttempt.value.kind] : '操作'}结果尚未确认。原始输入已保留，请刷新订单核验后重试同一次操作。`)
 function currentContext() { return { userId: auth.session?.userId, orderId: id() } }
 function sameContext(context: ReturnType<typeof currentContext>) { return !!context.userId && !!context.orderId && context.userId === auth.session?.userId && context.orderId === id() }
 function clearAttempt(context = currentContext()) {
   if (context.userId && context.orderId) clearPaymentAttempt(context.userId, context.orderId)
   attempt = undefined; paymentState.value = 'idle'; retryChecked.value = false; confirmationOpen.value = false; agreed.value = false
 }
+function clearFulfillment(context = currentContext(), completed = false) {
+  if (context.userId && context.orderId) clearFulfillmentAttempt(context.userId, context.orderId)
+  fulfillmentAttempt.value = undefined; fulfillmentState.value = 'idle'; fulfillmentRetryChecked.value = false
+  if (completed) fulfillmentReset.value++
+}
 /** 查询始终以当前身份与订单为界，临时故障保留详情；权限失效立即清空。 */
 async function load() {
   const context = currentContext(); if (!context.userId || !context.orderId) return
   if (busy.value) { deferredRefresh = true; return }
-  const current = ++revision; loading.value = true; error.value = ''; retryChecked.value = false
+  const current = ++revision; loading.value = true; error.value = ''; retryChecked.value = false; fulfillmentRetryChecked.value = false
   try {
     const result = await getOrder(context.orderId)
     if (current !== revision || !sameContext(context)) return
@@ -43,16 +54,20 @@ async function load() {
       if (result.payment || result.paidAt) { clearAttempt(context); paymentError.value = '' }
       else { retryChecked.value = true; paymentError.value = unknownMessage }
     }
+    if (fulfillmentState.value === 'unknown' && fulfillmentAttempt.value) {
+      if (fulfillmentApplied(result, fulfillmentAttempt.value)) { clearFulfillment(context, true); fulfillmentError.value = '' }
+      else { fulfillmentRetryChecked.value = true; fulfillmentError.value = fulfillmentUnknownMessage.value }
+    }
   } catch (failure) {
     if (current !== revision || !sameContext(context)) return
-    if (failure instanceof ApiError && [401, 403, 404].includes(failure.status)) { order.value = undefined; clearAttempt(context); paymentError.value = '' }
+    if (failure instanceof ApiError && [401, 403, 404].includes(failure.status)) { order.value = undefined; clearAttempt(context); clearFulfillment(context); paymentError.value = ''; fulfillmentError.value = '' }
     error.value = failure instanceof Error ? failure.message : '订单读取失败'
   }
   finally { if (current === revision) loading.value = false }
 }
 /** 取消仅操作当前订单；响应未知可刷新或重试，不在页面提前改变状态。 */
 async function cancel() {
-  if (!order.value?.canCancel || busy.value || paymentState.value === 'unknown' || !window.confirm('确认取消未付款订单？需求将关闭，中标与落选报价不会恢复，重新选择需发布新需求。')) return
+  if (!order.value?.canCancel || busy.value || fulfillmentBlocked.value || !window.confirm('确认取消未付款订单？需求将关闭，中标与落选报价不会恢复，重新选择需发布新需求。')) return
   // 取消开始即作废在途旧查询，避免旧待付款快照覆盖已提交的取消结果。
   const context = currentContext(); if (!context.userId || !context.orderId) return
   const current = ++revision; loading.value = false; cancelling.value = true; error.value = ''
@@ -60,10 +75,10 @@ async function cancel() {
   catch (failure) { if (current === revision && sameContext(context)) error.value = `${failure instanceof Error ? failure.message : '取消请求失败'}。请刷新订单核对结果，再决定是否重试。` }
   finally { if (sameContext(context)) { cancelling.value = false; finishDeferredRefresh() } }
 }
-function openPayment() { if (!busy.value && order.value?.canPay && paymentState.value === 'idle') { confirmationOpen.value = true; agreed.value = false; paymentError.value = '' } }
+function openPayment() { if (!busy.value && !fulfillmentBlocked.value && order.value?.canPay && paymentState.value === 'idle') { confirmationOpen.value = true; agreed.value = false; paymentError.value = '' } }
 /** 首次确认与未知结果重试冻结同一输入；提交前作废所有旧GET，杜绝旧快照回写。 */
 async function pay() {
-  if (busy.value || !order.value) return
+  if (busy.value || fulfillmentState.value !== 'idle' || !order.value) return
   const context = currentContext(); if (!context.userId || !context.orderId || order.value.id !== context.orderId || !order.value.owned) return
   if (paymentState.value === 'unknown') { if (!attempt || !retryChecked.value) return }
   else {
@@ -101,18 +116,69 @@ async function pay() {
     if (sameContext(context)) { if (paymentState.value === 'submitting') paymentState.value = 'idle'; finishDeferredRefresh() }
   }
 }
+/** 所有履约写入共享页面查询代数；未知结果冻结原参数，持久化失败绝不发送HTTP。 */
+async function fulfill(candidate?: FulfillmentAttempt) {
+  if (busy.value || paymentState.value !== 'idle' || !order.value) return
+  const context = currentContext(); if (!context.userId || !context.orderId || order.value.id !== context.orderId) return
+  if (fulfillmentState.value === 'unknown') { if (candidate || !fulfillmentAttempt.value || !fulfillmentRetryChecked.value) return }
+  else { if (!candidate) return; fulfillmentAttempt.value = candidate }
+  const input = fulfillmentAttempt.value; if (!input) return
+  fulfillmentError.value = ''
+  try { saveFulfillmentAttempt(context.userId, context.orderId, input) }
+  catch {
+    fulfillmentError.value = `浏览器存储暂时不可用，本次${fulfillmentActionName[input.kind]}未提交。请允许本网站使用浏览器存储后重试。`
+    if (fulfillmentState.value !== 'unknown') fulfillmentAttempt.value = undefined
+    return
+  }
+  const current = ++revision; loading.value = false; error.value = ''; fulfillmentState.value = 'submitting'; fulfillmentRetryChecked.value = false
+  try {
+    let result: OrderVO
+    switch (input.kind) {
+      case 'start': result = await startProduction(context.orderId); break
+      case 'check-in': result = await checkInProgress(context.orderId, input.nodeId, input.input); break
+      case 'skip': result = await skipProgress(context.orderId, input.nodeId, input.input); break
+      case 'supplement': result = await supplementProgress(context.orderId, input.nodeId, input.input); break
+      case 'shipment': result = await shipOrder(context.orderId, input.input); break
+      case 'tracking': result = await correctTracking(context.orderId, input.input); break
+      case 'receipt': result = await confirmReceipt(context.orderId); break
+      case 'refund': result = await requestNoStartRefund(context.orderId, input.input); break
+    }
+    if (current !== revision || !sameContext(context)) return
+    order.value = result; clearFulfillment(context, true); fulfillmentError.value = ''
+  } catch (failure) {
+    if (current !== revision || !sameContext(context)) return
+    const unknown = !(failure instanceof ApiError) || !failure.status || failure.status >= 500
+    if (unknown) { fulfillmentState.value = 'unknown'; fulfillmentError.value = fulfillmentUnknownMessage.value }
+    else {
+      clearFulfillment(context)
+      if ([401, 403, 404].includes(failure.status)) order.value = undefined
+      fulfillmentError.value = `${failure.message}。输入已保留，请刷新订单核对最新状态后再提交。`
+    }
+    deferredRefresh = true
+  } finally {
+    if (sameContext(context)) { if (fulfillmentState.value === 'submitting') fulfillmentState.value = 'idle'; finishDeferredRefresh() }
+  }
+}
+function fulfillmentUpload(value: boolean) { fulfillmentUploading.value = value; if (!value) finishDeferredRefresh() }
 function finishDeferredRefresh() { if (deferredRefresh && !busy.value) { deferredRefresh = false; void load() } }
 function refresh() { void load() }
 function visible() { if (document.visibilityState === 'visible') refresh() }
 onBeforeRouteLeave(() => !auth.session || !busy.value); onBeforeRouteUpdate(() => !auth.session || !busy.value)
 watch([() => route.name, () => route.params.id, () => auth.session?.userId], () => {
-  revision++; order.value = undefined; loading.value = false; cancelling.value = false; deferredRefresh = false; confirmationOpen.value = false; agreed.value = false; error.value = ''; paymentError.value = ''; retryChecked.value = false
+  revision++; order.value = undefined; loading.value = false; cancelling.value = false; deferredRefresh = false; confirmationOpen.value = false; agreed.value = false; error.value = ''; paymentError.value = ''; retryChecked.value = false; fulfillmentUploading.value = false; fulfillmentError.value = ''; fulfillmentRetryChecked.value = false
   // 普通离页只重置本页内存，保留原订单的未知付款标记，返回后仍须核验再重试。
   const context = currentContext(); attempt = context.userId && context.orderId ? readPaymentAttempt(context.userId, context.orderId) : undefined
   paymentState.value = attempt ? 'unknown' : 'idle'; if (attempt) paymentError.value = unknownMessage
+  fulfillmentAttempt.value = context.userId && context.orderId ? readFulfillmentAttempt(context.userId, context.orderId) : undefined
+  fulfillmentState.value = fulfillmentAttempt.value ? 'unknown' : 'idle'; if (fulfillmentAttempt.value) fulfillmentError.value = fulfillmentUnknownMessage.value
   void load()
 }, { immediate: true })
 watch(() => notifications.connected, (connected, previous) => { if (connected && !previous) refresh() })
+/** 会话中的节点引用在详情异步加载后定位到原节点，不改变初始参考计划。 */
+watch([() => route.hash, () => order.value?.id], () => {
+  if (!/^#progress-[1-9]\d*$/.test(route.hash)) return
+  void nextTick(() => document.getElementById(route.hash.slice(1))?.scrollIntoView({ block: 'start' }))
+})
 onMounted(() => { window.addEventListener('order-updated', refresh); window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', visible) })
 onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', visible) })
 </script>
@@ -146,6 +212,30 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
       >
         重试确认支付结果
       </button>
+    </p><p
+      v-if="fulfillmentError"
+      class="form-alert"
+      role="alert"
+    >
+      {{ fulfillmentError }} <button
+        v-if="fulfillmentState === 'unknown'"
+        class="inline-button"
+        :disabled="busy || !fulfillmentRetryChecked"
+        @click="fulfill()"
+      >
+        重试确认操作结果
+      </button><button
+        class="inline-button"
+        :disabled="busy || loading"
+        @click="load"
+      >
+        刷新订单
+      </button>
+    </p><p
+      v-if="fulfillmentState === 'submitting'"
+      role="status"
+    >
+      正在提交{{ fulfillmentAttempt ? fulfillmentActionName[fulfillmentAttempt.kind] : '履约操作' }}，请勿重复提交…
     </p><p
       v-if="loading && !order"
       role="status"
@@ -240,22 +330,16 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
               {{ order.payment.termsText }}
             </p>
           </section>
-          <section
-            v-if="order.progressNodes?.length"
-            class="editor-section"
-          >
-            <h2>制作参考计划</h2><p class="field-help">
-              支付时固定的初始参考计划，等待创作者确认开工。
-            </p>
-            <ol class="order-progress">
-              <li
-                v-for="node in order.progressNodes"
-                :key="node.id"
-              >
-                <div><strong>{{ progressNodeName[node.nodeCode] || node.nodeCode }}</strong><span>{{ progressNodeStatus[node.status] || node.status }}</span></div><p>参考完成日 {{ node.plannedFinishDate }}</p><time v-if="node.handledAt">实际处理 {{ formatTime(node.handledAt) }}</time>
-              </li>
-            </ol>
-          </section>
+          <OrderFulfillmentPanel
+            :key="order.id"
+            :order="order"
+            :busy="busy"
+            :blocked="fulfillmentBlocked"
+            :pending="fulfillmentAttempt"
+            :reset="fulfillmentReset"
+            @submit="fulfill"
+            @uploading="fulfillmentUpload"
+          />
           <section
             v-if="!order.owned && order.settlement"
             class="editor-section"
@@ -282,7 +366,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
             </div><RouterLink :to="`/requests/${order.requestId}`">查看原需求 ↗</RouterLink>
           </section>
           <section
-            v-if="order.owned && order.addressSnapshot"
+            v-if="order.addressSnapshot"
             class="editor-section"
           >
             <h2>收货地址快照</h2><address class="award-address">
@@ -323,7 +407,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
             </p><button
               v-if="order.canCancel"
               class="button-secondary"
-              :disabled="busy || paymentState === 'unknown'"
+              :disabled="busy || fulfillmentBlocked"
               @click="cancel"
             >
               {{ cancelling ? '正在取消…' : '取消订单' }}

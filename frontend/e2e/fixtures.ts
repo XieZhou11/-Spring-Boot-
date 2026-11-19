@@ -35,6 +35,8 @@ interface Mailbox {
   promoteAdmin: (email: string) => Promise<void>
   /** 仅在随机库补足分页规模，模拟已有的下架收藏及认证失效关注。 */
   seedInteractionHistory: (userId: string, workId: string, creatorId: string) => Promise<void>
+  /** 仅调整本worker隔离库内已由真实业务建立订单的时限，避免浏览器验收实际等待48小时或七天。 */
+  expireFulfillmentBoundary: (orderId: string, phase: 'NO_START' | 'AUTO_RECEIPT' | 'SHIPPING_OVERDUE' | 'COMPLETION') => Promise<void>
 }
 
 /** 只在测试进程使用隔离库和 SMTP 夹具，生产后端无测试接口或假验证码。 */
@@ -50,6 +52,7 @@ export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabl
         codes: new Map(), rejectNext: false,
         promoteAdmin: async () => { throw new Error('测试数据库尚未就绪') },
         seedInteractionHistory: async () => { throw new Error('测试数据库尚未就绪') },
+        expireFulfillmentBoundary: async () => { throw new Error('测试数据库尚未就绪') },
       }
       // 经过真实 OSS SDK 的 HTTP 协议；仅接收本夹具随机对象，绝不访问真实云端。
       const objects = new Map<string, { bytes: Buffer; type: string }>()
@@ -144,6 +147,16 @@ export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabl
         mailbox.promoteAdmin = async (email) => {
           await database.execute(`UPDATE \`${schema}\`.user_account SET is_admin=1 WHERE email=?`, [email])
         }
+        mailbox.expireFulfillmentBoundary = async (orderId, phase) => {
+          const statements = {
+            NO_START: "SET paid_at=DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 49 HOUR) WHERE id=? AND order_type='CUSTOM' AND status='PAID' AND started_at IS NULL",
+            AUTO_RECEIPT: "SET shipped_at=DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 8 DAY),auto_confirm_at=DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 1 SECOND) WHERE id=? AND order_type='CUSTOM' AND status='SHIPPED'",
+            SHIPPING_OVERDUE: "SET ship_deadline_at=DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 1 SECOND) WHERE id=? AND order_type='CUSTOM' AND status IN ('PAID','IN_PRODUCTION','PENDING_SHIP')",
+            COMPLETION: "SET original_completed_at=DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 8 DAY) WHERE id=? AND order_type='CUSTOM' AND status='COMPLETED'",
+          }
+          const [result] = await database.execute<ResultSetHeader>(`UPDATE \`${schema}\`.trade_order ${statements[phase]}`, [orderId])
+          if (result.affectedRows !== 1) throw new Error(`履约时限夹具未命中本测试订单：${phase}`)
+        }
         mailbox.seedInteractionHistory = async (userId, workId, creatorId) => {
           // 主流程对象仍由真实发布审核建立；这里只准备20条历史关系，使真实关系落在末页。
           await database.execute(`UPDATE \`${schema}\`.work_reaction SET created_at='2000-01-01 00:00:00' WHERE user_id=? AND work_id=? AND reaction_type='FAVORITE'`, [userId, workId])
@@ -159,7 +172,8 @@ export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabl
           'java',
           [
             '-jar',
-            resolve('../backend/target/handcraft-platform-0.0.1-SNAPSHOT.jar'),
+            // 可选独立产物避免 Windows 占用开发后端 JAR，默认仍使用标准构建结果。
+            resolve(process.env.HANDCRAFT_E2E_BACKEND_JAR || '../backend/target/handcraft-platform-0.0.1-SNAPSHOT.jar'),
             `--server.port=${backendPort}`,
             `--app.cors.allowed-origins=${frontendOrigin}`,
             `--spring.datasource.url=jdbc:mysql://localhost:3306/${schema}?serverTimezone=Asia/Shanghai`,

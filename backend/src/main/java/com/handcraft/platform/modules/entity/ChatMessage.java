@@ -22,6 +22,10 @@ public class ChatMessage {
     private String content;
     /** 零至三张图片的JSON字符串编号数组。 */
     private String imageIds;
+    /** 选填本订单的制作节点编号，终态订单也可引用补证。 */
+    private Long referencedNodeId;
+    /** 联查节点标识，仅用于响应展示，不单独持久化。 */
+    private String referencedNodeCode;
     /** 服务器保存时间。 */
     private LocalDateTime createdAt;
 }

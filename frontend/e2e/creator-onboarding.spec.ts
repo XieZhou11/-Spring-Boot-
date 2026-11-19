@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
 import { test, expect, frontendOrigin } from './fixtures'
 
@@ -110,7 +110,10 @@ test('入驻撤回重提、管理员驳回补正通过、实时通知及会话�
     await page.getByRole('button', { name: '开始申请', exact: true }).click()
     await page.getByLabel('上传作品1成品图', { exact: true }).setInputFiles({ name: 'invalid.txt', mimeType: 'text/plain', buffer: Buffer.from('not an image') })
     await expect(page.getByRole('alert')).toContainText('JPEG、PNG 或 WebP')
-    await page.getByLabel('上传作品1成品图', { exact: true }).setInputFiles({ name: 'large.png', mimeType: 'image/png', buffer: Buffer.alloc(5 * 1024 * 1024 + 1) })
+    // 路径上传保留相同超限边界，避免把大文件经浏览器协议反复编码拷贝。
+    const oversizedImage = testInfo.outputPath('large.png')
+    writeFileSync(oversizedImage, Buffer.alloc(5 * 1024 * 1024 + 1))
+    await page.getByLabel('上传作品1成品图', { exact: true }).setInputFiles(oversizedImage)
     await expect(page.getByRole('alert')).toContainText('5 MiB')
     await fillMaterials(page, categoryName)
     await expect(page.getByRole('img', { name: '作品1成品图 1', exact: true })).toBeVisible()

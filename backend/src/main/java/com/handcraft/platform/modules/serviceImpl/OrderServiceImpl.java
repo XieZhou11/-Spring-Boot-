@@ -39,16 +39,17 @@ public class OrderServiceImpl implements OrderService {
     private final OrderPaymentMapper payments;
     private final OrderPaymentService paymentService;
     private final PaymentAccountCryptoService crypto;
+    private final OrderFulfillmentMapper fulfillment;
 
     public OrderServiceImpl(TradeOrderMapper orders,QuoteMapper quotes,CustomRequestMapper requests,UserAccountMapper users,
             ShippingAddressMapper addresses,CategoryMapper categories,ConversationMapper conversationMapper,
             ConversationService conversations,CustomRequestPolicyService policy,QuoteLifecycleService lifecycle,
             NotificationService notifications,OperationLogService logs,ObjectMapper json,PlatformTransactionManager manager,
-            OrderPaymentMapper payments,OrderPaymentService paymentService,PaymentAccountCryptoService crypto) {
+            OrderPaymentMapper payments,OrderPaymentService paymentService,PaymentAccountCryptoService crypto,OrderFulfillmentMapper fulfillment) {
         this.orders=orders;this.quotes=quotes;this.requests=requests;this.users=users;this.addresses=addresses;this.categories=categories;
         this.conversationMapper=conversationMapper;this.conversations=conversations;this.policy=policy;this.lifecycle=lifecycle;
         this.notifications=notifications;this.logs=logs;this.json=json;
-        this.payments=payments;this.paymentService=paymentService;this.crypto=crypto;
+        this.payments=payments;this.paymentService=paymentService;this.crypto=crypto;this.fulfillment=fulfillment;
         transaction=new TransactionTemplate(manager);transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
 
@@ -177,16 +178,32 @@ public class OrderServiceImpl implements OrderService {
                 terms==null?null:terms.path("termsVersion").asText(null),terms==null?null:terms.path("termsText").asText(null));
         var settlement=detailed&&!owned?payments.settlement(order.getId()):null;
         var settlementView=settlement==null?null:new OrderSettlementVO(settlement.getPaidAmount().setScale(2).toPlainString(),settlement.getStatus(),maskedPayee(order,settlement));
-        var nodes=detailed?payments.nodes(order.getId()).stream().map(node->new OrderProgressNodeVO(node.getId().toString(),node.getNodeCode(),node.getSortOrder(),node.getPlannedFinishDate(),node.getStatus(),time(node.getHandledAt()))).toList():List.<OrderProgressNodeVO>of();
+        boolean pending=fulfillment.hasPending(order.getId());
+        boolean active=!pending&&!Set.of("AFTER_SALE","CANCELLED","REFUNDED","COMPLETED").contains(status);
+        var nodes=detailed?payments.nodes(order.getId()).stream().map(node->{
+            boolean handled=Set.of("CHECKED","SKIPPED").contains(node.getStatus());
+            boolean unlocked=active&&!owned&&"UNLOCKED".equals(node.getStatus())&&"IN_PRODUCTION".equals(status);
+            var records=fulfillment.records(node.getId()).stream().map(r->new OrderProgressRecordVO(r.getId().toString(),r.getRequestKey(),r.getRecordType(),r.getContent(),ids(r.getImageIds()),r.getSkipReason(),time(r.getCreatedAt()))).toList();
+            var actual=node.getHandledAt()==null?now.toLocalDate():node.getHandledAt().toLocalDate();
+            long deviation=java.time.temporal.ChronoUnit.DAYS.between(node.getPlannedFinishDate(),actual);
+            return new OrderProgressNodeVO(node.getId().toString(),node.getNodeCode(),node.getSortOrder(),node.getPlannedFinishDate(),node.getStatus(),time(node.getHandledAt()),records,
+                    unlocked&&node.getSortOrder()<5,unlocked&&"SAMPLE".equals(node.getNodeCode()),active&&!owned&&handled&&Set.of("IN_PRODUCTION","PENDING_SHIP","SHIPPED").contains(status),deviation,!handled&&deviation>0);
+        }).toList():List.<OrderProgressNodeVO>of();
+        var trackingHistory=detailed?fulfillment.corrections(order.getId()).stream().map(op->{var detail=json.readTree(op.getDetail());return new OrderTrackingHistoryVO(op.getId().toString(),detail.path("requestKey").asText(),detail.path("oldTrackingNo").asText(),detail.path("newTrackingNo").asText(),text(op.getOperatorId()),time(operationTime(op)));}).toList():List.<OrderTrackingHistoryVO>of();
+        var refund=detailed?fulfillment.refunded(order.getId()):null;var refundedFlow=refund==null?null:fulfillment.refundFlowForOrder(order.getId());
+        var refundView=refund==null?null:new OrderNoStartRefundVO(refund.getId().toString(),refund.getDescription(),ids(refund.getImageIds()),refundedFlow==null?null:refundedFlow.getAmount().setScale(2).toPlainString(),refundedFlow==null?null:refundedFlow.getFlowNo(),time(refund.getFinishedAt()),refund.getDecisionReason());
         boolean canPay=owned&&"PENDING_PAY".equals(status)&&!buyer.isAdmin();
         var preview=detailed&&canPay?paymentService.preview(now.toLocalDate(),order.getDurationDays()):null;
         return new OrderVO(order.getId().toString(),order.getOrderNo(),order.getOrderType(),order.getBuyerId().toString(),buyer.getNickname(),
                 order.getCreatorId().toString(),creator.getNickname(),text(order.getRequestId()),text(order.getQuoteId()),status,
                 order.getTitleSnapshot(),order.getTotalAmount().setScale(2).toPlainString(),order.getDurationDays(),map(order.getAgreementSnapshot()),
-                owned&&detailed?map(order.getAddressSnapshot()):null,time(order.getCreatedAt()),time(order.getPayDeadlineAt()),time(cancelledAt),reason,
+                detailed&&(owned||"PENDING_SHIP".equals(status)||order.getShippedAt()!=null)?map(order.getAddressSnapshot()):null,time(order.getCreatedAt()),time(order.getPayDeadlineAt()),time(cancelledAt),reason,
                 owned,owned&&"PENDING_PAY".equals(status),conversation==null?null:conversation.getId().toString(),history,
                 canPay,paidAmount,time(order.getPaidAt()),time(order.getTermsConfirmedAt()),order.getShipDeadlineAt()==null?null:order.getShipDeadlineAt().toLocalDate().minusDays(1),
-                time(order.getShipDeadlineAt()),preview,paymentView,settlementView,nodes);
+                time(order.getShipDeadlineAt()),preview,paymentView,settlementView,nodes,time(order.getStartedAt()),time(order.getPaidAt()==null?null:order.getPaidAt().plusHours(48)),order.getTrackingNo(),time(order.getShippedAt()),time(order.getAutoConfirmAt()),time(order.getOriginalCompletedAt()),time(now),
+                active&&!owned&&"PAID".equals(status),active&&!owned&&"PENDING_SHIP".equals(status),active&&!owned&&"SHIPPED".equals(status),active&&owned&&"SHIPPED".equals(status),
+                active&&owned&&"PAID".equals(status)&&order.getStartedAt()==null&&order.getPaidAt()!=null&&!now.isBefore(order.getPaidAt().plusHours(48)),
+                Set.of("PAID","IN_PRODUCTION","PENDING_SHIP").contains(status)&&order.getShippedAt()==null&&order.getShipDeadlineAt()!=null&&!now.isBefore(order.getShipDeadlineAt()),trackingHistory,refundView);
     }
 
     /** 只从本单原快照解密后生成脱敏文本，不返回申请编号、姓名原文或编码密文。 */

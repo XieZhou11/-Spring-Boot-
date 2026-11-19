@@ -14,4 +14,6 @@ public class ChatMessageDTO {
     @Size(max=500) private String content;
     /** 当前会话中本人上传的零至三张图片。 */
     @NotNull @Size(max=3) private List<@NotBlank @Pattern(regexp="[1-9][0-9]{0,18}") String> imageIds=List.of();
+    /** 选填本会话关联订单的制作节点；引用不能代替消息文字或图片。 */
+    @Pattern(regexp="[1-9][0-9]{0,18}") private String referencedNodeId;
 }

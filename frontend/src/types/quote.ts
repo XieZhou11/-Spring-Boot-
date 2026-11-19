@@ -165,8 +165,38 @@ export interface OrderVO {
   durationDays: number
   /** 不随需求或报价变化的约定快照。 */
   agreementSnapshot: AgreementSnapshot
-  /** 仅买家详情返回；创作者本阶段为空。 */
+  /** 买家及服务端允许的创作者发货阶段返回的固定收货资料。 */
   addressSnapshot: (Omit<AddressDTO, 'isDefault'> & { id?: string }) | null
+  /** 实际确认开工时刻，未开工为空。 */
+  startedAt: string | null
+  /** 支付后48小时确认开工截止时刻。 */
+  startDeadlineAt: string | null
+  /** 当前运单号；尚未发货为空。 */
+  trackingNo: string | null
+  /** 首次发货时刻，更正单号不改变。 */
+  shippedAt: string | null
+  /** 服务端计算的自动确认收货时刻。 */
+  autoConfirmAt: string | null
+  /** 最初完成时刻，售后恢复不重设。 */
+  originalCompletedAt: string | null
+  /** 本次快照的服务器北京时间。 */
+  serverTime: string
+  /** 服务端核验的确认开工资格。 */
+  canStart: boolean
+  /** 服务端核验的第五节点原子发货资格。 */
+  canShip: boolean
+  /** 服务端核验的运单号更正资格。 */
+  canCorrectTracking: boolean
+  /** 服务端核验的买家确认收货资格。 */
+  canConfirmReceipt: boolean
+  /** 服务端按48小时边界核验的未开工退款资格。 */
+  canRequestNoStartRefund: boolean
+  /** 已过固定约定发货截止且尚未发货。 */
+  shippingOverdue: boolean
+  /** 运单号历次更正记录，不覆盖原值。 */
+  trackingHistory: OrderTrackingHistoryVO[]
+  /** 系统未开工全额退款依据与流水。 */
+  noStartRefund: OrderNoStartRefundVO | null
   /** 建单时间。 */
   createdAt: string
   /** 24 小时付款截止时间。 */
@@ -248,6 +278,95 @@ export interface OrderProgressNodeVO {
   status: string
   /** 实际处理时间，未处理为空。 */
   handledAt: string | null
+  /** 本节点不可覆盖的首次记录和历次补充。 */
+  records: OrderProgressRecordVO[]
+  /** 当前参与方是否可首次提交本节点。 */
+  canCheckIn: boolean
+  /** 当前参与方是否可说明原因跳过打样节点。 */
+  canSkip: boolean
+  /** 当前参与方是否可追加本节点图文。 */
+  canSupplement: boolean
+  /** 相对固定参考完成日的有符号自然日差，正数为延后。 */
+  deviationDays: number | null
+  /** 尚未处理且已过参考完成日。 */
+  overdue: boolean
+}
+export interface OrderProgressRecordVO {
+  /** 不可变的记录编号。 */
+  id: string
+  /** 首次请求与重试共用的请求键。 */
+  requestKey: string
+  /** 首次打卡、跳过或追加记录类型。 */
+  recordType: string
+  /** 阶段说明，纯图片补充可为空。 */
+  content: string | null
+  /** 本记录按提交顺序保存的进度图片编号。 */
+  imageIds: string[]
+  /** 打样跳过原因，非跳过记录为空。 */
+  skipReason: string | null
+  /** 服务端实际提交时刻。 */
+  createdAt: string
+}
+export interface OrderTrackingHistoryVO {
+  /** 运单更正记录编号。 */
+  id: string
+  /** 本次更正的幂等请求键。 */
+  requestKey: string
+  /** 更正前的原运单号。 */
+  oldTrackingNo: string
+  /** 本次更正后的运单号。 */
+  newTrackingNo: string
+  /** 本次更正的操作者编号。 */
+  operatorId: string
+  /** 更正提交时刻。 */
+  createdAt: string
+}
+export interface OrderNoStartRefundVO {
+  /** 唯一系统无责退款申请编号。 */
+  id: string
+  /** 买家提交的原始退款说明。 */
+  description: string
+  /** 买家提交的凭证图片编号。 */
+  imageIds: string[]
+  /** 按原实付金额确定的全额退款金额。 */
+  amount: string
+  /** 唯一模拟退款流水号。 */
+  flowNo: string
+  /** 退款实际完成时刻。 */
+  occurredAt: string
+  /** 系统校验并执行无责退款的依据。 */
+  decisionReason: string
+}
+/** 图文写操作必须固定请求键与原始内容后才可发送。 */
+export interface OrderProgressDTO {
+  /** 同一提交和未知结果重试共用的请求键。 */
+  requestKey: string
+  /** 阶段说明或追加说明。 */
+  content: string
+  /** 本单创作者上传的私有进度图片。 */
+  imageIds: string[]
+}
+export interface OrderSkipDTO extends OrderProgressDTO {
+  /** 仅打样可填写的跳过原因。 */
+  skipReason: string
+}
+export interface OrderShipmentDTO extends OrderProgressDTO {
+  /** 8—30位字母数字运单号，与第五节点同时提交。 */
+  trackingNo: string
+}
+export interface OrderTrackingDTO {
+  /** 更正与原内容重试共用的请求键。 */
+  requestKey: string
+  /** 用户确认时看到的原运单号，防止覆盖其他端更正。 */
+  expectedTrackingNo: string
+  /** 更正后的8—30位字母数字运单号。 */
+  trackingNo: string
+}
+export interface OrderNoStartRefundDTO {
+  /** 20—500字未开工退款说明，不接受客户端金额。 */
+  description: string
+  /** 最多3张本人上传的本单退款凭证。 */
+  imageIds: string[]
 }
 export interface OrderHistoryVO {
   /** 状态变更动作。 */

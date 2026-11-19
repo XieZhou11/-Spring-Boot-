@@ -4,23 +4,47 @@ import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import PrivateImage from '@/components/PrivateImage.vue'
 import PrivateImagePicker from '@/components/PrivateImagePicker.vue'
 import { getConversation, getMessages, readConversation, sendMessage } from '@/api/customRequest'
+import { getOrder } from '@/api/quote'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/creator'
-import { orderStatus } from '@/utils/quote'
+import { orderStatus, progressNodeName } from '@/utils/quote'
+import { readConversationDraft, saveConversationDraft } from '@/utils/conversationDraft'
 import { ApiError } from '@/utils/request'
 import type { ChatMessageVO, ConversationVO } from '@/types/customRequest'
 import '@/assets/styles/custom-request.css'
+import '@/assets/styles/quote.css'
 const route = useRoute(); const notifications = useNotificationsStore(); const auth = useAuthStore()
 const conversation = ref<ConversationVO>(); const messages = ref<ChatMessageVO[]>([]); const hasOlder = ref(false)
 const loading = ref(false); const olderLoading = ref(false); const sending = ref(false); const uploading = ref(false); const uncertain = ref(false)
 const content = ref(''); const imageIds = ref<string[]>([]); const error = ref(''); const loadError = ref(''); const readError = ref(''); const transcript = ref<HTMLElement>()
+const referencedNode = ref<{ id: string; nodeCode: string }>(); const referenceLoading = ref(false); const referenceError = ref('')
+let referenceRevision = 0; let restoredReferenceId: string | undefined; let activeDraftId = ''; let activeDraftUserId = ''
 let generation = 0; let refreshing = false; let refreshAgain = false; let disposed = false; let observer: IntersectionObserver | undefined
 // HTTP已补齐游标独立于乐观合并的发送结果，避免自己的较新消息跳过断线缺口。
 let syncCursor: string | undefined
 let readTimer: ReturnType<typeof setTimeout> | undefined; let desiredRead = '0'; let acknowledgedRead = '0'; let readingGeneration: number | undefined
-let attempt: { clientMessageKey: string; content: string; imageIds: string[] } | undefined
+let attempt: { clientMessageKey: string; content: string; imageIds: string[]; referencedNodeId?: string } | undefined
 const id = () => String(route.params.id)
+/** 引用只附加到原草稿，不替换正文，也不在跳转后自动发送消息。 */
+async function resolveReference() {
+  const current = ++referenceRevision
+  const requested = uncertain.value ? attempt?.referencedNodeId : typeof route.query.progressNodeId === 'string' ? route.query.progressNodeId : restoredReferenceId
+  referencedNode.value = undefined; referenceError.value = ''; referenceLoading.value = false
+  if (!requested || !conversation.value?.orderId) return
+  referenceLoading.value = true
+  try {
+    const detail = await getOrder(conversation.value.orderId)
+    if (current !== referenceRevision) return
+    const node = detail.progressNodes.find(value => value.id === requested)
+    if (!node) { referenceError.value = '所引用的进度不属于当前订单，未附加引用。'; return }
+    referencedNode.value = { id: node.id, nodeCode: node.nodeCode }
+  } catch (failure) { if (current === referenceRevision) referenceError.value = failure instanceof Error ? failure.message : '节点引用读取失败，请重试' }
+  finally { if (current === referenceRevision) referenceLoading.value = false }
+}
+function keepDraft() {
+  if (activeDraftUserId && activeDraftUserId === auth.session?.userId && activeDraftId) saveConversationDraft(activeDraftUserId, activeDraftId, { content: content.value, imageIds: [...imageIds.value], referencedNodeId: referencedNode.value?.id, attempt: attempt ? { ...attempt, imageIds: [...attempt.imageIds] } : undefined, uncertain: uncertain.value })
+}
 /** 唯一编号去重，字符串大整数比较避免序号精度丢失。 */
 function merge(items: ChatMessageVO[]) { const map = new Map(messages.value.map(message => [message.id, message])); for (const message of items) map.set(message.id, message); messages.value = [...map.values()].sort((a, b) => BigInt(a.seqNo) < BigInt(b.seqNo) ? -1 : 1) }
 function atBottom() { const node = transcript.value; return !node || node.scrollHeight - node.scrollTop - node.clientHeight < 70 }
@@ -52,7 +76,9 @@ async function refresh(initial = false) {
   try {
     const detail = await getConversation(id())
     if (current !== generation) return
+    const previousOrderId = conversation.value?.orderId
     conversation.value = detail; acknowledgedRead = detail.readSeq || '0'
+    if (initial || previousOrderId !== detail.orderId) void resolveReference()
     let cursor = initial ? undefined : syncCursor
     do {
       const result = await getMessages(id(), cursor ? { afterSeq: cursor } : undefined)
@@ -76,42 +102,53 @@ async function older() {
   finally { olderLoading.value = false }
 }
 async function send() {
-  if (sending.value || uploading.value || (!conversation.value?.canSend && !uncertain.value)) return
+  if (sending.value || uploading.value || referenceLoading.value || referenceError.value || (!conversation.value?.canSend && !uncertain.value)) return
   error.value = ''
   if (!uncertain.value) {
-    const body = { content: content.value.trim(), imageIds: [...imageIds.value] }
+    const body = { content: content.value.trim(), imageIds: [...imageIds.value], ...(referencedNode.value ? { referencedNodeId: referencedNode.value.id } : {}) }
     if ((!body.content && !body.imageIds.length) || body.content.length > 500) { error.value = '请输入 1—500 字文字，或上传图片'; return }
-    if (!attempt || attempt.content !== body.content || JSON.stringify(attempt.imageIds) !== JSON.stringify(body.imageIds)) attempt = { ...body, clientMessageKey: crypto.randomUUID() }
+    if (!attempt || attempt.content !== body.content || JSON.stringify(attempt.imageIds) !== JSON.stringify(body.imageIds) || attempt.referencedNodeId !== body.referencedNodeId) attempt = { ...body, clientMessageKey: crypto.randomUUID() }
   }
   if (!attempt) return
   sending.value = true; const current = generation
   try {
     const result = await sendMessage(id(), attempt)
     if (current !== generation) return
-    merge([result]); content.value = ''; imageIds.value = []; attempt = undefined; uncertain.value = false
+    merge([result]); content.value = ''; imageIds.value = []; attempt = undefined; uncertain.value = false; referencedNode.value = undefined; restoredReferenceId = undefined; keepDraft()
     await observe(true); void refresh()
   } catch (failure) {
     if (current !== generation) return
-    uncertain.value = !(failure instanceof ApiError) || !failure.status
+    uncertain.value = !(failure instanceof ApiError) || !failure.status || failure.status >= 500
     error.value = `${failure instanceof Error ? failure.message : '发送失败'}${uncertain.value ? '。发送结果未知，请重试确认；同一条消息不会重复发送。' : '。输入已保留。'}`
     if (failure instanceof ApiError && failure.retryAfter) error.value += ` 请在 ${failure.retryAfter} 秒后重试。`
     if (!uncertain.value) void refresh()
-  } finally { sending.value = false }
+  } finally { sending.value = false; keepDraft() }
 }
 function focused() { if (document.visibilityState === 'visible') { void refresh(); void observe(false); if (!notifications.connected) void notifications.reconnect() } }
 watch(() => notifications.chatUpdate, update => {
   if (update.all || update.conversationIds.includes(id())) void refresh()
 })
-watch(() => route.params.id, () => { generation++; observer?.disconnect(); clearTimeout(readTimer); syncCursor = undefined; messages.value = []; conversation.value = undefined; content.value = ''; imageIds.value = []; uploading.value = false; error.value = ''; loadError.value = ''; readError.value = ''; attempt = undefined; uncertain.value = false; desiredRead = '0'; acknowledgedRead = '0'; void refresh(true) }, { immediate: true })
+watch([() => route.params.id, () => auth.session?.userId], () => {
+  if (!route.path.startsWith('/messages/conversations/')) return
+  activeDraftId = id(); activeDraftUserId = auth.session?.userId || ''
+  generation++; referenceRevision++; observer?.disconnect(); clearTimeout(readTimer); syncCursor = undefined; messages.value = []; conversation.value = undefined; content.value = ''; imageIds.value = []; uploading.value = false; error.value = ''; loadError.value = ''; readError.value = ''; referencedNode.value = undefined; referenceError.value = ''; referenceLoading.value = false; attempt = undefined; uncertain.value = false; desiredRead = '0'; acknowledgedRead = '0'
+  const draft = auth.session?.userId ? readConversationDraft(auth.session.userId, id()) : undefined
+  if (draft) { content.value = draft.content; imageIds.value = [...draft.imageIds]; attempt = draft.attempt; uncertain.value = draft.uncertain; restoredReferenceId = draft.referencedNodeId }
+  else restoredReferenceId = undefined
+  if (activeDraftUserId) void refresh(true)
+}, { immediate: true })
+watch(() => route.query.progressNodeId, () => { if (conversation.value) void resolveReference() })
 function canLeave() {
   if (!auth.session) return true
   if (sending.value || uploading.value) return false
-  return !(content.value || imageIds.value.length || uncertain.value) || window.confirm('还有未发送或结果未确认的消息，确定离开？')
+  const allowed = !(content.value || imageIds.value.length || uncertain.value) || window.confirm('还有未发送或结果未确认的消息，确定离开？草稿将在本次使用期间保留。')
+  if (allowed) keepDraft()
+  return allowed
 }
 onBeforeRouteLeave(canLeave)
-onBeforeRouteUpdate(canLeave)
+onBeforeRouteUpdate(to => to.params.id === route.params.id || canLeave())
 onMounted(() => { window.addEventListener('focus', focused); document.addEventListener('visibilitychange', focused) })
-onBeforeUnmount(() => { disposed = true; generation++; observer?.disconnect(); clearTimeout(readTimer); window.removeEventListener('focus', focused); document.removeEventListener('visibilitychange', focused) })
+onBeforeUnmount(() => { keepDraft(); disposed = true; generation++; referenceRevision++; observer?.disconnect(); clearTimeout(readTimer); window.removeEventListener('focus', focused); document.removeEventListener('visibilitychange', focused) })
 </script>
 <template>
   <div class="conversation-current">
@@ -199,7 +236,11 @@ onBeforeUnmount(() => { disposed = true; generation++; observer?.disconnect(); c
         >
           <header>{{ message.senderId === auth.session?.userId ? '我' : conversation.otherNickname }}</header><p v-if="message.content">
             {{ message.content }}
-          </p><div
+          </p><RouterLink
+            v-if="message.referencedNodeId && conversation.orderId"
+            class="progress-reference"
+            :to="`/orders/${conversation.orderId}#progress-${message.referencedNodeId}`"
+          >引用进度：{{ progressNodeName[message.referencedNodeCode || ''] || '制作节点' }} ↗</RouterLink><div
             v-if="message.imageIds.length"
             class="request-images"
           >
@@ -218,6 +259,43 @@ onBeforeUnmount(() => { disposed = true; generation++; observer?.disconnect(); c
         class="chat-compose"
         @submit.prevent="send"
       >
+        <p
+          v-if="referenceLoading"
+          class="field-help"
+        >
+          正在核验节点引用…
+        </p><p
+          v-if="referenceError"
+          class="form-alert"
+          role="alert"
+        >
+          {{ referenceError }} <button
+            type="button"
+            class="inline-button"
+            @click="resolveReference"
+          >
+            重新核验引用
+          </button><button
+            type="button"
+            class="inline-button"
+            @click="referenceError = ''; restoredReferenceId = undefined"
+          >
+            取消引用
+          </button>
+        </p>
+        <div
+          v-if="referencedNode"
+          class="progress-reference"
+        >
+          引用进度：{{ progressNodeName[referencedNode.nodeCode] || referencedNode.nodeCode }}<button
+            type="button"
+            class="inline-button"
+            :disabled="sending || uncertain"
+            @click="referencedNode = undefined; restoredReferenceId = undefined"
+          >
+            移除引用
+          </button>
+        </div>
         <label class="work-field">沟通内容<textarea
           v-model="content"
           aria-label="沟通内容"
@@ -235,7 +313,7 @@ onBeforeUnmount(() => { disposed = true; generation++; observer?.disconnect(); c
         /><div class="request-actions">
           <span class="field-help">{{ content.length }} / 500</span><button
             class="button-primary"
-            :disabled="sending || uploading"
+            :disabled="sending || uploading || referenceLoading || !!referenceError"
           >
             {{ sending ? '正在发送…' : uncertain ? '重试确认发送' : '发送消息' }}
           </button>
