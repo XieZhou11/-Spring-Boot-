@@ -7,14 +7,17 @@ import { getOrders } from '@/api/quote'
 import type { OrderVO } from '@/types/quote'
 import { orderStatus } from '@/utils/quote'
 import { formatTime } from '@/utils/creator'
+import { useAuthStore } from '@/stores/auth'
+import { useNotificationsStore } from '@/stores/notifications'
 import '@/assets/styles/custom-request.css'
 import '@/assets/styles/quote.css'
-const route = useRoute(); const router = useRouter()
+const route = useRoute(); const router = useRouter(); const auth = useAuthStore(); const notifications = useNotificationsStore()
 const side = ref(route.query.side === 'CREATOR' ? 'CREATOR' : 'BUYER'); const status = ref('')
 const rows = ref<OrderVO[]>([]); const page = ref(1); const total = ref(0); const loading = ref(false); const error = ref('')
 let revision = 0
 /** 买家和创作者分别使用服务端参与方过滤，不在浏览器按昵称判断归属。 */
 async function load(next = page.value) {
+  if (!auth.session) return
   const current = ++revision; page.value = next; loading.value = true; error.value = ''
   try {
     const result = await getOrders({ side: side.value, status: status.value || undefined, page: next })
@@ -23,9 +26,13 @@ async function load(next = page.value) {
   finally { if (current === revision) loading.value = false }
 }
 function refresh() { void load() }
+/** 推送可能在断线时遗漏，窗口恢复或重连后查询持久化订单。 */
+function visible() { if (document.visibilityState === 'visible') refresh() }
 watch(() => route.query.side, () => { side.value = route.query.side === 'CREATOR' ? 'CREATOR' : 'BUYER'; void load(1) })
-onMounted(() => { refresh(); window.addEventListener('order-updated', refresh); window.addEventListener('focus', refresh) })
-onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh); window.removeEventListener('focus', refresh) })
+watch(() => auth.session?.userId, () => { revision++; rows.value = []; total.value = 0; if (auth.session) void load(1) }, { flush: 'sync' })
+watch(() => notifications.connected, (connected, previous) => { if (connected && !previous) refresh() })
+onMounted(() => { refresh(); window.addEventListener('order-updated', refresh); window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', visible) })
+onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', visible) })
 </script>
 <template>
   <WorkLayout>
@@ -50,7 +57,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
         v-model="status"
         aria-label="订单状态"
         @change="load(1)"
-      ><option value="">全部状态</option><option value="PENDING_PAY">待付款</option><option value="CANCELLED">已取消</option></select></label><button
+      ><option value="">全部状态</option><option value="PENDING_PAY">待付款</option><option value="PAID">待开工</option><option value="CANCELLED">已取消</option></select></label><button
         class="button-secondary"
         :disabled="loading"
       >

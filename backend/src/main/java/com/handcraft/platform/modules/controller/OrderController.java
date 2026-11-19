@@ -4,6 +4,7 @@ import com.handcraft.platform.common.api.Result;
 import com.handcraft.platform.modules.dto.*;
 import com.handcraft.platform.modules.security.AccountPrincipal;
 import com.handcraft.platform.modules.service.OrderService;
+import com.handcraft.platform.modules.service.OrderPaymentService;
 import com.handcraft.platform.modules.vo.*;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -14,7 +15,14 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 public class OrderController {
     private final OrderService orders;
-    public OrderController(OrderService orders){this.orders=orders;}
+    private final OrderPaymentService payments;
+    public OrderController(OrderService orders,OrderPaymentService payments){this.orders=orders;this.payments=payments;}
+    /** 写事务已提交后再读取完整详情；响应失败时可按订单重试确认原支付。 */
+    @PutMapping("/api/orders/{id}/payment")
+    public ResponseEntity<Result<OrderVO>> payment(@AuthenticationPrincipal AccountPrincipal principal,@PathVariable Long id,@Valid @RequestBody OrderPaymentDTO input){
+        boolean created=payments.pay(principal.userId(),id,input);
+        return ResponseEntity.status(created?201:200).body(Result.ok(orders.detail(principal.userId(),id)));
+    }
     @PutMapping("/api/custom-requests/{id}/award")
     public ResponseEntity<Result<OrderVO>> award(@AuthenticationPrincipal AccountPrincipal principal,@PathVariable Long id,@Valid @RequestBody AwardDTO input) {
         var result=orders.award(principal.userId(),id,input);return ResponseEntity.status(result.created()?201:200).body(Result.ok(result.order()));

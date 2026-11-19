@@ -62,6 +62,15 @@ public class ConversationServiceImpl implements ConversationService {
         LOGGER.info("定标会话变更等待提交：requestId={}, orderId={}, conversationId={}",request.getId(),persisted.getId(),winner.getId());
         return winner.getId();
     });}
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void orderChanged(TradeOrder order){BusinessLog.run(LOGGER,"订单会话状态同步",order.getBuyerId(),()->{
+        var initial=conversations.byRequest(order.getRequestId(),order.getCreatorId());
+        if(initial==null)throw conflict("订单关联会话不存在");
+        var conversation=conversations.lock(initial.getId());
+        if(!Objects.equals(order.getId(),conversation.getOrderId())||!Objects.equals(order.getBuyerId(),conversation.getBuyerId()))throw conflict("订单关联会话不一致");
+        afterCommit(()->both(conversation,Map.of("type","CONVERSATION_UPDATED","conversationId",conversation.getId().toString())));
+        LOGGER.info("订单会话状态同步已准备：orderId={}, conversationId={}, stage=提交后刷新",order.getId(),conversation.getId());return null;
+    });}
     public PageVO<ConversationVO> list(Long userId,int page,int size){return BusinessLog.run(LOGGER,"本人会话列表查询",userId,()->{policy.user(userId);page(page,size);return new PageVO<>(conversations.list(userId,(page-1)*size,size).stream().map(c->view(c,userId)).toList(),conversations.count(userId),page,size);});}
     public ConversationVO detail(Long userId,Long id){return BusinessLog.run(LOGGER,"会话详情查询",userId,()->{policy.user(userId);var c=conversations.find(id);participant(userId,c);return view(c,userId);});}
     public long unread(Long userId){return BusinessLog.run(LOGGER,"会话未读总数查询",userId,()->{policy.user(userId);return conversations.unread(userId);});}

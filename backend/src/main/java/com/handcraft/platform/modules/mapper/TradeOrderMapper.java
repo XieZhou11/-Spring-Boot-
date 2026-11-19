@@ -24,6 +24,9 @@ public interface TradeOrderMapper {
     @Options(useGeneratedKeys=true,keyProperty="id") int insert(TradeOrder order);
     @Update("UPDATE trade_order SET status='CANCELLED',updated_at=#{now} WHERE id=#{id} AND status='PENDING_PAY'")
     int cancel(@Param("id") Long id,@Param("now") LocalDateTime now);
+    /** 调用方锁后检查截止及需求状态，条件更新不覆盖取消或已付款结果。 */
+    @Update("UPDATE trade_order SET status='PAID',paid_at=#{paidAt},terms_confirmed_at=#{termsConfirmedAt},ship_deadline_at=#{shipDeadlineAt},updated_at=#{updatedAt} WHERE id=#{id} AND order_type='CUSTOM' AND status='PENDING_PAY'")
+    int pay(TradeOrder order);
     String FILTER="""
         <where>
         order_type='CUSTOM' AND

@@ -9,11 +9,16 @@ import type { CustomRequestVO } from '@/types/customRequest'
 import { requestStatus } from '@/utils/customRequest'
 import { formatTime } from '@/utils/creator'
 import { ApiError } from '@/utils/request'
+import { useAuthStore } from '@/stores/auth'
+import { useNotificationsStore } from '@/stores/notifications'
 import '@/assets/styles/custom-request.css'
 const route = useRoute(); const router = useRouter(); const value = ref<CustomRequestVO>()
+const auth = useAuthStore(); const notifications = useNotificationsStore()
 const loading = ref(false); const busy = ref(false); const error = ref(''); let copyKey = crypto.randomUUID()
-let revision = 0
+let revision = 0; let deferredRefresh = false
 async function load() {
+  if (busy.value) { deferredRefresh = true; return }
+  if (!auth.session) return
   const current = ++revision; loading.value = true; error.value = ''
   try { const result = await getCustomRequest(String(route.params.id)); if (current === revision) value.value = result }
   catch (failure) {
@@ -30,7 +35,7 @@ async function act(action: 'close' | 'copy' | 'chat' | 'delete') {
   if (!value.value || busy.value) return
   if (action === 'close' && !window.confirm('关闭后不能继续报价或在未成单会话发送消息。确定关闭？')) return
   if (action === 'delete' && !window.confirm('确定删除此草稿？')) return
-  busy.value = true; error.value = ''
+  revision++; busy.value = true; error.value = ''
   const expected = revision; const requestId = value.value.id; const version = value.value.version
   const stillCurrent = () => expected === revision && requestId === String(route.params.id)
   try {
@@ -39,12 +44,17 @@ async function act(action: 'close' | 'copy' | 'chat' | 'delete') {
     if (action === 'chat') { const result = await openConversation(requestId); if (stillCurrent()) await router.push(`/messages/conversations/${result.id}`) }
     if (action === 'delete') { await deleteRequest(requestId, version); if (stillCurrent()) await router.push('/my-requests') }
   } catch (failure) { if (stillCurrent()) error.value = `${failure instanceof Error ? failure.message : '操作失败'}。请刷新核对最新状态。` }
-  finally { busy.value = false }
+  finally { busy.value = false; if (deferredRefresh) { deferredRefresh = false; void load() } }
 }
-function updated() { if (!busy.value) void load() }
-watch(() => route.params.id, () => { copyKey = crypto.randomUUID(); value.value = undefined; void load() }, { immediate: true })
+/** 提交期间合并恢复事件，完成后再核验持久化状态。 */
+function updated() { void load() }
+function visible() { if (document.visibilityState === 'visible') updated() }
+watch([() => route.params.id, () => auth.session?.userId], () => { revision++; copyKey = crypto.randomUUID(); value.value = undefined; void load() }, { immediate: true, flush: 'sync' })
+watch(() => notifications.connected, (connected, previous) => { if (connected && !previous) updated() })
 window.addEventListener('custom-request-updated', updated)
-onBeforeUnmount(() => { revision++; window.removeEventListener('custom-request-updated', updated) })
+window.addEventListener('focus', updated)
+document.addEventListener('visibilitychange', visible)
+onBeforeUnmount(() => { revision++; window.removeEventListener('custom-request-updated', updated); window.removeEventListener('focus', updated); document.removeEventListener('visibilitychange', visible) })
 </script>
 <template>
   <WorkLayout>

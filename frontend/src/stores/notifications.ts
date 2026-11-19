@@ -200,6 +200,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
           // 资料页自行重新核验资格，不把推送内容当作认证权威数据。
           if (payload.notification?.businessReference?.type === 'WORK') window.dispatchEvent(new Event('work-updated'))
           else if (payload.notification?.businessReference?.type === 'CUSTOM_REQUEST') window.dispatchEvent(new Event('custom-request-updated'))
+          else if (payload.notification?.businessReference?.type === 'QUOTE') { window.dispatchEvent(new Event('quote-updated')); window.dispatchEvent(new Event('custom-request-updated')) }
+          else if (payload.notification?.businessReference?.type === 'ORDER') { window.dispatchEvent(new Event('order-updated')); window.dispatchEvent(new Event('quote-updated')); window.dispatchEvent(new Event('custom-request-updated')) }
           else if (payload.notification?.businessReference?.type === 'CREATOR_APPLICATION') window.dispatchEvent(new Event('creator-certification-updated'))
         }
         if (payload.type === 'CHAT_UNREAD_UPDATED' && typeof payload.count === 'number') { chatUnreadRevision++; chatUnreadCount.value = payload.count }

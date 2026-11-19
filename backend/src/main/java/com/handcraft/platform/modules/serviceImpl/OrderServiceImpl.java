@@ -36,14 +36,19 @@ public class OrderServiceImpl implements OrderService {
     private final OperationLogService logs;
     private final ObjectMapper json;
     private final TransactionTemplate transaction;
+    private final OrderPaymentMapper payments;
+    private final OrderPaymentService paymentService;
+    private final PaymentAccountCryptoService crypto;
 
     public OrderServiceImpl(TradeOrderMapper orders,QuoteMapper quotes,CustomRequestMapper requests,UserAccountMapper users,
             ShippingAddressMapper addresses,CategoryMapper categories,ConversationMapper conversationMapper,
             ConversationService conversations,CustomRequestPolicyService policy,QuoteLifecycleService lifecycle,
-            NotificationService notifications,OperationLogService logs,ObjectMapper json,PlatformTransactionManager manager) {
+            NotificationService notifications,OperationLogService logs,ObjectMapper json,PlatformTransactionManager manager,
+            OrderPaymentMapper payments,OrderPaymentService paymentService,PaymentAccountCryptoService crypto) {
         this.orders=orders;this.quotes=quotes;this.requests=requests;this.users=users;this.addresses=addresses;this.categories=categories;
         this.conversationMapper=conversationMapper;this.conversations=conversations;this.policy=policy;this.lifecycle=lifecycle;
         this.notifications=notifications;this.logs=logs;this.json=json;
+        this.payments=payments;this.paymentService=paymentService;this.crypto=crypto;
         transaction=new TransactionTemplate(manager);transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
 
@@ -98,16 +103,18 @@ public class OrderServiceImpl implements OrderService {
         });
     }
 
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
     public PageVO<OrderVO> list(Long userId,OrderQueryDTO query) {
         return BusinessLog.run(LOGGER,"本人订单列表查询",userId,()->{
             policy.user(userId);var now=policy.now();
             return new PageVO<>(orders.list(userId,query,now,(query.getPage()-1)*query.getSize()).stream()
-                    .map(order->view(order,userId,false)).toList(),orders.count(userId,query,now),query.getPage(),query.getSize());
+                    .map(order->view(order,userId,false,now)).toList(),orders.count(userId,query,now),query.getPage(),query.getSize());
         });
     }
 
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
     public OrderVO detail(Long userId,Long orderId) {
-        return BusinessLog.run(LOGGER,"订单详情查询",userId,()->{var order=orders.find(orderId);participant(userId,order);return view(order,userId,true);});
+        return BusinessLog.run(LOGGER,"订单详情查询",userId,()->{var order=orders.find(orderId);participant(userId,order);policy.user(userId);return view(order,userId,true,policy.now());});
     }
 
     @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
@@ -148,7 +155,12 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private OrderVO view(TradeOrder order,Long userId,boolean detailed) {
-        boolean owned=userId.equals(order.getBuyerId()),overdue=overdue(order);
+        return view(order,userId,detailed,policy.now());
+    }
+
+    /** 一个只读聚合复用同一数据库快照和服务器时刻，避免并发支付造成字段撕裂。 */
+    private OrderVO view(TradeOrder order,Long userId,boolean detailed,LocalDateTime now) {
+        boolean owned=userId.equals(order.getBuyerId()),overdue=overdue(order,now);
         String status=overdue?"CANCELLED":order.getStatus();
         var buyer=users.findById(order.getBuyerId());var creator=users.findById(order.getCreatorId());
         var conversation=conversationMapper.byRequest(order.getRequestId(),order.getCreatorId());
@@ -157,11 +169,32 @@ public class OrderServiceImpl implements OrderService {
         var cancellation=operations.stream().filter(operation->"CANCELLED".equals(operation.getAfterStatus())).findFirst().orElse(null);
         var cancelledAt=cancellation==null?(overdue?order.getPayDeadlineAt():null):operationTime(cancellation);
         String reason=cancellation==null?(overdue?"TIMEOUT":null):cancellation.getReason();
+        var payment=payments.payment(order.getId());
+        var paidAmount=payment==null?null:payment.getAmount().setScale(2).toPlainString();
+        var payOperation=operations.stream().filter(operation->"PAY".equals(operation.getAction())).findFirst().orElse(null);
+        var terms=payOperation==null||payOperation.getDetail()==null?null:json.readTree(payOperation.getDetail());
+        var paymentView=!detailed||payment==null?null:new OrderPaymentVO(payment.getFlowNo(),paidAmount,payment.getResult(),time(payment.getOccurredAt()),
+                terms==null?null:terms.path("termsVersion").asText(null),terms==null?null:terms.path("termsText").asText(null));
+        var settlement=detailed&&!owned?payments.settlement(order.getId()):null;
+        var settlementView=settlement==null?null:new OrderSettlementVO(settlement.getPaidAmount().setScale(2).toPlainString(),settlement.getStatus(),maskedPayee(order,settlement));
+        var nodes=detailed?payments.nodes(order.getId()).stream().map(node->new OrderProgressNodeVO(node.getId().toString(),node.getNodeCode(),node.getSortOrder(),node.getPlannedFinishDate(),node.getStatus(),time(node.getHandledAt()))).toList():List.<OrderProgressNodeVO>of();
+        boolean canPay=owned&&"PENDING_PAY".equals(status)&&!buyer.isAdmin();
+        var preview=detailed&&canPay?paymentService.preview(now.toLocalDate(),order.getDurationDays()):null;
         return new OrderVO(order.getId().toString(),order.getOrderNo(),order.getOrderType(),order.getBuyerId().toString(),buyer.getNickname(),
                 order.getCreatorId().toString(),creator.getNickname(),text(order.getRequestId()),text(order.getQuoteId()),status,
                 order.getTitleSnapshot(),order.getTotalAmount().setScale(2).toPlainString(),order.getDurationDays(),map(order.getAgreementSnapshot()),
                 owned&&detailed?map(order.getAddressSnapshot()):null,time(order.getCreatedAt()),time(order.getPayDeadlineAt()),time(cancelledAt),reason,
-                owned,owned&&"PENDING_PAY".equals(status),conversation==null?null:conversation.getId().toString(),history);
+                owned,owned&&"PENDING_PAY".equals(status),conversation==null?null:conversation.getId().toString(),history,
+                canPay,paidAmount,time(order.getPaidAt()),time(order.getTermsConfirmedAt()),order.getShipDeadlineAt()==null?null:order.getShipDeadlineAt().toLocalDate().minusDays(1),
+                time(order.getShipDeadlineAt()),preview,paymentView,settlementView,nodes);
+    }
+
+    /** 只从本单原快照解密后生成脱敏文本，不返回申请编号、姓名原文或编码密文。 */
+    private String maskedPayee(TradeOrder order,OrderSettlement settlement){
+        var snapshot=json.readTree(settlement.getPayeeSnapshot());
+        String name=snapshot.path("real_name").asText();
+        String account=crypto.decrypt(order.getCreatorId(),Base64.getDecoder().decode(snapshot.path("alipay_account_ciphertext").asText()));
+        return (name.isEmpty()?"**":name.substring(0,1)+"**")+" / "+(account.length()<5?"****":account.substring(0,1)+"****"+account.substring(account.length()-2));
     }
 
     private LocalDateTime operationTime(WorkOperation operation) {
@@ -191,7 +224,8 @@ public class OrderServiceImpl implements OrderService {
                 &&input.getAddressId().equals(map(order.getAddressSnapshot()).get("id"))
                 &&input.getConfirmedEstimatedShipDate().toString().equals(map(order.getAgreementSnapshot()).get("confirmedEstimatedShipDate"));
     }
-    private boolean overdue(TradeOrder order){return "PENDING_PAY".equals(order.getStatus())&&!policy.now().isBefore(order.getPayDeadlineAt());}
+    private boolean overdue(TradeOrder order){return overdue(order,policy.now());}
+    private boolean overdue(TradeOrder order,LocalDateTime now){return "PENDING_PAY".equals(order.getStatus())&&!now.isBefore(order.getPayDeadlineAt());}
     /** 当前订单入口仅承接定制流程，现货交易由后续独立任务开放。 */
     private void participant(Long userId,TradeOrder order){if(order==null||!"CUSTOM".equals(order.getOrderType())||!userId.equals(order.getBuyerId())&&!userId.equals(order.getCreatorId()))throw missing();}
     private Map<String,Object> map(String raw){return json.readValue(raw,new TypeReference<Map<String,Object>>(){});}

@@ -4,6 +4,7 @@ import * as api from '@/api/auth'
 import { switchActiveRole } from '@/api/creator'
 import type { LoginDTO, SessionVO } from '@/types/auth'
 import { advanceAuthenticationRevision, ApiError } from '@/utils/request'
+import { clearUserPaymentAttempts } from '@/utils/orderPayment'
 
 /** 只在内存缓存本人会话；刷新及业务页导航均向服务端核验 Cookie。 */
 export const useAuthStore = defineStore('auth', () => {
@@ -18,6 +19,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function clearSession() {
+    clearUserPaymentAttempts(session.value?.userId)
     advanceRevision()
     session.value = null
     initialized = true
@@ -53,6 +55,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function signIn(input: LoginDTO) {
     advanceRevision()
     const current = await api.login(input)
+    if (session.value?.userId !== current.userId) clearUserPaymentAttempts(session.value?.userId)
     advanceRevision()
     session.value = current
     initialized = true

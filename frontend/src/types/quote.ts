@@ -151,11 +151,21 @@ export interface OrderVO {
   title: string
   /** 商品成交金额。 */
   totalAmount: string
+  /** 实际支付金额；未付款为空。 */
+  paidAmount: string | null
+  /** 支付成功时刻；未付款为空。 */
+  paidAt: string | null
+  /** 买家确认支付条款的时刻。 */
+  termsConfirmedAt: string | null
+  /** 支付时固定的最终约定发货日。 */
+  shipDate: string | null
+  /** 发货日次日零时，排他截止时刻。 */
+  shipDeadlineAt: string | null
   /** 约定工期。 */
   durationDays: number
   /** 不随需求或报价变化的约定快照。 */
   agreementSnapshot: AgreementSnapshot
-  /** 本人收货地址快照；未付款创作者不可见。 */
+  /** 仅买家详情返回；创作者本阶段为空。 */
   addressSnapshot: (Omit<AddressDTO, 'isDefault'> & { id?: string }) | null
   /** 建单时间。 */
   createdAt: string
@@ -169,10 +179,75 @@ export interface OrderVO {
   owned: boolean
   /** 服务端是否允许取消。 */
   canCancel: boolean
+  /** 服务端核验的当前买家支付资格。 */
+  canPay: boolean
+  /** 仅买家待付款详情提供的支付确认内容。 */
+  paymentPreview: OrderPaymentPreviewVO | null
+  /** 仅详情提供的模拟支付流水和条款快照。 */
+  payment: OrderPaymentVO | null
+  /** 仅创作者可见的结算信息。 */
+  settlement: OrderSettlementVO | null
+  /** 支付后固定的五个节点，列表不返回详情。 */
+  progressNodes: OrderProgressNodeVO[]
   /** 中标双方继续使用的会话编号。 */
   conversationId: string
   /** 已提交的订单状态历史。 */
   history: OrderHistoryVO[]
+}
+/** 支付确认只提交条款和日期，不接受客户端金额。 */
+export interface OrderPaymentDTO {
+  /** 买家已阅读并同意条款。 */
+  termsConfirmed: true
+  /** 本次确认的服务端条款版本。 */
+  termsVersion: string
+  /** 本次确认的最终发货日期。 */
+  confirmedShipDate: string
+}
+export interface OrderPaymentPreviewVO {
+  /** 按当前支付日测算的发货日。 */
+  shipDate: string
+  /** 发货日次日零时的排他截止时刻。 */
+  shipDeadlineAt: string
+  /** 服务端提供的条款版本。 */
+  termsVersion: string
+  /** 买家需要确认的完整条款。 */
+  termsText: string
+}
+export interface OrderPaymentVO {
+  /** 唯一模拟支付流水号。 */
+  flowNo: string
+  /** 服务端确定的支付金额。 */
+  amount: string
+  /** 支付处理结果。 */
+  result: string
+  /** 支付发生时间。 */
+  occurredAt: string
+  /** 已确认的条款版本快照。 */
+  termsVersion: string
+  /** 已确认的条款正文快照。 */
+  termsText: string
+}
+export interface OrderSettlementVO {
+  /** 应结算金额，等于买家实付金额。 */
+  paidAmount: string
+  /** 待结算、已结算或已取消。 */
+  status: string
+  /** 已审核收款人的脱敏姓名和账号。 */
+  maskedPayee: string
+}
+export interface OrderProgressNodeVO {
+  /** 固定制作节点编号。 */
+  id: string
+  /** 备料、打样、制作、质检或包装发货。 */
+  nodeCode: string
+  /** 制作节点顺序。 */
+  sortOrder: number
+  /** 支付时固定的初始参考完成日。 */
+  plannedFinishDate: string
+  /** 节点当前处理状态。 */
+  status: string
+  /** 实际处理时间，未处理为空。 */
+  handledAt: string | null
 }
 export interface OrderHistoryVO {
   /** 状态变更动作。 */

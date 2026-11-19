@@ -36,6 +36,12 @@ public class TradeOrder {
     private String addressSnapshot;
     /** 创建二十四小时付款截止。 */
     private LocalDateTime payDeadlineAt;
+    /** 原成功支付时间，后续状态变更不覆盖。 */
+    private LocalDateTime paidAt;
+    /** 买家确认支付条款的时间。 */
+    private LocalDateTime termsConfirmedAt;
+    /** 最终发货日次日零时的排他截止上界。 */
+    private LocalDateTime shipDeadlineAt;
     /** 买家范围建单幂等键。 */
     private String createRequestKey;
     /** 建单时间。 */

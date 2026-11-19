@@ -9,8 +9,11 @@ import type { CategoryVO } from '@/types/creator'
 import type { CustomRequestVO, RequestQuotaVO } from '@/types/customRequest'
 import { requestStatus } from '@/utils/customRequest'
 import { formatTime } from '@/utils/creator'
+import { useAuthStore } from '@/stores/auth'
+import { useNotificationsStore } from '@/stores/notifications'
 import '@/assets/styles/custom-request.css'
 const props = defineProps<{ scope: 'hall' | 'mine' | 'invitations' }>()
+const auth = useAuthStore(); const notifications = useNotificationsStore()
 const title = computed(() => props.scope === 'hall' ? '需求大厅' : props.scope === 'mine' ? '我的需求' : '收到的定向邀约')
 const rows = ref<CustomRequestVO[]>([]); const categories = ref<CategoryVO[]>([]); const quota = ref<RequestQuotaVO>()
 const page = ref(1); const total = ref(0); const loading = ref(false); const error = ref('')
@@ -19,6 +22,7 @@ const selectable = computed(() => categories.value.flatMap(root => root.children
 let revision = 0
 /** 大厅默认由服务端按认证主品类过滤；切换筛选只重置页码。 */
 async function load(next = page.value) {
+  if (!auth.session) return
   const current = ++revision; loading.value = true; error.value = ''; page.value = next
   try {
     const params = Object.fromEntries(Object.entries({ ...(props.scope === 'hall' ? filters : { status: filters.status }), page: next }).filter(([, value]) => value !== ''))
@@ -27,13 +31,18 @@ async function load(next = page.value) {
     const result = await getRequests(params, props.scope)
     if (current !== revision) return
     rows.value = result.items; total.value = result.total
-    if (props.scope === 'mine') quota.value = await getRequestQuota()
+    if (props.scope === 'mine') { const resultQuota = await getRequestQuota(); if (current === revision) quota.value = resultQuota }
   } catch (failure) { if (current === revision) { rows.value = []; error.value = failure instanceof Error ? failure.message : '需求读取失败' } }
   finally { if (current === revision) loading.value = false }
 }
 watch(() => props.scope, () => { rows.value = []; Object.assign(filters, { categoryId: '', minBudget: '', maxBudget: '', publishedAfter: '', publishedBefore: '', allCategories: false, status: '' }); void load(1) })
-onMounted(() => { void load(); void getCategories().then(result => categories.value = result).catch(() => { /* 主列表仍显示具体请求错误。 */ }) })
-onBeforeUnmount(() => revision++)
+/** 付款通知、窗口恢复和实时重连均重新核验需求状态，推送不直接改写列表。 */
+function refresh() { void load() }
+function visible() { if (document.visibilityState === 'visible') refresh() }
+watch(() => auth.session?.userId, () => { revision++; rows.value = []; quota.value = undefined; total.value = 0; if (auth.session) void load(1) }, { flush: 'sync' })
+watch(() => notifications.connected, (connected, previous) => { if (connected && !previous) refresh() })
+onMounted(() => { refresh(); window.addEventListener('custom-request-updated', refresh); window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', visible); void getCategories().then(result => categories.value = result).catch(() => { /* 主列表仍显示具体请求错误。 */ }) })
+onBeforeUnmount(() => { revision++; window.removeEventListener('custom-request-updated', refresh); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', visible) })
 </script>
 <template>
   <component :is="scope === 'mine' ? WorkLayout : CreatorLayout">

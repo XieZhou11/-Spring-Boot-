@@ -39,4 +39,12 @@
 .order-timeline { padding-left: 20px; }
 .order-timeline li { padding: 8px 0 18px; }
 .order-timeline time { display: block; color: var(--muted); font-size: 12px; margin-top: 6px; }
+/* 支付确认在原详情内展开；节点只呈现支付时确定的参考计划。 */
+.payment-confirmation { margin: 0 0 24px; }
+.payment-terms { line-height: 1.9; }
+.payment-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; }
+.order-progress { list-style: none; padding: 0; }
+.order-progress li { padding: 18px 0; border-bottom: 1px solid var(--border); }
+.order-progress li > div { display: flex; justify-content: space-between; gap: 16px; }
+.order-progress li span, .order-progress li p, .order-progress li time { color: var(--muted); font-size: 13px; }
 @media (max-width: 900px) { .order-detail-grid { grid-template-columns: 1fr; } .award-panel { padding: 20px; } .quote-record { padding: 18px; } }
