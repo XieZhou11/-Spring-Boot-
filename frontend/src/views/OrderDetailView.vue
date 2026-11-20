@@ -6,6 +6,7 @@ import QuoteImages from '@/components/QuoteImages.vue'
 import PrivateImage from '@/components/PrivateImage.vue'
 import OrderFulfillmentPanel from '@/components/OrderFulfillmentPanel.vue'
 import OrderRefundPanel from '@/components/OrderRefundPanel.vue'
+import OrderReviewPanel from '@/components/OrderReviewPanel.vue'
 import { cancelOrder, checkInProgress, confirmReceipt, correctTracking, getOrder, payOrder, requestNoStartRefund, shipOrder, skipProgress, startProduction, supplementProgress } from '@/api/quote'
 import type { OrderPaymentDTO, OrderVO } from '@/types/quote'
 import { orderReason, orderStatus, settlementStatus } from '@/utils/quote'
@@ -366,6 +367,11 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
             :reset="fulfillmentReset"
             @submit="fulfill"
             @uploading="fulfillmentUpload"
+          />
+          <OrderReviewPanel
+            v-if="order.originalCompletedAt"
+            :key="`review-${order.id}`"
+            :order-id="order.id"
           />
           <OrderRefundPanel
             v-if="order.orderType === 'CUSTOM'"

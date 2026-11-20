@@ -42,6 +42,7 @@ const router = createRouter({
     { path: '/admin/refunds', name: 'admin-refunds', component: () => import('@/views/AdminRefundsView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: '售后与退款' }, children: [
       { path: ':id', name: 'admin-refund-detail', component: () => import('@/views/AdminRefundDetailView.vue'), meta: { title: '售后查证与裁定' } },
     ] },
+    { path: '/admin/review-reports', name: 'admin-review-reports', component: () => import('@/views/AdminReviewReportsView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: '评价举报' } },
     { path: '/admin/works', component: () => import('@/views/AdminWorksView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: '作品审核' }, children: [
       { path: ':id', component: () => import('@/views/AdminWorkReviewView.vue'), meta: { title: '作品材料审核' } },
     ] },

@@ -78,6 +78,8 @@ public class NotificationServiceImpl implements NotificationService {
                 case "ORDER_CREATED" -> "订单已创建";
                 case "ORDER_CANCELLED" -> "订单已取消";
                 case "ORDER_PAID" -> "订单已付款";
+                case "ORDER_REVIEWED" -> "订单收到新评价";
+                case "REVIEW_REPORT_PROCESSED" -> "评价举报已处理";
                 default -> throw new IllegalArgumentException("不支持的交易通知事件");
             };
             var notice=new SystemNotification();notice.setRecipientId(recipientId);notice.setEventType(eventType);notice.setEventKey(eventKey);

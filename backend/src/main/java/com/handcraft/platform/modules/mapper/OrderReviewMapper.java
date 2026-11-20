@@ -1,0 +1,46 @@
+package com.handcraft.platform.modules.mapper;
+
+import com.handcraft.platform.modules.entity.OrderReview;
+import com.handcraft.platform.modules.entity.ReviewReport;
+import com.handcraft.platform.modules.entity.ReviewReportEvidence;
+import java.util.List;
+import org.apache.ibatis.annotations.*;
+
+/** 评价及评价举报持久化；治理只追加操作历史，不删除交易证据。 */
+@Mapper
+public interface OrderReviewMapper {
+    @Select("SELECT * FROM order_review WHERE order_id=#{orderId}") OrderReview byOrder(Long orderId);
+    @Select("SELECT * FROM order_review WHERE id=#{id}") OrderReview find(Long id);
+    @Select("SELECT * FROM order_review WHERE id=#{id} FOR UPDATE") OrderReview lock(Long id);
+    @Select("SELECT r.* FROM order_review r JOIN trade_order o ON o.id=r.order_id WHERE r.creator_id=#{creatorId} AND r.moderation_status='VISIBLE' AND o.status<>'REFUNDED' ORDER BY r.created_at DESC,r.id DESC LIMIT #{size} OFFSET #{offset}")
+    List<OrderReview> creatorPage(@Param("creatorId")Long creatorId,@Param("offset")int offset,@Param("size")int size);
+    @Select("SELECT COUNT(*) FROM order_review r JOIN trade_order o ON o.id=r.order_id WHERE r.creator_id=#{creatorId} AND r.moderation_status='VISIBLE' AND o.status<>'REFUNDED'") long creatorCount(Long creatorId);
+    @Insert("INSERT INTO order_review(order_id,buyer_id,creator_id,rating,content,image_ids) VALUES(#{orderId},#{buyerId},#{creatorId},#{rating},#{content},#{imageIds})")
+    @Options(useGeneratedKeys=true,keyProperty="id") int insert(OrderReview review);
+    @Update("UPDATE order_review SET moderation_status=#{status} WHERE id=#{id}") int moderate(@Param("id")Long id,@Param("status")String status);
+    @Select("SELECT * FROM report WHERE id=#{id}") ReviewReport report(Long id);
+    @Select("SELECT * FROM report WHERE id=#{id} FOR UPDATE") ReviewReport lockReport(Long id);
+    @Select("SELECT * FROM report WHERE reporter_id=#{userId} AND target_type='REVIEW' AND target_id=#{reviewId} AND status='PENDING'") ReviewReport pending(@Param("userId")Long userId,@Param("reviewId")Long reviewId);
+    @Select("SELECT * FROM report WHERE reporter_id=#{userId} AND target_type='REVIEW' ORDER BY created_at DESC,id DESC LIMIT #{size} OFFSET #{offset}") List<ReviewReport> reporterReports(@Param("userId")Long userId,@Param("offset")int offset,@Param("size")int size);
+    @Select("SELECT * FROM report WHERE target_type='REVIEW' AND target_id=#{reviewId} ORDER BY created_at DESC,id DESC") List<ReviewReport> reviewReports(Long reviewId);
+    @Select("SELECT COUNT(*) FROM report WHERE reporter_id=#{userId} AND target_type='REVIEW'") long reporterReportCount(Long userId);
+    @Select("SELECT * FROM report WHERE target_type='REVIEW' AND (#{status}='ALL' OR status=#{status}) ORDER BY created_at,id LIMIT #{size} OFFSET #{offset}") List<ReviewReport> adminReports(@Param("status")String status,@Param("offset")int offset,@Param("size")int size);
+    @Select("SELECT COUNT(*) FROM report WHERE target_type='REVIEW' AND (#{status}='ALL' OR status=#{status})") long adminReportCount(String status);
+    @Insert("INSERT INTO report(reporter_id,target_type,target_id,reason_code,description,image_ids) VALUES(#{reporterId},'REVIEW',#{targetId},#{reasonCode},#{description},#{imageIds})") @Options(useGeneratedKeys=true,keyProperty="id") int insertReport(ReviewReport report);
+    @Update("UPDATE report SET status='PROCESSED',latest_result=#{result},handler_id=#{handlerId},last_processed_at=#{now} WHERE id=#{id} AND status='PENDING'") int decideReport(@Param("id")Long id,@Param("result")String result,@Param("handlerId")Long handlerId,@Param("now")java.time.LocalDateTime now);
+    @Update("UPDATE report SET latest_result=#{result},handler_id=#{handlerId},last_processed_at=#{now} WHERE id=#{id} AND status='PROCESSED'") int correctReport(@Param("id")Long id,@Param("result")String result,@Param("handlerId")Long handlerId,@Param("now")java.time.LocalDateTime now);
+    @Insert("INSERT INTO report_evidence(report_id,submitter_id,evidence_type,content,image_ids) VALUES(#{reportId},#{submitterId},#{type},#{content},#{imageIds})") int addEvidence(@Param("reportId")Long reportId,@Param("submitterId")Long submitterId,@Param("type")String type,@Param("content")String content,@Param("imageIds")String imageIds);
+    @Select("SELECT COUNT(*) FROM report_evidence WHERE report_id=#{reportId}") long evidenceCount(Long reportId);
+    @Select("SELECT * FROM report_evidence WHERE report_id=#{reportId} ORDER BY id") List<ReviewReportEvidence> evidence(Long reportId);
+    @Select("SELECT reason FROM operation_log WHERE target_type='REVIEW_REPORT' AND target_id=#{id} AND action IN ('DECIDE','CORRECT') ORDER BY id DESC LIMIT 1") String decisionReason(Long id);
+    @Select("SELECT id,operator_id,operator_type,action,before_status,after_status,reason,detail,created_at FROM operation_log WHERE target_type='REVIEW_REPORT' AND target_id=#{id} AND action IN ('DECIDE','CORRECT') ORDER BY id") List<com.handcraft.platform.modules.entity.WorkOperation> reportHistory(Long id);
+    @Select("SELECT COALESCE(JSON_UNQUOTE(JSON_EXTRACT(detail,'$.originalModerationStatus')),JSON_UNQUOTE(JSON_EXTRACT(detail,'$.beforeModerationStatus'))) FROM operation_log WHERE target_type='REVIEW_REPORT' AND target_id=#{id} AND action IN ('DECIDE','CORRECT') ORDER BY id LIMIT 1") String originalModerationStatus(Long id);
+    @Select("SELECT COUNT(*) FROM operation_log WHERE target_type='REVIEW_REPORT' AND target_id=#{id} AND action IN ('DECIDE','CORRECT') AND JSON_UNQUOTE(JSON_EXTRACT(detail,'$.decision')) IN ('HIDE','DELETE')") long hasModerationAction(Long id);
+    @Select("SELECT o.*,c.id AS conversation_id FROM order_review r JOIN trade_order o ON o.id=r.order_id LEFT JOIN conversation c ON c.order_id=o.id WHERE r.id=#{reviewId}") java.util.Map<String,Object> orderAndConversation(Long reviewId);
+    @Select("SELECT (SELECT COUNT(*) FROM report WHERE target_type='REVIEW' AND JSON_CONTAINS(image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))) AND (#{admin}=1 OR reporter_id=#{userId})) + (SELECT COUNT(*) FROM report_evidence e JOIN report r ON r.id=e.report_id WHERE r.target_type='REVIEW' AND JSON_CONTAINS(e.image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))) AND (#{admin}=1 OR r.reporter_id=#{userId} OR EXISTS (SELECT 1 FROM order_review rv WHERE rv.id=r.target_id AND (rv.buyer_id=#{userId} OR rv.creator_id=#{userId}))))") int canReadReportImage(@Param("userId")Long userId,@Param("fileId")Long fileId,@Param("admin")boolean admin);
+    @Select("SELECT COUNT(*) FROM order_review WHERE JSON_CONTAINS(image_ids,JSON_QUOTE(CAST(#{id} AS CHAR)))") int imageReferences(Long id);
+    @Select("SELECT COUNT(*) FROM order_review r JOIN trade_order o ON o.id=r.order_id WHERE r.moderation_status='VISIBLE' AND o.status<>'REFUNDED' AND JSON_CONTAINS(r.image_ids,JSON_QUOTE(CAST(#{id} AS CHAR)))") int publicImageReferences(Long id);
+    @Select("SELECT COUNT(*) FROM order_review r JOIN trade_order o ON o.id=r.order_id WHERE JSON_CONTAINS(r.image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))) AND ((r.moderation_status='VISIBLE' AND o.status<>'REFUNDED') OR #{admin}=1 OR r.buyer_id=#{userId} OR r.creator_id=#{userId})") int canReadReviewImage(@Param("userId")Long userId,@Param("fileId")Long fileId,@Param("admin")boolean admin);
+    @Select("SELECT o.* FROM order_review r JOIN trade_order o ON o.id=r.order_id WHERE r.id=#{reviewId}") com.handcraft.platform.modules.entity.TradeOrder reviewOrder(Long reviewId);
+    @Select("SELECT COUNT(*) FROM report WHERE target_type='REVIEW' AND target_id=#{reviewId} AND reporter_id=#{userId}") long hasReported(@Param("userId")Long userId,@Param("reviewId")Long reviewId);
+}

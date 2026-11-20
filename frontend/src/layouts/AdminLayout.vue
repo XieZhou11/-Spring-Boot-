@@ -57,6 +57,10 @@ async function signOut() {
           active-class="active"
         ><AppIcon name="shield" />售后与退款</RouterLink>
         <RouterLink
+          to="/admin/review-reports"
+          active-class="active"
+        ><AppIcon name="shield" />评价举报</RouterLink>
+        <RouterLink
           to="/admin/settlements"
           active-class="active"
         ><AppIcon name="grid" />资金记录</RouterLink>

@@ -25,6 +25,8 @@ public record CreatorPublicVO(
     String averageRating,
     /** 可见评价总数。 */
     long reviewCount,
+    /** 四至五星占有效评价的百分比，无评价为空。 */
+    String positiveRate,
     /** 完成订单数。 */
     long completedOrderCount,
     /** 当前上架作品数。 */

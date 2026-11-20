@@ -53,6 +53,8 @@ export interface QuoteVO extends Omit<QuoteDTO, 'requestKey' | 'additionalAgreem
   averageRating: string | null
   /** 评价数量。 */
   reviewCount: number
+  /** 四至五星占有效评价比例，无评价为空。 */
+  positiveRate: string | null
   /** 完成订单数量。 */
   completedOrderCount: number
   /** 是否本人报价。 */

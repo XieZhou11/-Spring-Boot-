@@ -111,7 +111,7 @@ public class WorkServiceImpl implements WorkService {
         var all=categories.all();List<CategoryVO> main=a==null?List.of():applications.categoryIds(a.getId()).stream().map(categories::find).filter(Objects::nonNull).map(c->new CategoryVO(c.getId().toString(),text(c.getParentId()),c.getName(),c.isEnabled(),c.getSortOrder(),List.of(),c.isEnabled()&&all.stream().noneMatch(x->Objects.equals(x.getParentId(),c.getId())))).toList();
         // 主页与报价对比共用退款、治理状态及历史完成事实的统计口径。
         var reputation=reputations.summary(creatorId);
-        return new CreatorPublicVO(creatorId.toString(),u.getNickname(),u.getBio(),avatar==null?null:avatar.url(),avatar==null?null:avatar.expiresAt(),main,a==null?null:a.getProvince(),a==null?null:a.getCity(),u.isCreatorPaused()||u.isAdminBusinessPaused(),reputation.averageRating(),reputation.reviewCount(),reputation.completedOrderCount(),works.publicCount(creatorId));
+        return new CreatorPublicVO(creatorId.toString(),u.getNickname(),u.getBio(),avatar==null?null:avatar.url(),avatar==null?null:avatar.expiresAt(),main,a==null?null:a.getProvince(),a==null?null:a.getCity(),u.isCreatorPaused()||u.isAdminBusinessPaused(),reputation.averageRating(),reputation.reviewCount(),reputation.positiveRate(),reputation.completedOrderCount(),works.publicCount(creatorId));
     });}
     public PageVO<CreatorPublicVO> customCandidates(Long userId,Long categoryId,String keyword,int page,int size){return run("定向需求创作者选择",userId,()->{
         var current=requireUser(userId);if(current.isAdmin())throw new BusinessException(CommonErrorCode.FORBIDDEN,"管理员不能作为交易主体");if(page<1||page>1000000||size<1||size>50||keyword!=null&&keyword.length()>30)throw invalid("筛选参数无效");

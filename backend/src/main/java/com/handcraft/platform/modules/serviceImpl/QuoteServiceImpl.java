@@ -170,7 +170,7 @@ public class QuoteServiceImpl implements QuoteService {
                 author.getNickname(),quote.getGoodsAmount().setScale(2).toPlainString(),quote.getDurationDays(),quote.getProposal(),
                 quote.getAdditionalAgreement(),ids(quote.getImageIds()),status,expired?"TIMEOUT":quote.getInvalidReason(),
                 time(quote.getCreatedAt()),time(quote.getExpiresAt()),policy.now().toLocalDate().plusDays(quote.getDurationDays()),
-                summary.averageRating(),summary.reviewCount(),summary.completedOrderCount(),owned,owned&&active,
+                summary.averageRating(),summary.reviewCount(),summary.positiveRate(),summary.completedOrderCount(),owned,owned&&active,
                 userId.equals(request.getBuyerId())&&active&&awardReason(request)==null&&policy.creatorReason(author,request.getCategoryId())==null);
     }
 

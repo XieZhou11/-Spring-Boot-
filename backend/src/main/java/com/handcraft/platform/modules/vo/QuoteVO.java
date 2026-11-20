@@ -22,9 +22,10 @@ import java.time.OffsetDateTime;
  * @param estimatedShipDate 按当前日期测算的发货日
  * @param averageRating 一位小数平均星级，无评价为空
  * @param reviewCount 有效评价数
+ * @param positiveRate 好评率
  * @param completedOrderCount 未退款已完成订单数
  * @param owned 是否本人提交
  * @param canWithdraw 是否可撤回
  * @param canAward 当前买家是否可选择
  */
-public record QuoteVO(String id, String requestId, String requestTitle, String creatorId, String creatorNickname, String goodsAmount, int durationDays, String proposal, String additionalAgreement, List<String> imageIds, String status, String invalidReason, OffsetDateTime createdAt, OffsetDateTime expiresAt, LocalDate estimatedShipDate, String averageRating, long reviewCount, long completedOrderCount, boolean owned, boolean canWithdraw, boolean canAward) {}
+public record QuoteVO(String id, String requestId, String requestTitle, String creatorId, String creatorNickname, String goodsAmount, int durationDays, String proposal, String additionalAgreement, List<String> imageIds, String status, String invalidReason, OffsetDateTime createdAt, OffsetDateTime expiresAt, LocalDate estimatedShipDate, String averageRating, long reviewCount, String positiveRate, long completedOrderCount, boolean owned, boolean canWithdraw, boolean canAward) {}

@@ -1,6 +1,6 @@
 # 项目文档中心
 
-更新日期：2026-11-19。
+更新日期：2026-11-20。
 
 这里是从 0 开发时的统一上下文入口。先确认当前资料与任务，再按需要阅读相关文档；不要把所有历史版本同时作为实现依据。
 
@@ -17,7 +17,7 @@
 | 技术选型 | 用户已确认采用；账号本地业务集成已验证，QQ/163 公网收件及找回密码补充验收用户明确暂缓，其他业务能力按任务验证 | [ADR-001](design/decisions/ADR-001-technology-stack.md) |
 | 数据库详细设计 | V1.5 设计草稿；27 表 Flyway SQL 已在本地执行，迁移及失败补偿在 MySQL 8.4 验证 | [数据库表结构](design/数据库表结构.md)，含字段、索引、应用关联与事务回滚 |
 | 架构、领域与 UI 详细设计 | 尚未编写 | [设计约定](design/README.md)，在相关任务中逐步形成 |
-| 前后端工程 | 已有账号、个人中心、创作者入驻与后台审核、两级品类、身份切换、系统通知、作品链路、作品互动、个人收藏/关注、定制需求/图文会话、报价定标、定制模拟付款、履约、未开工退款、普通售后/管理员裁定、模拟结算与现货直购；T-006已整合到当前业务分支并通过联合回归。QQ/163公网收件及找回密码补充验收用户明确暂缓；评价待后续任务 | [后端说明](../backend/README.md)、[前端说明](../frontend/README.md)、[T-002](development/tasks/T-002-frontend-auth.md)、[T-003](development/tasks/T-003-personal-center.md)、[T-004](development/tasks/T-004-creator-onboarding.md)、[T-005](development/tasks/T-005-work-publication.md)、[T-006](development/tasks/T-006-work-interactions.md)、[T-007](development/tasks/T-007-custom-requests.md)、[T-009](development/tasks/T-009-quote-award.md)、[T-011](development/tasks/T-011-order-payment.md)、[T-013](development/tasks/T-013-order-fulfillment.md)、[T-014](development/tasks/T-014-refund-adjudication.md)、[T-015](development/tasks/T-015-settlement-income.md)、[T-016](development/tasks/T-016-stock-order.md) |
+| 前后端工程 | 已有账号、个人中心、创作者入驻与后台审核、两级品类、身份切换、系统通知、作品链路、作品互动、定制需求与会话、报价定标、定制与现货模拟支付、履约、退款裁定、模拟结算、评价及口碑治理。QQ/163公网收件及找回密码补充验收用户明确暂缓 | [后端说明](../backend/README.md)、[前端说明](../frontend/README.md)、[T-002](development/tasks/T-002-frontend-auth.md)、[T-003](development/tasks/T-003-personal-center.md)、[T-004](development/tasks/T-004-creator-onboarding.md)、[T-005](development/tasks/T-005-work-publication.md)、[T-006](development/tasks/T-006-work-interactions.md)、[T-007](development/tasks/T-007-custom-requests.md)、[T-009](development/tasks/T-009-quote-award.md)、[T-011](development/tasks/T-011-order-payment.md)、[T-013](development/tasks/T-013-order-fulfillment.md)、[T-014](development/tasks/T-014-refund-adjudication.md)、[T-015](development/tasks/T-015-settlement-income.md)、[T-016](development/tasks/T-016-stock-order.md)、[T-017](development/tasks/T-017-order-reviews-reputation.md) |
 | 前后台导航与工作区 | T-008 已完成独立后台、审核双栏、前台一级导航、创作者工作台与消息双栏；需求和沟通移出个人中心，旧链接兼容跳转 | [T-008](development/tasks/T-008-navigation-layout.md)、[测试记录](testing/T-008-navigation-layout.md) |
 | 聊天连接与查询优化 | T-010 已完成心跳检测、有限重连、按会话合并刷新和每轮凭证查询复用；握手失败仍查询持久化未读，已完成隔离回归及失败项复测 | [T-010](development/tasks/T-010-chat-reliability.md)、[测试记录](testing/T-010-chat-reliability.md) |
 | 报价对比与定标建单 | T-009已完成：报价/撤回、私有图片、对比、唯一待付款订单、取消/超时及关联会话；独立审查与最终回归通过 | [T-009](development/tasks/T-009-quote-award.md)、[测试记录](testing/T-009-quote-award.md) |
@@ -26,6 +26,7 @@
 | 普通售后与管理员退款裁定 | T-014已完成：申请、双方追加补证、撤回、后台只读查证/退回核验、版本裁定及公共原子退款；独立审查及最终回归通过 | [T-014](development/tasks/T-014-refund-adjudication.md)、[测试记录](testing/T-014-refund-adjudication.md) |
 | 模拟结算与创作者收入记录 | T-015已完成：定时扫描满七天到期订单原子结算、与售后双向互斥幂等、创作者收入页与后台资金记录页及订单详情结算时间；独立审查与最终回归通过 | [T-015](development/tasks/T-015-settlement-income.md)、[测试记录](testing/T-015-settlement-income.md) |
 | 现货直购建单与模拟支付 | T-016已完成：详情直购、单件锁定、模拟付款、未知结果恢复、履约定时扫描及现有发货流程通过；真实 MySQL 专项 8 项、订单支付/履约兼容回归 28 项、浏览器专项 1 项及前端 lint/构建通过 | [T-016](development/tasks/T-016-stock-order.md)、[测试记录](testing/T-016-stock-order.md) |
+| 订单评价与创作者口碑 | T-017完成评价资格、图文评价、统一口碑统计、评价举报补证、管理员处置/更正与前后端入口；重要后端真实 MySQL 用例通过，浏览器 E2E 由其他 AI 验收 | [T-017](development/tasks/T-017-order-reviews-reputation.md)、[测试记录](testing/T-017-order-reviews-reputation.md) |
 | 主流程演示反馈 | T-012 已完成详情离页请求、管理员聊天未读、状态提示及订单排版修复；相关 25 项用例经复测通过，初次主流程检查和修复复测维护在同一报告 | [T-012](development/tasks/T-012-demo-feedback.md)、[主流程演示报告](testing/demo-main-flow.md) |
 | 业务接口、自动化测试与 CI | 已交付业务用真实MySQL、HTTP、WebSocket及协议接收器验证；T-015最终后端verify323项、0失败/错误、14项真实OSS条件跳过，全量浏览器87/87、前端类型/lint/构建通过，历史云端结果单独保留；后端测试源码仅本地保留且被Git忽略；无CI文件，未执行远端CI | [当前集成回归](testing/T-015-settlement-income.md)、[互动历史回归](testing/T-006-work-interactions.md)、[全部业务测试记录](testing/README.md) |
 
@@ -55,7 +56,7 @@ T-005 已完成作品草稿、发布额度、版本冲突、审核历史、作�
 
 [T-009 报价对比与定标建单](development/tasks/T-009-quote-award.md)沿用需求及会话，实现报价、定标快照与唯一订单，买家取消或超时关闭需求，中标会话继续可用。V5追加报价请求键，V1—V5迁移已在隔离MySQL验证，开发库由实际启动追加尚未执行版本。
 
-[T-011定制订单模拟支付与支付后初始化](development/tasks/T-011-order-payment.md)沿用V1—V5，付款原子保存成功流水、PAID待开工、IN_TRADE、待结算快照和五个未开始节点；前端保留未知付款确认并核验结果，双方收到持久化通知。开工、制作履约及未开工退款由T-013承接，普通售后由T-014承接；结算执行由T-015完成，现货直购由[T-016](development/tasks/T-016-stock-order.md)完成，评价另行处理。
+[T-011定制订单模拟支付与支付后初始化](development/tasks/T-011-order-payment.md)沿用V1—V5，付款原子保存成功流水、PAID待开工、IN_TRADE、待结算快照和五个未开始节点；前端保留未知付款确认并核验结果，双方收到持久化通知。开工、制作履约及未开工退款由T-013承接，普通售后由T-014承接；结算执行由T-015完成，现货直购由[T-016](development/tasks/T-016-stock-order.md)完成，订单评价与口碑治理由[T-017](development/tasks/T-017-order-reviews-reputation.md)完成。
 
 [T-008 导航与工作区修复](development/tasks/T-008-navigation-layout.md)沿用现有接口：管理员默认进入固定左栏的后台，作品和入驻审核保留队列/详情上下文；普通用户从一级导航管理需求，从独立消息中心沟通，个人中心保留资料、地址与入驻，并由T-006补入收藏、关注。当前页面路径以[前端说明](../frontend/README.md)为准，旧个人中心需求/消息路径兼容跳转。
 
@@ -123,7 +124,8 @@ docs/
 │       ├── T-013-order-fulfillment.md # 定制履约、制作进度及未开工退款
 │       ├── T-014-refund-adjudication.md # 普通售后、双方补证及管理员裁定
 │       ├── T-015-settlement-income.md # 模拟结算与创作者收入记录
-│       └── T-016-stock-order.md      # 现货直购建单与模拟支付
+│       ├── T-016-stock-order.md      # 现货直购建单与模拟支付
+│       └── T-017-order-reviews-reputation.md # 订单评价与创作者口碑
 └── testing/                          # 简短测试结果，不存测试代码、不建子目录
     ├── README.md                     # 业务功能测试记录方式与格式示例
     ├── T-001-backend-auth.md          # 账号后端测试与复测结果
@@ -141,7 +143,8 @@ docs/
     ├── T-013-order-fulfillment.md        # 履约、退款、图片及恢复回归
     ├── T-014-refund-adjudication.md      # 售后裁定、原子退款及未知结果恢复
     ├── T-015-settlement-income.md        # 结算扫描、双向竞争及收入页面回归
-    └── T-016-stock-order.md             # 现货直购及模拟支付回归
+    ├── T-016-stock-order.md             # 现货直购及模拟支付回归
+    └── T-017-order-reviews-reputation.md # 评价资格、口碑与举报治理
 ```
 
 补充说明：
@@ -150,7 +153,7 @@ docs/
 - `prototypes/README.md` 是当前导航，`assets/原型说明.md` 是原始设计说明，两者职责接近；后续若精简，可以合并说明并减少一层目录，本轮未改写原始材料。
 - 原 `design/database.md` 已删除，现有 [数据库表结构](design/数据库表结构.md)为按当前需求编写的新草稿，对应 SQL 位于后端 `src/main/resources/db/migration/`，V1 已执行且包含异常结构补偿；人工结构回退位于相邻 `rollback/`，未执行。
 - `decisions/` 中的 ADR-001 记录已选技术；选型和框架验证不代表全部业务已经实现，SMTP 公网实收补充验收已由用户明确暂缓，OSS 实际结果见 T-003。
-- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端T-001、认证前端T-002、个人中心T-003、入驻审核T-004、作品链路T-005、作品互动T-006、定制需求/会话T-007、导航交互修复T-008、报价/待付款订单T-009、聊天优化T-010、模拟付款T-011、演示反馈修复T-012、定制履约T-013、普通售后T-014、模拟结算T-015及现货直购T-016。
+- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端T-001、认证前端T-002、个人中心T-003、入驻审核T-004、作品链路T-005、作品互动T-006、定制需求/会话T-007、导航交互修复T-008、报价/待付款订单T-009、聊天优化T-010、模拟付款T-011、演示反馈修复T-012、定制履约T-013、普通售后T-014、模拟结算T-015、现货直购T-016及订单评价与口碑T-017。
 - `testing/README.md` 只规定业务功能测试结果如何填写；功能开发时再增加实际记录，复测更新同一文件，任务只保留总体结果和链接。
 
 ## 3. 已有资料迁移对照
@@ -219,4 +222,4 @@ docs/
 
 后续统一以[当前 V1.5 MVP 版需求](requirements/requirements.md)为依据，其中所列需求均须实现；[后续功能清单](requirements/archive/手工定制作品分享与交易平台后续功能清单.md)独立留存，供完成后选择补充。数据库设计及 SQL 待审核，原型待按当前范围调整。
 
-后续从[当前需求](requirements/requirements.md)、[数据库表结构](design/数据库表结构.md)及 [ADR-001](design/decisions/ADR-001-technology-stack.md)继续。工程说明见[后端README](../backend/README.md)与[前端README](../frontend/README.md)。互动集成交接见[T-006](development/tasks/T-006-work-interactions.md)及其测试记录；QQ/163公网收件及找回密码补充验收仍按T-001/T-002暂缓。定制履约及退款已由[T-013](development/tasks/T-013-order-fulfillment.md)完成，普通售后由[T-014](development/tasks/T-014-refund-adjudication.md)完成，模拟结算与收入记录已由[T-015](development/tasks/T-015-settlement-income.md)完成；现货直购实施与当前验证见[T-016](development/tasks/T-016-stock-order.md)，评价与公开授权另行验收。
+后续从[当前需求](requirements/requirements.md)、[数据库表结构](design/数据库表结构.md)及 [ADR-001](design/decisions/ADR-001-technology-stack.md)继续。工程说明见[后端README](../backend/README.md)与[前端README](../frontend/README.md)。互动集成交接见[T-006](development/tasks/T-006-work-interactions.md)及其测试记录；QQ/163公网收件及找回密码补充验收仍按T-001/T-002暂缓。定制履约及退款已由[T-013](development/tasks/T-013-order-fulfillment.md)完成，普通售后由[T-014](development/tasks/T-014-refund-adjudication.md)完成，模拟结算与收入记录已由[T-015](development/tasks/T-015-settlement-income.md)完成，现货直购由[T-016](development/tasks/T-016-stock-order.md)完成；订单评价与口碑实现及验证见[T-017](development/tasks/T-017-order-reviews-reputation.md)，浏览器 E2E 由其他 AI 验收，成品公开授权仍待后续独立验收。

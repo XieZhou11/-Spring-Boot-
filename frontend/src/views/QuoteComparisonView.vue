@@ -191,7 +191,7 @@ onBeforeUnmount(() => { revision++; historyRevision++; addressRevision++; window
               :id="`quote-${quote.id}`"
               :key="quote.id"
             >
-              <td><RouterLink :to="`/creators/${quote.creatorId}`">{{ quote.creatorNickname }} ↗</RouterLink><span class="field-help">{{ quote.averageRating === null ? '暂无评价' : `${quote.averageRating} 分` }}</span><span class="field-help">{{ quote.reviewCount }} 条评价 · 完成 {{ quote.completedOrderCount }} 单</span></td>
+              <td><RouterLink :to="`/creators/${quote.creatorId}`">{{ quote.creatorNickname }} ↗</RouterLink><span class="field-help">{{ quote.averageRating === null ? '暂无评价' : `${quote.averageRating} 分 · 好评率 ${quote.positiveRate}%` }}</span><span class="field-help">{{ quote.reviewCount }} 条评价 · 完成 {{ quote.completedOrderCount }} 单</span></td>
               <td>
                 <strong class="quote-amount">¥ {{ quote.goodsAmount }}</strong><br><span
                   v-if="Number(quote.goodsAmount) === lowestAmount"

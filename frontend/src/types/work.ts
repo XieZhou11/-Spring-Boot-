@@ -102,6 +102,8 @@ export interface CreatorPublicVO {
   averageRating: string | null
   /** 实际评价数。 */
   reviewCount: number
+  /** 四至五星占有效评价比例，无评价为空。 */
+  positiveRate: string | null
   /** 实际完成订单数。 */
   completedOrderCount: number
   /** 当前已上架作品数。 */

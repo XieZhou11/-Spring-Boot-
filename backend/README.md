@@ -206,3 +206,9 @@ V6仅新增制作记录可空请求键及创作者范围唯一索引；历史迁
 ## 模拟结算与创作者收入记录（T-015）
 
 [T-015](../docs/development/tasks/T-015-settlement-income.md)承接支付时建立的待结算记录，新增每分钟定时扫描：订单原完成时间满七天、未全额退款且无处理中售后时，在锁内重检（账号升序→需求→订单→退款→结算→会话，锁后统一取时）后同事务落地`SETTLEMENT`成功流水（幂等键`SETTLEMENT:ORDER:{orderId}`）、回写`settlement_flow_id`/`settled_at`、系统操作日志及创作者专属通知，状态仅`PENDING→SETTLED`；与T-014退款批准原子取消待结算形成双向互斥，结算前校验收款快照三键与三方金额一致。查询接口`GET /api/me/settlements`（创作者收入记录，仅脱敏账户）与`GET /api/admin/settlements`（管理员资金记录，含姓名与账号明文）均为只读分页，`OrderSettlementVO`补充结算时间。脱敏与明文口径统一由`PayeeSnapshotService`维护。V1已含全部所需列与索引，本任务无新增迁移。验证见[T-015测试记录](../docs/testing/T-015-settlement-income.md)。
+
+## 订单评价与创作者口碑（T-017）
+
+订单买家可在原完成时间后七天内提交一次图文评价；订单详情读取评价和创建资格，公开评价列表、主页统计及报价口碑共用隐藏/删除/退款排除口径。接口包括 `POST /api/orders/{id}/reviews`、`GET /api/orders/{id}/review` 及 `GET /api/creators/{id}/reviews`。评价与举报图片复用私有图片上传能力，文件清理会保留评价与举报历史引用。
+
+评价举报支持重复待处理记录追加证据、举报人/交易参与方按关系读取历史并补证/异议、管理员查阅关联订单沟通、处理不成立/隐藏/删除及更正恢复。相关通知与只追加操作历史在事务内提交。复用 V1 的 `order_review`、`report`、`report_evidence`，无新迁移。重要真实 MySQL 后端用例及检查结果见 [T-017 测试记录](../docs/testing/T-017-order-reviews-reputation.md)。
