@@ -1,4 +1,5 @@
 import type { AddressDTO } from './account'
+import type { RefundApplicationVO } from './refund'
 
 /** 北京时间自然日的报价提交额度。 */
 export interface QuoteQuotaVO {
@@ -191,6 +192,12 @@ export interface OrderVO {
   canConfirmReceipt: boolean
   /** 服务端按48小时边界核验的未开工退款资格。 */
   canRequestNoStartRefund: boolean
+  /** 服务端核验的买家普通售后申请资格。 */
+  canRequestRefund: boolean
+  /** 最初完成后七天排他截止时刻，完成前为空。 */
+  refundWindowEndsAt: string | null
+  /** 当前处理中申请，无申请时为空。 */
+  currentRefund: RefundApplicationVO | null
   /** 已过固定约定发货截止且尚未发货。 */
   shippingOverdue: boolean
   /** 运单号历次更正记录，不覆盖原值。 */

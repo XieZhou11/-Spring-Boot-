@@ -5,6 +5,7 @@ import WorkLayout from '@/layouts/WorkLayout.vue'
 import QuoteImages from '@/components/QuoteImages.vue'
 import PrivateImage from '@/components/PrivateImage.vue'
 import OrderFulfillmentPanel from '@/components/OrderFulfillmentPanel.vue'
+import OrderRefundPanel from '@/components/OrderRefundPanel.vue'
 import { cancelOrder, checkInProgress, confirmReceipt, correctTracking, getOrder, payOrder, requestNoStartRefund, shipOrder, skipProgress, startProduction, supplementProgress } from '@/api/quote'
 import type { OrderPaymentDTO, OrderVO } from '@/types/quote'
 import { orderReason, orderStatus, settlementStatus } from '@/utils/quote'
@@ -15,14 +16,19 @@ import { ApiError } from '@/utils/request'
 import { clearPaymentAttempt, readPaymentAttempt, savePaymentAttempt } from '@/utils/orderPayment'
 import { clearFulfillmentAttempt, fulfillmentActionName, fulfillmentApplied, readFulfillmentAttempt, saveFulfillmentAttempt } from '@/utils/orderFulfillment'
 import type { FulfillmentAttempt } from '@/utils/orderFulfillment'
+import { clearRefundState } from '@/utils/refund'
 import '@/assets/styles/custom-request.css'
 import '@/assets/styles/quote.css'
+import '@/assets/styles/refund.css'
 const route = useRoute(); const auth = useAuthStore(); const notifications = useNotificationsStore()
 const order = ref<OrderVO>(); const loading = ref(false); const cancelling = ref(false); const error = ref('')
 const paymentState = ref<'idle' | 'submitting' | 'unknown'>('idle'); const paymentError = ref(''); const confirmationOpen = ref(false); const agreed = ref(false); const retryChecked = ref(false)
 const fulfillmentState = ref<'idle' | 'submitting' | 'unknown'>('idle'); const fulfillmentAttempt = ref<FulfillmentAttempt>(); const fulfillmentError = ref(''); const fulfillmentRetryChecked = ref(false); const fulfillmentReset = ref(0); const fulfillmentUploading = ref(false)
-const busy = computed(() => cancelling.value || paymentState.value === 'submitting' || fulfillmentState.value === 'submitting' || fulfillmentUploading.value)
-const fulfillmentBlocked = computed(() => fulfillmentState.value === 'unknown' || paymentState.value === 'unknown')
+const refundBusy = ref(false); const refundBlocked = ref(false)
+const baseBusy = computed(() => cancelling.value || paymentState.value === 'submitting' || fulfillmentState.value === 'submitting' || fulfillmentUploading.value)
+const baseBlocked = computed(() => fulfillmentState.value === 'unknown' || paymentState.value === 'unknown')
+const busy = computed(() => baseBusy.value || refundBusy.value)
+const fulfillmentBlocked = computed(() => baseBlocked.value || refundBlocked.value)
 let revision = 0; let deferredRefresh = false; let attempt: OrderPaymentDTO | undefined
 /** 订单上下文仅在本详情路由有效，离页与其他资源的同名参数不能触发订单查询。 */
 const id = () => route.name === 'order-detail' && typeof route.params.id === 'string' && /^[1-9]\d*$/.test(route.params.id) ? route.params.id : undefined
@@ -60,7 +66,7 @@ async function load() {
     }
   } catch (failure) {
     if (current !== revision || !sameContext(context)) return
-    if (failure instanceof ApiError && [401, 403, 404].includes(failure.status)) { order.value = undefined; clearAttempt(context); clearFulfillment(context); paymentError.value = ''; fulfillmentError.value = '' }
+    if (failure instanceof ApiError && [401, 403, 404].includes(failure.status)) { order.value = undefined; clearAttempt(context); clearFulfillment(context); if (context.userId && context.orderId) { clearRefundState(context.userId, context.orderId, 'attempt'); clearRefundState(context.userId, context.orderId, 'draft') }; paymentError.value = ''; fulfillmentError.value = ''; refundBusy.value = false; refundBlocked.value = false }
     error.value = failure instanceof Error ? failure.message : '订单读取失败'
   }
   finally { if (current === revision) loading.value = false }
@@ -78,7 +84,7 @@ async function cancel() {
 function openPayment() { if (!busy.value && !fulfillmentBlocked.value && order.value?.canPay && paymentState.value === 'idle') { confirmationOpen.value = true; agreed.value = false; paymentError.value = '' } }
 /** 首次确认与未知结果重试冻结同一输入；提交前作废所有旧GET，杜绝旧快照回写。 */
 async function pay() {
-  if (busy.value || fulfillmentState.value !== 'idle' || !order.value) return
+  if (busy.value || fulfillmentState.value !== 'idle' || refundBlocked.value || !order.value) return
   const context = currentContext(); if (!context.userId || !context.orderId || order.value.id !== context.orderId || !order.value.owned) return
   if (paymentState.value === 'unknown') { if (!attempt || !retryChecked.value) return }
   else {
@@ -118,7 +124,7 @@ async function pay() {
 }
 /** 所有履约写入共享页面查询代数；未知结果冻结原参数，持久化失败绝不发送HTTP。 */
 async function fulfill(candidate?: FulfillmentAttempt) {
-  if (busy.value || paymentState.value !== 'idle' || !order.value) return
+  if (busy.value || paymentState.value !== 'idle' || refundBlocked.value || !order.value) return
   const context = currentContext(); if (!context.userId || !context.orderId || order.value.id !== context.orderId) return
   if (fulfillmentState.value === 'unknown') { if (candidate || !fulfillmentAttempt.value || !fulfillmentRetryChecked.value) return }
   else { if (!candidate) return; fulfillmentAttempt.value = candidate }
@@ -160,12 +166,15 @@ async function fulfill(candidate?: FulfillmentAttempt) {
   }
 }
 function fulfillmentUpload(value: boolean) { fulfillmentUploading.value = value; if (!value) finishDeferredRefresh() }
+/** 普通售后与履约共用查询代数，较早订单快照不能覆盖新售后状态。 */
+function refundWriteStart() { revision++; loading.value = false }
+function refundLock(value: { busy: boolean; blocked: boolean }) { refundBusy.value = value.busy; refundBlocked.value = value.blocked; if (!value.busy) finishDeferredRefresh() }
 function finishDeferredRefresh() { if (deferredRefresh && !busy.value) { deferredRefresh = false; void load() } }
 function refresh() { void load() }
 function visible() { if (document.visibilityState === 'visible') refresh() }
 onBeforeRouteLeave(() => !auth.session || !busy.value); onBeforeRouteUpdate(() => !auth.session || !busy.value)
 watch([() => route.name, () => route.params.id, () => auth.session?.userId], () => {
-  revision++; order.value = undefined; loading.value = false; cancelling.value = false; deferredRefresh = false; confirmationOpen.value = false; agreed.value = false; error.value = ''; paymentError.value = ''; retryChecked.value = false; fulfillmentUploading.value = false; fulfillmentError.value = ''; fulfillmentRetryChecked.value = false
+  revision++; order.value = undefined; loading.value = false; cancelling.value = false; deferredRefresh = false; confirmationOpen.value = false; agreed.value = false; error.value = ''; paymentError.value = ''; retryChecked.value = false; fulfillmentUploading.value = false; fulfillmentError.value = ''; fulfillmentRetryChecked.value = false; refundBusy.value = false; refundBlocked.value = false
   // 普通离页只重置本页内存，保留原订单的未知付款标记，返回后仍须核验再重试。
   const context = currentContext(); attempt = context.userId && context.orderId ? readPaymentAttempt(context.userId, context.orderId) : undefined
   paymentState.value = attempt ? 'unknown' : 'idle'; if (attempt) paymentError.value = unknownMessage
@@ -339,6 +348,16 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
             :reset="fulfillmentReset"
             @submit="fulfill"
             @uploading="fulfillmentUpload"
+          />
+          <OrderRefundPanel
+            :key="`refund-${order.id}`"
+            :order="order"
+            :busy="baseBusy"
+            :blocked="baseBlocked"
+            @lock="refundLock"
+            @write-start="refundWriteStart"
+            @refresh="load"
+            @invalid="load"
           />
           <section
             v-if="!order.owned && order.settlement"

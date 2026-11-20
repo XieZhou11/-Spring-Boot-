@@ -21,6 +21,10 @@ public interface OrderImageMapper {
     @Select("SELECT started_at IS NULL FROM trade_order WHERE id=#{id}")
     boolean unstarted(Long id);
 
+    /** 处理中申请允许双方为当前售后上传，历史终局不会重新打开上传资格。 */
+    @Select("SELECT EXISTS(SELECT 1 FROM refund_application WHERE order_id=#{id} AND application_type='NORMAL' AND status='WAIT_ADMIN')")
+    boolean normalRefundPending(Long id);
+
     /** 同一订单固定节点所属关系不可变，历史打卡和补充均赋予双方读取权。 */
     @Select("""
         SELECT EXISTS (SELECT 1 FROM order_progress_record r
@@ -30,6 +34,9 @@ public interface OrderImageMapper {
         OR EXISTS (SELECT 1 FROM refund_application r JOIN trade_order o ON o.id=r.order_id
             WHERE (o.buyer_id=#{userId} OR o.creator_id=#{userId})
               AND JSON_CONTAINS(r.image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))))
+        OR EXISTS (SELECT 1 FROM refund_evidence e JOIN refund_application r ON r.id=e.refund_application_id
+            JOIN trade_order o ON o.id=r.order_id WHERE (o.buyer_id=#{userId} OR o.creator_id=#{userId})
+              AND JSON_CONTAINS(e.image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))))
         """)
     boolean readable(@Param("userId") Long userId,@Param("fileId") Long fileId);
 
@@ -38,6 +45,8 @@ public interface OrderImageMapper {
             WHERE JSON_CONTAINS(r.image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))))
         OR EXISTS (SELECT 1 FROM refund_application r
             WHERE JSON_CONTAINS(r.image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))))
+        OR EXISTS (SELECT 1 FROM refund_evidence e
+            WHERE JSON_CONTAINS(e.image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))))
         """)
     boolean referenced(Long fileId);
 
@@ -49,6 +58,7 @@ public interface OrderImageMapper {
             OR (upload_status='AVAILABLE' AND updated_at<DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 24 HOUR)))
         AND NOT EXISTS (SELECT 1 FROM order_progress_record r WHERE JSON_CONTAINS(r.image_ids,JSON_QUOTE(CAST(f.id AS CHAR))))
         AND NOT EXISTS (SELECT 1 FROM refund_application r WHERE JSON_CONTAINS(r.image_ids,JSON_QUOTE(CAST(f.id AS CHAR))))
+        AND NOT EXISTS (SELECT 1 FROM refund_evidence e WHERE JSON_CONTAINS(e.image_ids,JSON_QUOTE(CAST(f.id AS CHAR))))
         ORDER BY updated_at,id LIMIT 100
         """)
     List<FileAsset> cleanupCandidates();

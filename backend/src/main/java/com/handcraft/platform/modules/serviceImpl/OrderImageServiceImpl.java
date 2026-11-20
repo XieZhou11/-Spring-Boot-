@@ -142,8 +142,12 @@ public class OrderImageServiceImpl implements OrderImageService {
             if(!userId.equals(order.getCreatorId()))throw new BusinessException(CommonErrorCode.FORBIDDEN,"仅本单创作者可上传制作进度图片");
             if(!Set.of("IN_PRODUCTION","PENDING_SHIP","SHIPPED").contains(order.getStatus()))throw conflict("当前订单阶段不可上传制作进度图片");
         }else{
-            if(!userId.equals(order.getBuyerId()))throw new BusinessException(CommonErrorCode.FORBIDDEN,"仅本单买家可上传退款凭证");
-            if(!"PAID".equals(order.getStatus())||!references.unstarted(order.getId()))throw conflict("仅待开工订单可上传无责退款凭证");
+            if("AFTER_SALE".equals(order.getStatus())&&references.normalRefundPending(order.getId()))return;
+            if(!userId.equals(order.getBuyerId()))throw new BusinessException(CommonErrorCode.FORBIDDEN,"仅买家可上传初次退款凭证；双方可在处理中补证");
+            boolean eligible=Set.of("PAID","IN_PRODUCTION","PENDING_SHIP","SHIPPED").contains(order.getStatus())
+                    ||"COMPLETED".equals(order.getStatus())&&order.getOriginalCompletedAt()!=null
+                    &&policy.now().isBefore(order.getOriginalCompletedAt().plusDays(7));
+            if(!eligible)throw conflict("当前订单不在可申请普通售后的阶段或原七天窗口");
         }
     }
     private static String prefix(String purpose){return switch(purpose){case "PROGRESS"->"order-progress/";case "REFUND"->"order-refunds/";default->throw invalid("订单图片用途无效");};}

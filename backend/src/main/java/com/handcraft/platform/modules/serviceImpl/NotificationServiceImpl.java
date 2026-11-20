@@ -24,6 +24,25 @@ public class NotificationServiceImpl implements NotificationService {
     private final ObjectMapper json;
     public NotificationServiceImpl(SystemNotificationMapper notices,NotificationSocketHandler socket,ObjectMapper json){this.notices=notices;this.socket=socket;this.json=json;}
     @Transactional(propagation=Propagation.MANDATORY)
+    public void refundChanged(Long recipientId,String eventType,Long eventId,Long orderId,Long requestId){
+        BusinessLog.run(LoggerFactory.getLogger(getClass()),"售后通知保存",recipientId,()->{
+            String key=eventType+":"+eventId;if(notices.event(recipientId,key)!=null)return null;
+            String title=switch(eventType){
+                case "REFUND_APPLIED" -> "订单已申请售后";
+                case "REFUND_EVIDENCE" -> "售后证据已补充";
+                case "REFUND_WITHDRAWN" -> "售后申请已撤回";
+                case "REFUND_REJECTED" -> "售后申请已驳回，履约已恢复";
+                case "REFUND_APPROVED" -> "售后申请已批准并全额退款";
+                case "SETTLEMENT_CANCELLED" -> "订单待结算已取消";
+                default -> throw new IllegalArgumentException("不支持的售后通知事件");
+            };
+            var notice=new SystemNotification();notice.setRecipientId(recipientId);notice.setEventType(eventType);notice.setEventKey(key);
+            notice.setTitle(title);notice.setContent(title+"，请查看订单详情。");
+            notice.setBusinessReference(json.writeValueAsString(Map.of("type","ORDER","id",orderId.toString(),"requestId",requestId.toString())));
+            notices.insert(notice);afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(notice.getId()))));publishUnread(recipientId);});return null;
+        });
+    }
+    @Transactional(propagation=Propagation.MANDATORY)
     public void fulfillmentChanged(Long recipientId,String eventType,Long eventId,Long orderId,Long requestId){
         BusinessLog.run(LoggerFactory.getLogger(getClass()),"订单履约通知保存",recipientId,()->{
             String key=eventType+":"+eventId;if(notices.event(recipientId,key)!=null)return null;

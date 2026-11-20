@@ -4,6 +4,8 @@ Vue 3 + TypeScript + Vite 工程。登录注册、个人中心、创作者入驻
 
 ## 环境与依赖
 
+[T-014普通售后与管理员退款裁定](../docs/development/tasks/T-014-refund-adjudication.md)在`/orders/:id`提供售后申请、原窗口、申请历史、双方补证和撤回；后台`/admin/refunds`及`/admin/refunds/:id`提供筛选队列、订单证据/只读聊天和退回核验裁定。未知写入结果按账号和对象保留必要原始输入，刷新后精确核验；管理员新补证版本必须重新查阅确认。实际检查及浏览器验证见[测试记录](../docs/testing/T-014-refund-adjudication.md)。
+
 - Node.js 24.22.2、npm 11.19.1；`.node-version` 标记 Node 版本，`package.json` 限定 Node 24 和 npm 11。
 - Vue 3.5.45、TypeScript 5.9.3、Vite 8.3.7、Vue Router 4.6.4、Pinia 3.0.4、Axios 1.21.1、Element Plus 2.14.8。
 - Router、Pinia 已注册；Axios 已封装直连后端、Session Cookie 与 CSRF。Element Plus 的 Cascader 按需引入组件及样式，使用 `element-china-area-data` 6.1.0 的本地省市区数据。
@@ -162,7 +164,7 @@ npm run test:e2e -- e2e/work-interactions.spec.ts
 
 买家从需求详情进入 `/requests/:id/quotes`，一张表比较最多五份有效报价，按金额、工期或平均评分排序，标记最低价与最短工期；无评价显示“暂无评价”。定标前核对完整方案、测算发货日期与本人收货地址；晚于期望须再次确认，没有地址先到地址管理页补充。未知提交结果锁定原报价、地址、测算日期和请求键，保留原内容重试；明确拒绝后保留输入或要求刷新核对。订单金额来自服务端报价，页面不发送成交价格。
 
-`/orders` 区分我购买的与我承接的订单，身份筛选仅要求登录，失去创作者资格也能继续查看承接历史；`/orders/:id` 展示金额、方案与需求快照、付款截止、状态历史及订单沟通。买家可查看固定的地址快照并取消未付款订单。取消或24小时到期不恢复原报价，需重新发布需求；中标原会话关联订单并继续沟通。报价和订单通知均有相应资源入口。定制付款由T-011接入，制作履约与未开工退款由T-013承接；现货建单、普通售后和结算执行留待后续任务。
+`/orders` 区分我购买的与我承接的订单，身份筛选仅要求登录，失去创作者资格也能继续查看承接历史；`/orders/:id` 展示金额、方案与需求快照、付款截止、状态历史及订单沟通。买家可查看固定的地址快照并取消未付款订单。取消或24小时到期不恢复原报价，需重新发布需求；中标原会话关联订单并继续沟通。报价和订单通知均有相应资源入口。定制付款由T-011接入，制作履约与未开工退款由T-013承接，普通售后由T-014承接；现货建单和结算执行留待后续任务。
 
 复测：`npm run test:e2e -- e2e/quote-award.spec.ts`，先生成最新后端 JAR。测试使用隔离 MySQL、真实 HTTP/WebSocket 及本地 OSS 协议接收器，覆盖撤回重报、上传、排序、资格和方案隐私、晚发货确认、报价与定标丢响应重试、临时刷新失败保留未知提交、本人历史仅登录可读、地址快照、取消时导航保护与旧查询隔离及取消后会话。浏览器图片测试不替代真实 OSS 云端验证；实际结果以任务及测试记录为准。
 
@@ -180,4 +182,8 @@ npm run test:e2e -- e2e/work-interactions.spec.ts
 
 履约写入与付款共享查询失效及页面忙碌控制。发送前按用户和订单保存原请求；未知响应先核验，未确认前只能重试同一键和输入，刷新继续恢复；存储失败不发送请求，权限失效清空内容。通知、连接恢复和窗口重新激活均读取最新详情。点击“讨论此进度”进入既有会话并附待发送节点引用，保留本次应用内的既有消息草稿，由用户手动发送。
 
-专项回归：`npm run test:e2e -- e2e/order-fulfillment.spec.ts`，先执行后端verify生成最新JAR；若开发后端正占用标准产物，可用`HANDCRAFT_E2E_BACKEND_JAR`指定独立构建的可执行JAR，路径相对于frontend或使用绝对路径。夹具仅对隔离随机库内由真实业务链建立的订单调整时间，用于48小时退款、自动收货与需求窗口；不增加生产测试接口。实际结果见[T-013测试记录](../docs/testing/T-013-order-fulfillment.md)，普通售后与结算执行继续由后续任务接入。
+专项回归：`npm run test:e2e -- e2e/order-fulfillment.spec.ts`，先执行后端verify生成最新JAR；若开发后端正占用标准产物，可用`HANDCRAFT_E2E_BACKEND_JAR`指定独立构建的可执行JAR，路径相对于frontend或使用绝对路径。夹具仅对隔离随机库内由真实业务链建立的订单调整时间，用于48小时退款、自动收货与需求窗口；不增加生产测试接口。实际结果见[T-013测试记录](../docs/testing/T-013-order-fulfillment.md)，普通售后由T-014接入，结算执行继续独立验收。
+
+## 普通售后与管理员裁定（T-014）
+
+专项：`npm run test:e2e -- e2e/order-refund.spec.ts e2e/order-refund-pagination.spec.ts e2e/order-refund-flow.spec.ts`。`order-refund.spec.ts`通过受控网络验证未知结果、原键核验、版本冲突重阅、存储失败、终态草稿只读与乱序隔离；`order-refund-pagination.spec.ts`验证双方和后台证据/聊天分页及队列条件保留；`order-refund-flow.spec.ts`从注册、入驻、定标及付款的真实链路建立订单，验证双方图文证据、状态恢复、管理员聊天只读、退回核验与原子退款。真实OSS独立结果在后端测试记录中区分，浏览器协议接收器不代替云端验证。详细结果见[T-014测试记录](../docs/testing/T-014-refund-adjudication.md)。

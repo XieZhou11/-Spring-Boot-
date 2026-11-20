@@ -40,16 +40,18 @@ public class OrderServiceImpl implements OrderService {
     private final OrderPaymentService paymentService;
     private final PaymentAccountCryptoService crypto;
     private final OrderFulfillmentMapper fulfillment;
+    private final RefundApplicationMapper refundApplications;
+    private final RefundApplicationService refundService;
 
     public OrderServiceImpl(TradeOrderMapper orders,QuoteMapper quotes,CustomRequestMapper requests,UserAccountMapper users,
             ShippingAddressMapper addresses,CategoryMapper categories,ConversationMapper conversationMapper,
             ConversationService conversations,CustomRequestPolicyService policy,QuoteLifecycleService lifecycle,
             NotificationService notifications,OperationLogService logs,ObjectMapper json,PlatformTransactionManager manager,
-            OrderPaymentMapper payments,OrderPaymentService paymentService,PaymentAccountCryptoService crypto,OrderFulfillmentMapper fulfillment) {
+            OrderPaymentMapper payments,OrderPaymentService paymentService,PaymentAccountCryptoService crypto,OrderFulfillmentMapper fulfillment,RefundApplicationMapper refundApplications,RefundApplicationService refundService) {
         this.orders=orders;this.quotes=quotes;this.requests=requests;this.users=users;this.addresses=addresses;this.categories=categories;
         this.conversationMapper=conversationMapper;this.conversations=conversations;this.policy=policy;this.lifecycle=lifecycle;
         this.notifications=notifications;this.logs=logs;this.json=json;
-        this.payments=payments;this.paymentService=paymentService;this.crypto=crypto;this.fulfillment=fulfillment;
+        this.payments=payments;this.paymentService=paymentService;this.crypto=crypto;this.fulfillment=fulfillment;this.refundApplications=refundApplications;this.refundService=refundService;
         transaction=new TransactionTemplate(manager);transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
 
@@ -203,7 +205,8 @@ public class OrderServiceImpl implements OrderService {
                 time(order.getShipDeadlineAt()),preview,paymentView,settlementView,nodes,time(order.getStartedAt()),time(order.getPaidAt()==null?null:order.getPaidAt().plusHours(48)),order.getTrackingNo(),time(order.getShippedAt()),time(order.getAutoConfirmAt()),time(order.getOriginalCompletedAt()),time(now),
                 active&&!owned&&"PAID".equals(status),active&&!owned&&"PENDING_SHIP".equals(status),active&&!owned&&"SHIPPED".equals(status),active&&owned&&"SHIPPED".equals(status),
                 active&&owned&&"PAID".equals(status)&&order.getStartedAt()==null&&order.getPaidAt()!=null&&!now.isBefore(order.getPaidAt().plusHours(48)),
-                Set.of("PAID","IN_PRODUCTION","PENDING_SHIP").contains(status)&&order.getShippedAt()==null&&order.getShipDeadlineAt()!=null&&!now.isBefore(order.getShipDeadlineAt()),trackingHistory,refundView);
+                Set.of("PAID","IN_PRODUCTION","PENDING_SHIP").contains(status)&&order.getShippedAt()==null&&order.getShipDeadlineAt()!=null&&!now.isBefore(order.getShipDeadlineAt()),trackingHistory,refundView,owned&&!pending&&refundService.eligible(order,now),time(order.getOriginalCompletedAt()==null?null:order.getOriginalCompletedAt().plusDays(7)),
+                detailed&&pending?refundService.view(refundApplications.current(order.getId()),order,userId):null);
     }
 
     /** 只从本单原快照解密后生成脱敏文本，不返回申请编号、姓名原文或编码密文。 */

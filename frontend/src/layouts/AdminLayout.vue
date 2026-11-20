@@ -52,6 +52,10 @@ async function signOut() {
           to="/admin/categories"
           active-class="active"
         ><AppIcon name="grid" />品类管理</RouterLink>
+        <RouterLink
+          to="/admin/refunds"
+          active-class="active"
+        ><AppIcon name="shield" />售后与退款</RouterLink>
       </nav>
       <div class="admin-sidebar-bottom">
         <RouterLink to="/discover"><AppIcon name="arrow" />查看前台作品</RouterLink>

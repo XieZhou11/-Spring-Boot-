@@ -4,6 +4,8 @@ import com.handcraft.platform.modules.vo.*;
 
 /** 持久化通知与已读状态，实时推送不替代数据库记录。 */
 public interface NotificationService {
+    /** 售后申请、证据、终局及取消待结算与业务同事务保存，按事件编号去重。 */
+    void refundChanged(Long recipientId,String eventType,Long eventId,Long orderId,Long requestId);
     /** 履约按原始记录或操作编号去重，事件键与订单跳转编号独立。 */
     void fulfillmentChanged(Long recipientId,String eventType,Long eventId,Long orderId,Long requestId);
     /** 报价与订单事件按业务对象去重，与业务同事务保存，提交后推送。 */
