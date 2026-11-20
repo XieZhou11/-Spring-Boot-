@@ -73,7 +73,8 @@ async function load() {
 }
 /** 取消仅操作当前订单；响应未知可刷新或重试，不在页面提前改变状态。 */
 async function cancel() {
-  if (!order.value?.canCancel || busy.value || fulfillmentBlocked.value || !window.confirm('确认取消未付款订单？需求将关闭，中标与落选报价不会恢复，重新选择需发布新需求。')) return
+  const prompt = order.value?.orderType === 'STOCK' ? '确认取消未付款现货订单？取消后该成品将重新开放购买。' : '确认取消未付款订单？需求将关闭，中标与落选报价不会恢复，重新选择需发布新需求。'
+  if (!order.value?.canCancel || busy.value || fulfillmentBlocked.value || !window.confirm(prompt)) return
   // 取消开始即作废在途旧查询，避免旧待付款快照覆盖已提交的取消结果。
   const context = currentContext(); if (!context.userId || !context.orderId) return
   const current = ++revision; loading.value = false; cancelling.value = true; error.value = ''
@@ -257,7 +258,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
           <p class="eyebrow">
             订单号 {{ order.orderNo }}
           </p><h1>{{ order.title }}</h1><p class="muted">
-            {{ order.buyerNickname }} × {{ order.creatorNickname }} · 定制订单
+            {{ order.buyerNickname }} × {{ order.creatorNickname }} · {{ order.orderType === 'STOCK' ? '现货订单' : '定制订单' }}
           </p>
         </div><span class="work-status">{{ orderStatus[order.status] || order.status }}</span>
       </header>
@@ -278,12 +279,16 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
               <strong>{{ order.addressSnapshot.recipientName }} · {{ order.addressSnapshot.phone }}</strong><br>{{ order.addressSnapshot.province }} {{ order.addressSnapshot.city }} {{ order.addressSnapshot.district }} {{ order.addressSnapshot.detailAddress }}
             </address>
             <dl class="work-specifications">
-              <div><dt>约定工期</dt><dd>{{ order.durationDays }} 个自然日</dd></div><div><dt>定标预计发货日</dt><dd>{{ order.agreementSnapshot.confirmedEstimatedShipDate }}</dd></div><div><dt>支付约定发货日</dt><dd>{{ order.paymentPreview.shipDate }}</dd></div>
+              <div v-if="order.orderType === 'CUSTOM'">
+                <dt>约定工期</dt><dd>{{ order.durationDays }} 个自然日</dd>
+              </div><div v-if="order.orderType === 'CUSTOM'">
+                <dt>定标预计发货日</dt><dd>{{ order.agreementSnapshot.confirmedEstimatedShipDate }}</dd>
+              </div><div><dt>{{ order.orderType === 'STOCK' ? '发货截止日' : '支付约定发货日' }}</dt><dd>{{ order.paymentPreview.shipDate }}</dd></div>
             </dl><p class="field-help">
-              包含开工等待，从支付次日零时起算；以上日期为发货日，不是送达日。
+              {{ order.orderType === 'STOCK' ? '现货支付后48小时内发货；显示截止日仅用于日期提示。' : '包含开工等待，从支付次日零时起算；以上日期为发货日，不是送达日。' }}
             </p>
             <p
-              v-if="order.paymentPreview.shipDate > order.agreementSnapshot.expectedShipDate"
+              v-if="order.orderType === 'CUSTOM' && order.paymentPreview.shipDate > order.agreementSnapshot.expectedShipDate"
               class="shipping-warning"
             >
               本次约定发货日晚于需求期望 {{ order.agreementSnapshot.expectedShipDate }}，请核对后再确认。
@@ -294,7 +299,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
               v-model="agreed"
               type="checkbox"
               :disabled="busy"
-            >我已阅读并同意定制支付条款</label>
+            >我已阅读并同意{{ order.orderType === 'STOCK' ? '现货' : '定制' }}支付条款</label>
             <div class="payment-actions">
               <button
                 class="button-primary"
@@ -311,7 +316,20 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
               </button>
             </div>
           </section>
-          <section class="editor-section">
+          <section
+            v-if="order.orderType === 'STOCK'"
+            class="editor-section"
+          >
+            <h2>现货作品快照</h2><dl class="work-specifications">
+              <div><dt>商品成交金额</dt><dd>¥ {{ order.totalAmount }}</dd></div><div><dt>材质</dt><dd>{{ order.agreementSnapshot.request.materialPreference }}</dd></div><div><dt>尺寸规格</dt><dd>{{ order.agreementSnapshot.request.specification }}</dd></div>
+            </dl><p class="request-description">
+              {{ order.agreementSnapshot.request.description }}
+            </p>
+          </section>
+          <section
+            v-else
+            class="editor-section"
+          >
             <h2>锁定的合作方案</h2><dl class="work-specifications">
               <div>
                 <dt>商品成交金额</dt><dd class="quote-amount">
@@ -350,6 +368,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
             @uploading="fulfillmentUpload"
           />
           <OrderRefundPanel
+            v-if="order.orderType === 'CUSTOM'"
             :key="`refund-${order.id}`"
             :order="order"
             :busy="baseBusy"
@@ -367,7 +386,10 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
               <div><dt>应结算金额</dt><dd>¥ {{ order.settlement.paidAmount }}</dd></div><div><dt>结算状态</dt><dd>{{ settlementStatus[order.settlement.status] || order.settlement.status }}</dd></div><div><dt>结算时间</dt><dd>{{ order.settlement.settledAt ? formatTime(order.settlement.settledAt) : '—' }}</dd></div><div><dt>收款账户</dt><dd>{{ order.settlement.maskedPayee }}</dd></div>
             </dl>
           </section>
-          <section class="editor-section">
+          <section
+            v-if="order.orderType === 'CUSTOM'"
+            class="editor-section"
+          >
             <h2>需求快照</h2><p class="field-help">
               {{ order.agreementSnapshot.request.categoryPath.join(' / ') }}
             </p><p class="request-description">
@@ -382,7 +404,10 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
                 scope="request"
                 :label="`订单需求参考图 ${index + 1}`"
               />
-            </div><RouterLink :to="`/requests/${order.requestId}`">查看原需求 ↗</RouterLink>
+            </div><RouterLink
+              v-if="order.requestId"
+              :to="`/requests/${order.requestId}`"
+            >查看原需求 ↗</RouterLink>
           </section>
           <section
             v-if="order.addressSnapshot"
@@ -391,7 +416,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
             <h2>收货地址快照</h2><address class="award-address">
               <strong>{{ order.addressSnapshot.recipientName }} · {{ order.addressSnapshot.phone }}</strong><br>{{ order.addressSnapshot.province }} {{ order.addressSnapshot.city }} {{ order.addressSnapshot.district }} {{ order.addressSnapshot.detailAddress }}
             </address><p class="field-help">
-              建单时已固定；修改个人地址不会改变此订单。未付款地址有误可取消订单，并重新发布需求取得报价。
+              建单时已固定；修改个人地址不会改变此订单。{{ order.orderType === 'STOCK' ? '未付款地址有误可取消订单并重新购买。' : '未付款地址有误可取消订单，并重新发布需求取得报价。' }}
             </p>
           </section>
         </div>
@@ -399,10 +424,10 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
           <section class="editor-section request-summary">
             <h2>订单安排</h2><p>创建于 {{ formatTime(order.createdAt) }}</p><template v-if="order.status === 'PENDING_PAY'">
               <p>付款截止<br><strong>{{ formatTime(order.payDeadlineAt) }}</strong></p><p class="field-help">
-                创建后 24 小时未付款，订单将取消，关联需求关闭。
+                {{ order.orderType === 'STOCK' ? '创建后24小时未付款，订单将取消并释放这件现货。' : '创建后24小时未付款，订单将取消并关闭关联需求。' }}
               </p>
             </template><p v-if="order.shipDate">
-              约定发货日<br><strong>{{ order.shipDate }}</strong>
+              {{ order.orderType === 'STOCK' ? '发货截止日' : '约定发货日' }}<br><strong>{{ order.shipDate }}</strong>
             </p><p
               v-if="order.cancelReason"
               class="review-reason"

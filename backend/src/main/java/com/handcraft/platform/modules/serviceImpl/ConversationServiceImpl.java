@@ -62,9 +62,18 @@ public class ConversationServiceImpl implements ConversationService {
         LOGGER.info("定标会话变更等待提交：requestId={}, orderId={}, conversationId={}",request.getId(),persisted.getId(),winner.getId());
         return winner.getId();
     });}
+    @Transactional(propagation=Propagation.MANDATORY,rollbackFor=Exception.class)
+    public Long createStockOrder(TradeOrder order){return BusinessLog.run(LOGGER,"现货订单会话创建",order.getBuyerId(),()->{
+        if(!"STOCK".equals(order.getOrderType())||order.getRequestId()!=null||order.getBuyerId().equals(order.getCreatorId()))throw conflict("现货订单关联信息无效");
+        var existing=conversations.byOrder(order.getId());if(existing!=null)return existing.getId();
+        var c=new Conversation();c.setBuyerId(order.getBuyerId());c.setCreatorId(order.getCreatorId());c.setOrderId(order.getId());c.setLastMessageAt(order.getCreatedAt());c.setCreatedAt(order.getCreatedAt());
+        conversations.insert(c);var saved=conversations.find(c.getId());
+        afterCommit(()->both(saved,Map.of("type","CONVERSATION_UPDATED","conversationId",saved.getId().toString(),"orderId",order.getId().toString())));
+        LOGGER.info("现货订单会话已准备：orderId={}, conversationId={}",order.getId(),saved.getId());return saved.getId();
+    });}
     @Transactional(propagation=Propagation.MANDATORY)
     public void orderChanged(TradeOrder order){BusinessLog.run(LOGGER,"订单会话状态同步",order.getBuyerId(),()->{
-        var initial=conversations.byRequest(order.getRequestId(),order.getCreatorId());
+        var initial="STOCK".equals(order.getOrderType())?conversations.byOrder(order.getId()):conversations.byRequest(order.getRequestId(),order.getCreatorId());
         if(initial==null)throw conflict("订单关联会话不存在");
         var conversation=conversations.lock(initial.getId());
         if(!Objects.equals(order.getId(),conversation.getOrderId())||!Objects.equals(order.getBuyerId(),conversation.getBuyerId()))throw conflict("订单关联会话不一致");

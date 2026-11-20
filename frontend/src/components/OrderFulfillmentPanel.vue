@@ -16,6 +16,7 @@ const editor = ref<HTMLFormElement>()
 const disabled = computed(() => props.busy || props.blocked || uploading.value)
 const completed = computed(() => props.order.progressNodes?.filter(node => ['CHECKED', 'SKIPPED'].includes(node.status)).length || 0)
 const terminal = computed(() => ['COMPLETED', 'CANCELLED', 'REFUNDED'].includes(props.order.status))
+const stock = computed(() => props.order.orderType === 'STOCK')
 const frozen = computed(() => terminal.value || props.order.status === 'AFTER_SALE')
 const currentNode = computed(() => props.order.progressNodes?.find(node => node.id === nodeId.value))
 const graphMode = computed(() => mode.value && ['check-in', 'skip', 'supplement', 'shipment'].includes(mode.value))
@@ -69,6 +70,10 @@ function submit() {
     if (!/^[A-Za-z0-9]{8,30}$/.test(tracking) || tracking === expectedTrackingNo.value) { validation.value = '请输入与原单号不同的8—30位字母数字运单号'; return }
     emit('submit', { kind: 'tracking', input: { requestKey: crypto.randomUUID(), expectedTrackingNo: expectedTrackingNo.value, trackingNo: tracking } }); return
   }
+  if (mode.value === 'shipment' && stock.value) {
+    if (!props.order.canShip || frozen.value || !/^[A-Za-z0-9]{8,30}$/.test(tracking)) { validation.value = '当前不可发货，或运单号不符合8—30位字母数字规则'; return }
+    emit('submit', { kind: 'shipment', nodeId: 'STOCK', input: { requestKey: crypto.randomUUID(), content: '', imageIds: [], trackingNo: tracking } }); return
+  }
   const node = currentNode.value
   const allowed = node && (mode.value === 'supplement' ? node.canSupplement : mode.value === 'skip' ? node.canSkip : mode.value === 'shipment' ? props.order.canShip && node.nodeCode === 'SHIPPING' : node.canCheckIn && node.nodeCode !== 'SHIPPING')
   if (!allowed || frozen.value) { validation.value = '节点资格已变化，请刷新订单核对'; return }
@@ -106,19 +111,23 @@ watch(() => props.pending, pending => {
 </script>
 <template>
   <section
-    v-if="order.progressNodes?.length"
+    v-if="order.progressNodes?.length || stock && ['PENDING_SHIP', 'SHIPPED', 'COMPLETED', 'AFTER_SALE', 'REFUNDED'].includes(order.status)"
     class="editor-section fulfillment-panel"
     aria-label="订单制作履约"
   >
     <header class="fulfillment-heading">
       <div>
-        <h2>制作进度</h2><p class="field-help">
-          支付时固定的初始参考计划 · 北京时间
+        <h2>{{ stock ? '现货履约' : '制作进度' }}</h2><p class="field-help">
+          {{ stock ? '现货不经过制作节点，支付后48小时内发货。' : '支付时固定的初始参考计划 · 北京时间' }}
         </p>
       </div>
-      <strong class="progress-count">{{ completed }}/5</strong>
+      <strong
+        v-if="!stock"
+        class="progress-count"
+      >{{ completed }}/5</strong>
     </header>
     <progress
+      v-if="!stock"
       :value="completed"
       max="5"
       :aria-label="`已处理${completed}个节点，共5个`"
@@ -187,7 +196,22 @@ watch(() => props.pending, pending => {
     >
       实际开工 {{ formatTime(order.startedAt) }}
     </p>
-    <ol class="order-progress fulfillment-progress">
+    <div
+      v-if="stock && order.canShip && !frozen"
+      class="fulfillment-actions"
+    >
+      <button
+        class="button-primary"
+        :disabled="disabled"
+        @click="begin('shipment')"
+      >
+        填写运单并发货
+      </button>
+    </div>
+    <ol
+      v-if="!stock"
+      class="order-progress fulfillment-progress"
+    >
       <li
         v-for="node in order.progressNodes"
         :id="`progress-${node.id}`"
@@ -298,7 +322,7 @@ watch(() => props.pending, pending => {
         :disabled="disabled"
       ></label>
       <label
-        v-if="mode !== 'tracking'"
+        v-if="mode !== 'tracking' && !(stock && mode === 'shipment')"
         class="work-field"
       >{{ mode === 'refund' ? '退款说明' : mode === 'skip' ? '跳过说明' : mode === 'supplement' ? '补充说明' : '阶段说明' }}<textarea
         v-model="content"
@@ -308,13 +332,13 @@ watch(() => props.pending, pending => {
         :disabled="disabled"
       /></label>
       <p
-        v-if="mode !== 'tracking'"
+        v-if="mode !== 'tracking' && !(stock && mode === 'shipment')"
         class="field-help"
       >
         {{ content.length }}/500 · {{ mode === 'refund' ? '说明至少20字，凭证可选' : mode === 'skip' ? '说明至少10字' : mode === 'supplement' ? '文字或图片至少一项，可纯文字或纯图片' : '说明至少5字，阶段实拍图至少1张' }}
       </p>
       <PrivateImagePicker
-        v-if="mode !== 'tracking' && mode !== 'skip'"
+        v-if="mode !== 'tracking' && mode !== 'skip' && !(stock && mode === 'shipment')"
         v-model="imageIds"
         :label="mode === 'refund' ? '退款凭证' : '阶段实拍图'"
         :max="mode === 'refund' ? 3 : 6"

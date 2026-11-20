@@ -26,6 +26,7 @@ public class OrderServiceImpl implements OrderService {
     private final QuoteMapper quotes;
     private final CustomRequestMapper requests;
     private final UserAccountMapper users;
+    private final WorkMapper works;
     private final ShippingAddressMapper addresses;
     private final CategoryMapper categories;
     private final ConversationMapper conversationMapper;
@@ -44,16 +45,69 @@ public class OrderServiceImpl implements OrderService {
     private final RefundApplicationService refundService;
     private final PayeeSnapshotService payees;
 
-    public OrderServiceImpl(TradeOrderMapper orders,QuoteMapper quotes,CustomRequestMapper requests,UserAccountMapper users,
+    public OrderServiceImpl(TradeOrderMapper orders,QuoteMapper quotes,CustomRequestMapper requests,UserAccountMapper users,WorkMapper works,
             ShippingAddressMapper addresses,CategoryMapper categories,ConversationMapper conversationMapper,
             ConversationService conversations,CustomRequestPolicyService policy,QuoteLifecycleService lifecycle,
             NotificationService notifications,OperationLogService logs,ObjectMapper json,PlatformTransactionManager manager,
             OrderPaymentMapper payments,OrderPaymentService paymentService,PaymentAccountCryptoService crypto,OrderFulfillmentMapper fulfillment,RefundApplicationMapper refundApplications,RefundApplicationService refundService,PayeeSnapshotService payees) {
-        this.orders=orders;this.quotes=quotes;this.requests=requests;this.users=users;this.addresses=addresses;this.categories=categories;
+        this.orders=orders;this.quotes=quotes;this.requests=requests;this.users=users;this.works=works;this.addresses=addresses;this.categories=categories;
         this.conversationMapper=conversationMapper;this.conversations=conversations;this.policy=policy;this.lifecycle=lifecycle;
         this.notifications=notifications;this.logs=logs;this.json=json;
         this.payments=payments;this.paymentService=paymentService;this.crypto=crypto;this.fulfillment=fulfillment;this.refundApplications=refundApplications;this.refundService=refundService;this.payees=payees;
         transaction=new TransactionTemplate(manager);transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+    }
+
+    @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
+    public Creation createStock(Long userId,Long workId,StockOrderDTO input){
+        return BusinessLog.run(LOGGER,"现货直购建单",userId,()->{
+            var initial=works.find(workId);if(initial==null)throw missing();
+            BusinessException categoryFailure=null;try{policy.lockCategory(initial.getCategoryId());}catch(BusinessException failure){categoryFailure=failure;}
+            policy.lockUsers(userId,initial.getCreatorId());
+            var buyer=policy.user(userId);var creator=users.findById(initial.getCreatorId());var work=works.lock(workId);
+            if(work==null||work.getDeletedAt()!=null)throw missing();
+            var previous=orders.findKey(userId,input.getRequestKey());
+            if(previous!=null){
+                if(!sameStock(previous,workId,input))throw conflict("同一请求键不能更改作品或收货地址");
+                return new Creation(view(previous,userId,true),false);
+            }
+            if(categoryFailure!=null)throw categoryFailure;
+            if(buyer.isAdminBusinessPaused())throw forbidden("账号新业务已暂停，不能购买现货");
+            if(userId.equals(work.getCreatorId()))throw forbidden("不能购买自己的作品");
+            String reason=policy.creatorReason(creator,work.getCategoryId());if(reason!=null)throw forbidden(reason);
+            if(!"ONLINE".equals(work.getReviewStatus())||!work.isSaleEnabled()||!"AVAILABLE".equals(work.getStockStatus())||work.getSourceOrderId()!=null||work.getStockPrice()==null)
+                throw conflict("作品当前不可购买，请刷新作品状态");
+            var address=addresses.lockOwned(userId,number(input.getAddressId()));if(address==null)throw missing();
+            LocalDateTime createdAt=policy.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+            var order=new TradeOrder();order.setOrderNo(UUID.randomUUID().toString().replace("-",""));order.setOrderType("STOCK");
+            order.setBuyerId(userId);order.setCreatorId(work.getCreatorId());order.setWorkId(workId);order.setStatus("PENDING_PAY");
+            order.setTitleSnapshot(work.getTitle());order.setTotalAmount(work.getStockPrice());order.setAgreementSnapshot(json.writeValueAsString(stockAgreement(work)));
+            order.setAddressSnapshot(json.writeValueAsString(addressSnapshot(address)));order.setCreateRequestKey(input.getRequestKey());
+            order.setCreatedAt(createdAt);order.setUpdatedAt(createdAt);order.setPayDeadlineAt(createdAt.plusHours(24));
+            orders.insertStock(order);
+            if(works.reserveStock(workId,order.getId(),createdAt)!=1)throw conflict("作品已被其他买家锁定，请刷新状态");
+            conversations.createStockOrder(order);
+            logs.record(userId,false,"ORDER",order.getId(),"CREATE",null,"PENDING_PAY",null,Map.of("workId",workId.toString(),"amount",work.getStockPrice().setScale(2).toPlainString(),"occurredAt",createdAt.toString()));
+            notifications.tradeChanged(userId,"ORDER_CREATED","ORDER",order.getId(),null);
+            notifications.tradeChanged(order.getCreatorId(),"ORDER_CREATED","ORDER",order.getId(),null);
+            LOGGER.info("现货订单与单件占用已准备：workId={}, orderId={}, stage=订单快照及双方通知",workId,order.getId());
+            return new Creation(view(order,userId,true),true);
+        });
+    }
+
+    private Map<String,Object> stockAgreement(Work work){
+        var request=new LinkedHashMap<String,Object>();request.put("title",work.getTitle());request.put("description",work.getDescription());request.put("purpose","");
+        request.put("materialPreference",work.getMaterial());request.put("specification",work.getSpecification());request.put("categoryPath",List.of());
+        request.put("referenceImageIds",List.of());request.put("sourceWorkId",null);
+        var snapshot=new LinkedHashMap<String,Object>();snapshot.put("request",request);snapshot.put("proposal",work.getProcessDescription());
+        snapshot.put("additionalAgreement",null);snapshot.put("imageIds",List.of());snapshot.put("expectedShipDate","");snapshot.put("confirmedEstimatedShipDate","");
+        snapshot.put("durationDays",0);snapshot.put("goodsAmount",work.getStockPrice().setScale(2).toPlainString());
+        snapshot.put("workId",work.getId().toString());snapshot.put("categoryId",text(work.getCategoryId()));
+        snapshot.put("mainImageIds",ids(work.getMainImageIds()));snapshot.put("specificationImageIds",ids(work.getSpecificationImageIds()));
+        snapshot.put("material",work.getMaterial());snapshot.put("specification",work.getSpecification());snapshot.put("processDescription",work.getProcessDescription());return snapshot;
+    }
+    private boolean sameStock(TradeOrder order,Long workId,StockOrderDTO input){
+        return "STOCK".equals(order.getOrderType())&&Objects.equals(workId,order.getWorkId())&&
+                Objects.equals(input.getAddressId(),map(order.getAddressSnapshot()).get("id"));
     }
 
     @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
@@ -127,22 +181,26 @@ public class OrderServiceImpl implements OrderService {
             var initial=orders.find(orderId);participant(userId,initial);
             if(!userId.equals(initial.getBuyerId()))throw forbidden("仅买家可以取消待付款订单");
             policy.lockUsers(initial.getBuyerId(),initial.getCreatorId());
-            var request=requests.lock(initial.getRequestId());var order=orders.lock(orderId);
+            Work stockWork="STOCK".equals(initial.getOrderType())?works.lock(initial.getWorkId()):null;
+            var request="CUSTOM".equals(initial.getOrderType())?requests.lock(initial.getRequestId()):null;var order=orders.lock(orderId);
             if("CANCELLED".equals(order.getStatus()))return view(order,userId,true);
             if(!"PENDING_PAY".equals(order.getStatus()))throw conflict("仅待付款订单可以取消");
-            cancelLocked(request,order,userId,overdue(order)?"TIMEOUT":"BUYER_CANCELLED");return view(order,userId,true);
+            cancelLocked(request,stockWork,order,userId,overdue(order)?"TIMEOUT":"BUYER_CANCELLED");return view(order,userId,true);
         });
     }
 
-    private void cancelLocked(CustomRequest request,TradeOrder order,Long actorId,String reason) {
+    private void cancelLocked(CustomRequest request,Work stockWork,TradeOrder order,Long actorId,String reason) {
         var occurredAt="TIMEOUT".equals(reason)?order.getPayDeadlineAt():policy.now();
         if(orders.cancel(order.getId(),policy.now())!=1)throw conflict("订单状态已变化");
         order.setStatus("CANCELLED");order.setUpdatedAt(policy.now());
-        lifecycle.state(request,"CLOSED",actorId);
+        if("STOCK".equals(order.getOrderType())){
+            if(stockWork==null||!Objects.equals(stockWork.getStockOrderId(),order.getId())||works.releaseStock(order.getWorkId(),order.getId(),policy.now())!=1)throw conflict("现货占用关联异常，取消未完成");
+            stockWork.setStockStatus("AVAILABLE");stockWork.setStockOrderId(null);
+        }else lifecycle.state(request,"CLOSED",actorId);
         logs.record(actorId,false,"ORDER",order.getId(),"CANCEL","PENDING_PAY","CANCELLED",reason,Map.of("occurredAt",occurredAt.toString()));
         notifications.tradeChanged(order.getBuyerId(),"ORDER_CANCELLED","ORDER",order.getId(),order.getRequestId());
         notifications.tradeChanged(order.getCreatorId(),"ORDER_CANCELLED","ORDER",order.getId(),order.getRequestId());
-        LOGGER.info("订单取消及需求关闭已准备：orderId={}, requestId={}, reason={}",order.getId(),request.getId(),reason);
+        LOGGER.info("待付款订单取消及库存释放已准备：orderId={}, orderType={}, reason={}",order.getId(),order.getOrderType(),reason);
     }
 
     /** 到期处理沿用用户→需求→订单锁序，保留中标会话和报价历史。 */
@@ -152,8 +210,9 @@ public class OrderServiceImpl implements OrderService {
             try {transaction.executeWithoutResult(status->BusinessLog.run(LOGGER,"待付款订单超时取消",null,()->{
                 var initial=orders.find(orderId);if(initial==null)return null;
                 policy.lockUsers(initial.getBuyerId(),initial.getCreatorId());
-                var request=requests.lock(initial.getRequestId());var order=orders.lock(orderId);
-                if(overdue(order))cancelLocked(request,order,null,"TIMEOUT");return null;
+                Work stockWork="STOCK".equals(initial.getOrderType())?works.lock(initial.getWorkId()):null;
+                var request="CUSTOM".equals(initial.getOrderType())?requests.lock(initial.getRequestId()):null;var order=orders.lock(orderId);
+                if(overdue(order))cancelLocked(request,stockWork,order,null,"TIMEOUT");return null;
             }));}catch(RuntimeException failure){LOGGER.error("订单超时取消失败：stage=单笔事务, orderId={}",orderId,SafeLog.exception(failure));}
         }}catch(RuntimeException failure){LOGGER.error("订单超时取消失败：stage=扫描",SafeLog.exception(failure));}
     }
@@ -167,7 +226,7 @@ public class OrderServiceImpl implements OrderService {
         boolean owned=userId.equals(order.getBuyerId()),overdue=overdue(order,now);
         String status=overdue?"CANCELLED":order.getStatus();
         var buyer=users.findById(order.getBuyerId());var creator=users.findById(order.getCreatorId());
-        var conversation=conversationMapper.byRequest(order.getRequestId(),order.getCreatorId());
+        var conversation="STOCK".equals(order.getOrderType())?conversationMapper.byOrder(order.getId()):conversationMapper.byRequest(order.getRequestId(),order.getCreatorId());
         var operations=orders.history(order.getId());
         var history=operations.stream().map(operation->new OrderHistoryVO(operation.getAction(),operation.getBeforeStatus(),operation.getAfterStatus(),operation.getReason(),time(operationTime(operation)))).toList();
         var cancellation=operations.stream().filter(operation->"CANCELLED".equals(operation.getAfterStatus())).findFirst().orElse(null);
@@ -196,7 +255,7 @@ public class OrderServiceImpl implements OrderService {
         var refund=detailed?fulfillment.refunded(order.getId()):null;var refundedFlow=refund==null?null:fulfillment.refundFlowForOrder(order.getId());
         var refundView=refund==null?null:new OrderNoStartRefundVO(refund.getId().toString(),refund.getDescription(),ids(refund.getImageIds()),refundedFlow==null?null:refundedFlow.getAmount().setScale(2).toPlainString(),refundedFlow==null?null:refundedFlow.getFlowNo(),time(refund.getFinishedAt()),refund.getDecisionReason());
         boolean canPay=owned&&"PENDING_PAY".equals(status)&&!buyer.isAdmin();
-        var preview=detailed&&canPay?paymentService.preview(now.toLocalDate(),order.getDurationDays()):null;
+        var preview=detailed&&canPay?("STOCK".equals(order.getOrderType())?paymentService.stockPreview(now):paymentService.preview(now.toLocalDate(),order.getDurationDays())):null;
         return new OrderVO(order.getId().toString(),order.getOrderNo(),order.getOrderType(),order.getBuyerId().toString(),buyer.getNickname(),
                 order.getCreatorId().toString(),creator.getNickname(),text(order.getRequestId()),text(order.getQuoteId()),status,
                 order.getTitleSnapshot(),order.getTotalAmount().setScale(2).toPlainString(),order.getDurationDays(),map(order.getAgreementSnapshot()),
@@ -245,7 +304,7 @@ public class OrderServiceImpl implements OrderService {
     private boolean overdue(TradeOrder order){return overdue(order,policy.now());}
     private boolean overdue(TradeOrder order,LocalDateTime now){return "PENDING_PAY".equals(order.getStatus())&&!now.isBefore(order.getPayDeadlineAt());}
     /** 当前订单入口仅承接定制流程，现货交易由后续独立任务开放。 */
-    private void participant(Long userId,TradeOrder order){if(order==null||!"CUSTOM".equals(order.getOrderType())||!userId.equals(order.getBuyerId())&&!userId.equals(order.getCreatorId()))throw missing();}
+    private void participant(Long userId,TradeOrder order){if(order==null||!Set.of("CUSTOM","STOCK").contains(order.getOrderType())||!userId.equals(order.getBuyerId())&&!userId.equals(order.getCreatorId()))throw missing();}
     private Map<String,Object> map(String raw){return json.readValue(raw,new TypeReference<Map<String,Object>>(){});}
     private List<String> ids(String raw){return json.readValue(raw,new TypeReference<List<String>>(){});}
     private static Long number(String value){try{return Long.valueOf(value);}catch(NumberFormatException failure){throw new BusinessException(CommonErrorCode.INVALID_REQUEST,"资源编号无效");}}

@@ -59,7 +59,8 @@ public class NotificationServiceImpl implements NotificationService {
             };
             var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType(eventType);n.setEventKey(key);n.setTitle(title);
             n.setContent(title+"，请查看订单详情。");
-            n.setBusinessReference(json.writeValueAsString(Map.of("type","ORDER","id",orderId.toString(),"requestId",requestId.toString())));
+            var reference=new LinkedHashMap<String,String>();reference.put("type","ORDER");reference.put("id",orderId.toString());if(requestId!=null)reference.put("requestId",requestId.toString());
+            n.setBusinessReference(json.writeValueAsString(reference));
             notices.insert(n);afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(n.getId()))));publishUnread(recipientId);});return null;
         });
     }
@@ -74,9 +75,9 @@ public class NotificationServiceImpl implements NotificationService {
                 case "QUOTE_EXPIRED" -> "报价已失效";
                 case "QUOTE_AWARDED" -> "报价已中标";
                 case "QUOTE_LOST" -> "报价未中标";
-                case "ORDER_CREATED" -> "定制订单已创建";
-                case "ORDER_CANCELLED" -> "定制订单已取消";
-                case "ORDER_PAID" -> "定制订单已付款";
+                case "ORDER_CREATED" -> "订单已创建";
+                case "ORDER_CANCELLED" -> "订单已取消";
+                case "ORDER_PAID" -> "订单已付款";
                 default -> throw new IllegalArgumentException("不支持的交易通知事件");
             };
             var notice=new SystemNotification();notice.setRecipientId(recipientId);notice.setEventType(eventType);notice.setEventKey(eventKey);

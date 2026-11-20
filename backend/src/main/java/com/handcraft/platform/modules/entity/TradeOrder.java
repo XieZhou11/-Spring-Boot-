@@ -22,6 +22,8 @@ public class TradeOrder {
     private Long requestId;
     /** 中标报价编号。 */
     private Long quoteId;
+    /** 现货来源作品编号，定制订单为空。 */
+    private Long workId;
     /** 持久化交易状态。 */
     private String status;
     /** 需求标题快照。 */

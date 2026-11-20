@@ -5,6 +5,7 @@ import WorkLayout from '@/layouts/WorkLayout.vue'
 import WorkInteractions from '@/components/WorkInteractions.vue'
 import CreatorFollow from '@/components/CreatorFollow.vue'
 import WorkMaterials from '@/components/WorkMaterials.vue'
+import StockPurchase from '@/components/StockPurchase.vue'
 import { getWork } from '@/api/work'
 import { useAuthStore } from '@/stores/auth'
 import type { WorkVO } from '@/types/work'
@@ -47,6 +48,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('focus', load) })
     >
       <template #creator-actions>
         <CreatorFollow :creator-id="work.creatorId" />
+        <StockPurchase :work="work" />
       </template>
     </WorkMaterials><WorkInteractions
       v-if="work && !error"

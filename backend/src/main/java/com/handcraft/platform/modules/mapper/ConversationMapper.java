@@ -10,6 +10,7 @@ public interface ConversationMapper {
     /** 并发锁等待结束后，游标和状态必须重新读取，不复用之前快照。 */
     @Select("SELECT * FROM conversation WHERE id=#{id} FOR UPDATE") @Options(flushCache=Options.FlushCachePolicy.TRUE) Conversation lock(Long id);
     @Select("SELECT * FROM conversation WHERE request_id=#{requestId} AND creator_id=#{creatorId}") Conversation byRequest(@Param("requestId")Long requestId,@Param("creatorId")Long creatorId);
+    @Select("SELECT * FROM conversation WHERE order_id=#{orderId}") Conversation byOrder(Long orderId);
     @Insert("INSERT INTO conversation(buyer_id,creator_id,request_id,order_id,last_message_at,created_at) VALUES(#{buyerId},#{creatorId},#{requestId},#{orderId},#{lastMessageAt},#{createdAt})")
     @Options(useGeneratedKeys=true,keyProperty="id") int insert(Conversation c);
     /** 查询不可变订单快照与期限，展示有效状态时不触发取消写操作。 */

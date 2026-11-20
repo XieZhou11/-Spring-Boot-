@@ -17,6 +17,11 @@ public class OrderController {
     private final OrderService orders;
     private final OrderPaymentService payments;
     public OrderController(OrderService orders,OrderPaymentService payments){this.orders=orders;this.payments=payments;}
+    /** 首次现货建单201；相同请求键重试返回原订单200。 */
+    @PostMapping("/api/works/{id}/orders")
+    public ResponseEntity<Result<OrderVO>> createStock(@AuthenticationPrincipal AccountPrincipal principal,@PathVariable Long id,@Valid @RequestBody StockOrderDTO input){
+        var result=orders.createStock(principal.userId(),id,input);return ResponseEntity.status(result.created()?201:200).body(Result.ok(result.order()));
+    }
     /** 写事务已提交后再读取完整详情；响应失败时可按订单重试确认原支付。 */
     @PutMapping("/api/orders/{id}/payment")
     public ResponseEntity<Result<OrderVO>> payment(@AuthenticationPrincipal AccountPrincipal principal,@PathVariable Long id,@Valid @RequestBody OrderPaymentDTO input){

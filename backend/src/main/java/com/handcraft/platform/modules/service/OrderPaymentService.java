@@ -3,6 +3,7 @@ package com.handcraft.platform.modules.service;
 import com.handcraft.platform.modules.dto.OrderPaymentDTO;
 import com.handcraft.platform.modules.vo.OrderPaymentPreviewVO;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /** 定制订单模拟付款，写事务完成后由控制器独立读取订单聚合。 */
 public interface OrderPaymentService {
@@ -10,4 +11,6 @@ public interface OrderPaymentService {
     boolean pay(Long userId,Long orderId,OrderPaymentDTO input);
     /** 按北京支付日期及快照工期生成需要买家确认的条款和发货日期。 */
     OrderPaymentPreviewVO preview(LocalDate paymentDate,int durationDays);
+    /** 返回现货支付时固定的48小时发货期限与确认条款。 */
+    OrderPaymentPreviewVO stockPreview(LocalDateTime now);
 }

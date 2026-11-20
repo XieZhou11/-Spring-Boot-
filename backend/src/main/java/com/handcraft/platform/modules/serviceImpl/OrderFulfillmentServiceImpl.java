@@ -52,13 +52,14 @@ public class OrderFulfillmentServiceImpl implements OrderFulfillmentService {
         var initial=orders.find(orderId);participant(actor,initial);
         if(!(buyer?initial.getBuyerId():initial.getCreatorId()).equals(actor))throw forbidden(buyer?"仅买家可以操作":"仅本单创作者可以操作");
         policy.lockUsers(initial.getBuyerId(),initial.getCreatorId());
-        var request=requests.lock(initial.getRequestId());var order=orders.lock(orderId);participant(actor,order);policy.user(actor);
-        if(request==null||!Objects.equals(request.getBuyerId(),order.getBuyerId()))throw conflict("订单与原需求关联不一致");
+        var request="CUSTOM".equals(initial.getOrderType())?requests.lock(initial.getRequestId()):null;var order=orders.lock(orderId);participant(actor,order);policy.user(actor);
+        if("CUSTOM".equals(order.getOrderType())&&(request==null||!Objects.equals(request.getBuyerId(),order.getBuyerId())))throw conflict("订单与原需求关联不一致");
         boolean pending=fulfillment.pending(orderId)!=null;
         return new Locked(order,request,policy.now().truncatedTo(ChronoUnit.MILLIS),pending);
     }
     private void active(Locked c){
         if(c.pending()||"AFTER_SALE".equals(c.order().getStatus()))throw conflict("售后处理中，履约操作已暂停");
+        if("STOCK".equals(c.order().getOrderType()))return;
         if(!"IN_TRADE".equals(c.request().getStatus()))throw conflict("需求当前状态不允许继续履约");
     }
     private List<OrderProgressNode> nodesAndConversation(TradeOrder order){
@@ -69,6 +70,8 @@ public class OrderFulfillmentServiceImpl implements OrderFulfillmentService {
         if(!Objects.equals(order.getId(),locked.getOrderId())||!Objects.equals(order.getBuyerId(),locked.getBuyerId()))throw conflict("订单会话关联不一致");
         return nodes;
     }
+    /** 现货没有制作节点，发货只锁定订单专属会话并保存运单时间线。 */
+    private void stockConversation(TradeOrder order){var first=conversationMapper.byOrder(order.getId());if(first==null)throw conflict("现货订单会话不存在");var locked=conversationMapper.lock(first.getId());if(!Objects.equals(order.getId(),locked.getOrderId())||!Objects.equals(order.getBuyerId(),locked.getBuyerId())||!Objects.equals(order.getCreatorId(),locked.getCreatorId()))throw conflict("现货订单会话关联不一致");}
     private <T>T run(String name,Long actor,Long orderId,Supplier<T> work){
         return BusinessLog.run(LOGGER,name,actor,()->{try{return work.get();}
             catch(BusinessException e){LOGGER.warn("{}拒绝：stage=锁后业务校验, orderId={}, userId={}, reason={}",name,orderId,actor,e.getMessage());throw e;}
@@ -120,6 +123,15 @@ public class OrderFulfillmentServiceImpl implements OrderFulfillmentService {
     @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
     public boolean ship(Long actor,Long orderId,OrderShipmentDTO input){return run("定制包装发货",actor,orderId,()->{
         var c=lock(actor,orderId,false);var prior=fulfillment.recordByKey(actor,input.getRequestKey());
+        if("STOCK".equals(c.order().getOrderType())){
+            var old=fulfillment.operation(orderId,"SHIP");
+            if(old!=null){var detail=json.readTree(old.getDetail());if(input.getRequestKey().equals(detail.path("requestKey").asText())&&input.getTrackingNo().equals(detail.path("trackingNo").asText()))return false;}
+            active(c);if(!"PENDING_SHIP".equals(c.order().getStatus()))throw conflict("仅待发货现货订单可确认发货");
+            if(!input.getTrackingNo().matches("[A-Za-z0-9]{8,30}"))throw invalid("运单号须为8至30位字母数字");
+            stockConversation(c.order());var order=c.order();order.setTrackingNo(input.getTrackingNo());order.setShippedAt(c.now());order.setAutoConfirmAt(c.now().plusDays(7));order.setStatus("SHIPPED");save(c);
+            history(actor,c,"SHIP","PENDING_SHIP","SHIPPED",Map.of("requestKey",input.getRequestKey(),"trackingNo",input.getTrackingNo()));
+            both(c,"ORDER_SHIPPED",orderId);conversations.orderChanged(order);return true;
+        }
         if(prior!=null){
             var original=fulfillment.operation(orderId,"SHIP");
             if(original==null||!json.readTree(original.getDetail()).path("trackingNo").asText().equals(input.getTrackingNo()))throw conflict("同一发货请求不能更改原始运单号");
@@ -143,7 +155,7 @@ public class OrderFulfillmentServiceImpl implements OrderFulfillmentService {
         active(c);var order=c.order();if(!"SHIPPED".equals(order.getStatus()))throw conflict("仅确认收货前可以更正运单号");
         if(!Objects.equals(order.getTrackingNo(),input.getExpectedTrackingNo()))throw conflict("运单号已被更正，请刷新后确认");
         if(input.getTrackingNo().equals(input.getExpectedTrackingNo()))throw invalid("更正后的运单号须不同于原值");
-        nodesAndConversation(order);order.setTrackingNo(input.getTrackingNo());save(c);
+        if("STOCK".equals(order.getOrderType()))stockConversation(order);else nodesAndConversation(order);order.setTrackingNo(input.getTrackingNo());save(c);
         history(actor,c,"TRACKING_CORRECT","SHIPPED","SHIPPED",Map.of("orderId",orderId.toString(),"requestKey",input.getRequestKey(),"oldTrackingNo",input.getExpectedTrackingNo(),"newTrackingNo",input.getTrackingNo()));
         var operation=fulfillment.correctionByKey(actor,input.getRequestKey());
         notifications.fulfillmentChanged(order.getBuyerId(),"ORDER_TRACKING_CORRECTED",operation.getId(),orderId,order.getRequestId());conversations.orderChanged(order);return null;
@@ -151,7 +163,7 @@ public class OrderFulfillmentServiceImpl implements OrderFulfillmentService {
     @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
     public boolean receive(Long actor,Long orderId){return run("订单确认收货",actor,orderId,()->{
         var c=lock(actor,orderId,true);if(c.order().getOriginalCompletedAt()!=null)return false;active(c);
-        if(!"SHIPPED".equals(c.order().getStatus()))throw conflict("仅已发货订单可以确认收货");nodesAndConversation(c.order());complete(c,actor,false);return true;
+        if(!"SHIPPED".equals(c.order().getStatus()))throw conflict("仅已发货订单可以确认收货");if("STOCK".equals(c.order().getOrderType()))stockConversation(c.order());else nodesAndConversation(c.order());complete(c,actor,false);return true;
     });}
     /** 每单独立事务且用键集遍历；旧的失败订单不会阻塞高编号订单的提醒和自动收货。 */
     @Scheduled(fixedDelay=60000,initialDelay=60000)
@@ -164,9 +176,9 @@ public class OrderFulfillmentServiceImpl implements OrderFulfillmentService {
     private void scanLocked(Long id){
         var initial=orders.find(id);if(initial==null)return;var c=lock(initial.getBuyerId(),id,true);var order=c.order();
         if(c.pending()||"AFTER_SALE".equals(order.getStatus()))return;
-        if("SHIPPED".equals(order.getStatus())&&order.getAutoConfirmAt()!=null&&!c.now().isBefore(order.getAutoConfirmAt())){nodesAndConversation(order);complete(c,null,true);}
+        if("SHIPPED".equals(order.getStatus())&&order.getAutoConfirmAt()!=null&&!c.now().isBefore(order.getAutoConfirmAt())){if("STOCK".equals(order.getOrderType()))stockConversation(order);else nodesAndConversation(order);complete(c,null,true);}
         if(Set.of("PAID","IN_PRODUCTION","PENDING_SHIP").contains(order.getStatus())&&order.getShippedAt()==null&&order.getShipDeadlineAt()!=null&&!c.now().isBefore(order.getShipDeadlineAt()))both(c,"ORDER_SHIPPING_OVERDUE",id);
-        if("COMPLETED".equals(order.getStatus())&&order.getOriginalCompletedAt()!=null&&!c.now().isBefore(order.getOriginalCompletedAt().plusDays(7))&&"IN_TRADE".equals(c.request().getStatus()))lifecycle.state(c.request(),"COMPLETED",null);
+        if("CUSTOM".equals(order.getOrderType())&&"COMPLETED".equals(order.getStatus())&&order.getOriginalCompletedAt()!=null&&!c.now().isBefore(order.getOriginalCompletedAt().plusDays(7))&&"IN_TRADE".equals(c.request().getStatus()))lifecycle.state(c.request(),"COMPLETED",null);
     }
     private void complete(Locked c,Long actor,boolean automatic){
         var order=c.order();order.setStatus("COMPLETED");if(order.getOriginalCompletedAt()==null)order.setOriginalCompletedAt(c.now());save(c);
@@ -196,7 +208,7 @@ public class OrderFulfillmentServiceImpl implements OrderFulfillmentService {
     private List<String> ids(String raw){return json.readValue(raw,new TypeReference<List<String>>(){});}
     private void requireContent(String content,int minimum){if(content==null||content.strip().length()<minimum||content.length()>500)throw invalid("说明字数不符合要求");}
     private void unique(List<String> imageIds){if(new HashSet<>(imageIds).size()!=imageIds.size())throw invalid("同一提交不能重复引用图片");}
-    private void participant(Long actor,TradeOrder order){if(order==null||!"CUSTOM".equals(order.getOrderType())||!Objects.equals(actor,order.getBuyerId())&&!Objects.equals(actor,order.getCreatorId()))throw new BusinessException(CommonErrorCode.NOT_FOUND);}
+    private void participant(Long actor,TradeOrder order){if(order==null||!Set.of("CUSTOM","STOCK").contains(order.getOrderType())||!Objects.equals(actor,order.getBuyerId())&&!Objects.equals(actor,order.getCreatorId()))throw new BusinessException(CommonErrorCode.NOT_FOUND);}
     private static BusinessException conflict(String text){return new BusinessException(CommonErrorCode.CONFLICT,text);}
     private static BusinessException invalid(String text){return new BusinessException(CommonErrorCode.INVALID_REQUEST,text);}
     private static BusinessException forbidden(String text){return new BusinessException(CommonErrorCode.FORBIDDEN,text);}

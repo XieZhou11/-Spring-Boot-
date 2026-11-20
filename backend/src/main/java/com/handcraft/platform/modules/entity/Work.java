@@ -42,6 +42,8 @@ public class Work {
     private String reviewStatus;
     /** 单件现货状态，不能通过开关重置。 */
     private String stockStatus;
+    /** 当前被锁定或已售出的现货订单编号，退款不自动清空。 */
+    private Long stockOrderId;
     /** 授权成品案例来源订单。 */
     private Long sourceOrderId;
     /** 首次提交北京时间，删除不返还额度。 */

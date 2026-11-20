@@ -54,15 +54,15 @@ public interface OrderFulfillmentMapper {
     List<WorkOperation> corrections(Long orderId);
     /** 仅扫描到期且仍需处理的订单；键集遍历使单笔失败不会饿死更高编号订单。 */
     @Select("""
-        SELECT o.id FROM trade_order o JOIN custom_request r ON r.id=o.request_id
-        WHERE o.order_type='CUSTOM' AND o.id>#{after}
+        SELECT o.id FROM trade_order o LEFT JOIN custom_request r ON r.id=o.request_id
+        WHERE o.order_type IN ('CUSTOM','STOCK') AND o.id>#{after}
         AND NOT EXISTS(SELECT 1 FROM refund_application a WHERE a.order_id=o.id AND a.status='WAIT_ADMIN')
         AND (
           (o.status IN ('PAID','IN_PRODUCTION','PENDING_SHIP') AND o.shipped_at IS NULL AND o.ship_deadline_at<=#{now}
             AND (NOT EXISTS(SELECT 1 FROM system_notification n WHERE n.recipient_id=o.buyer_id AND n.event_key=CONCAT('ORDER_SHIPPING_OVERDUE:',o.id))
               OR NOT EXISTS(SELECT 1 FROM system_notification n WHERE n.recipient_id=o.creator_id AND n.event_key=CONCAT('ORDER_SHIPPING_OVERDUE:',o.id))))
           OR (o.status='SHIPPED' AND o.auto_confirm_at<=#{now})
-          OR (o.status='COMPLETED' AND r.status='IN_TRADE' AND DATE_ADD(o.original_completed_at,INTERVAL 7 DAY)<=#{now})
+          OR (o.order_type='CUSTOM' AND o.status='COMPLETED' AND r.status='IN_TRADE' AND DATE_ADD(o.original_completed_at,INTERVAL 7 DAY)<=#{now})
         ) ORDER BY o.id LIMIT 100
         """)
     List<Long> scanAfter(@Param("after")Long after,@Param("now")LocalDateTime now);

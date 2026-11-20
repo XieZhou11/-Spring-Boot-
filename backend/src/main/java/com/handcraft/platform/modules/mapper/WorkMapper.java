@@ -7,7 +7,7 @@ import org.apache.ibatis.annotations.*;
 /** 品类→作者→作品→文件的锁序；首次提交计数必须处于作者锁内。 */
 @Mapper
 public interface WorkMapper {
-    String COLUMNS="w.id,w.creator_id,w.create_request_key,w.version,w.category_id,w.title,w.main_image_ids,w.specification_image_ids,w.material,w.specification,w.description,w.process_description,w.sale_enabled,w.custom_enabled,w.stock_price,w.custom_reference_days,w.review_status,w.stock_status,w.source_order_id,w.first_submitted_at,w.submitted_at,w.online_at,w.deleted_at,w.created_at,w.updated_at";
+    String COLUMNS="w.id,w.creator_id,w.create_request_key,w.version,w.category_id,w.title,w.main_image_ids,w.specification_image_ids,w.material,w.specification,w.description,w.process_description,w.sale_enabled,w.custom_enabled,w.stock_price,w.custom_reference_days,w.review_status,w.stock_status,w.stock_order_id,w.source_order_id,w.first_submitted_at,w.submitted_at,w.online_at,w.deleted_at,w.created_at,w.updated_at";
     String ELIGIBLE="(u.certification_status='APPROVED' AND u.is_admin=0 AND u.creator_paused=0 AND u.admin_business_paused=0)";
     String PURCHASABLE="("+ELIGIBLE+" AND w.sale_enabled=1 AND w.stock_status='AVAILABLE' AND w.source_order_id IS NULL AND w.stock_price IS NOT NULL)";
     String CUSTOMIZABLE="("+ELIGIBLE+" AND w.custom_enabled=1)";
@@ -24,6 +24,15 @@ public interface WorkMapper {
        +"<if test='q.keyword != null and q.keyword != &quot;&quot;'> AND (LOCATE(#{q.keyword},w.title)&gt;0 OR LOCATE(#{q.keyword},w.description)&gt;0)</if>";
     @Select("SELECT "+COLUMNS+" FROM work w WHERE w.id=#{id}") Work find(Long id);
     @Select("SELECT "+COLUMNS+" FROM work w WHERE w.id=#{id} FOR UPDATE") Work lock(Long id);
+    /** 锁订单的持有者后以状态条件锁定单件现货。 */
+    @Update("UPDATE work SET stock_status='RESERVED',stock_order_id=#{orderId},updated_at=#{now} WHERE id=#{workId} AND stock_status='AVAILABLE' AND sale_enabled=1 AND review_status='ONLINE' AND deleted_at IS NULL")
+    int reserveStock(@Param("workId")Long workId,@Param("orderId")Long orderId,@Param("now")LocalDateTime now);
+    /** 只有对应待付款订单可释放自己的占用。 */
+    @Update("UPDATE work SET stock_status='AVAILABLE',stock_order_id=NULL,updated_at=#{now} WHERE id=#{workId} AND stock_status='RESERVED' AND stock_order_id=#{orderId}")
+    int releaseStock(@Param("workId")Long workId,@Param("orderId")Long orderId,@Param("now")LocalDateTime now);
+    /** 付款将同一订单持有的锁定永久改为已售出，保留来源订单编号。 */
+    @Update("UPDATE work SET stock_status='SOLD_OUT',updated_at=#{now} WHERE id=#{workId} AND stock_status='RESERVED' AND stock_order_id=#{orderId}")
+    int sellStock(@Param("workId")Long workId,@Param("orderId")Long orderId,@Param("now")LocalDateTime now);
     @Select("SELECT "+COLUMNS+" FROM work w WHERE w.creator_id=#{creatorId} AND w.create_request_key=#{key}") Work findRequest(@Param("creatorId")Long creatorId,@Param("key")String key);
     @Insert("INSERT INTO work(creator_id,create_request_key,category_id,title,main_image_ids,specification_image_ids,material,specification,description,process_description,sale_enabled,custom_enabled,stock_price,custom_reference_days,stock_status) VALUES(#{creatorId},#{createRequestKey},#{categoryId},#{title},#{mainImageIds},#{specificationImageIds},#{material},#{specification},#{description},#{processDescription},#{saleEnabled},#{customEnabled},#{stockPrice},#{customReferenceDays},#{stockStatus})")
     @Options(useGeneratedKeys=true,keyProperty="id") int insert(Work value);

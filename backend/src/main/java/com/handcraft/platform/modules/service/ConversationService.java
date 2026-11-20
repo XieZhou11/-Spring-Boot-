@@ -9,6 +9,8 @@ public interface ConversationService {
     Creation create(Long userId,Long requestId);
     /** 调用者锁定账号、需求及订单后，在同一事务关联中标会话并归档未成单的落选会话。 */
     Long linkOrder(CustomRequest request,TradeOrder order);
+    /** 现货建单事务内创建与订单一对一绑定的买卖双方会话。 */
+    Long createStockOrder(TradeOrder order);
     /** 订单事务锁定原会话，提交后通知双方刷新状态，不创建新会话或改动消息。 */
     void orderChanged(TradeOrder order);
     /** 查询本人参与的最近会话。 */

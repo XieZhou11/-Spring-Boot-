@@ -132,7 +132,7 @@ export interface OrderVO {
   id: string
   /** 公开订单流水号。 */
   orderNo: string
-  /** 订单类型，本阶段为定制。 */
+  /** 现货或定制履约类型。 */
   orderType: string
   /** 买家编号。 */
   buyerId: string
@@ -143,9 +143,9 @@ export interface OrderVO {
   /** 创作者昵称。 */
   creatorNickname: string
   /** 关联需求编号。 */
-  requestId: string
+  requestId: string | null
   /** 中标报价编号。 */
-  quoteId: string
+  quoteId: string | null
   /** 当前订单业务状态。 */
   status: string
   /** 订单标题。 */
@@ -163,7 +163,7 @@ export interface OrderVO {
   /** 发货日次日零时，排他截止时刻。 */
   shipDeadlineAt: string | null
   /** 约定工期。 */
-  durationDays: number
+  durationDays: number | null
   /** 不随需求或报价变化的约定快照。 */
   agreementSnapshot: AgreementSnapshot
   /** 买家及服务端允许的创作者发货阶段返回的固定收货资料。 */

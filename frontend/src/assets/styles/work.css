@@ -80,6 +80,9 @@
 .trade-summary h2 { font-family: var(--serif); font-size: 18px; font-weight: 500; margin-bottom: 22px; }
 .trade-summary > div { display: flex; justify-content: space-between; align-items: center; gap: 15px; font-size: 13px; margin-top: 18px; }
 .trade-summary .field-help { font-size: 11px; margin-top: 8px; }
+.stock-purchase { display: grid; gap: 12px; margin: 18px 0; padding: 18px; border: 1px solid #d9ddce; border-radius: 5px; background: #f8f8f3; }
+.stock-purchase .work-field { margin: 0; }
+.stock-purchase .field-help, .stock-purchase .field-error { margin: 0; }
 .work-creator-link { margin-top: 25px; padding: 20px 0; border-block: 1px solid var(--border); display: flex; align-items: center; gap: 15px; }
 .creator-initial { width: 45px; height: 45px; border-radius: 50%; background: #e2e8d7; color: #5f7350; display: grid; place-items: center; font-family: var(--serif); font-size: 23px; }
 .work-creator-link > span:nth-child(2) { flex: 1; }

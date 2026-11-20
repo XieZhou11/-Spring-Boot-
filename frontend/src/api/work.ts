@@ -1,6 +1,7 @@
 import request from '@/utils/request'
 import type { ApiResult } from '@/types/api'
 import type { ImageVO, PageVO } from '@/types/creator'
+import type { OrderVO } from '@/types/quote'
 import type { CreatorPublicVO, PublicationQuotaVO, WorkContent, WorkHistoryVO, WorkQuery, WorkVO } from '@/types/work'
 
 /** 全部作品请求复用会话、CSRF 与统一错误处理。 */
@@ -10,6 +11,10 @@ async function get<T>(path: string, params?: object) {
 const scope = (admin = false) => admin ? '/admin/works' : '/me/works'
 export const getWorks = (params: WorkQuery) => get<PageVO<WorkVO>>('/works', params)
 export const getWork = (id: string) => get<WorkVO>(`/works/${id}`)
+/** 服务端从当前作品和买家地址生成快照；重试必须沿用请求键。 */
+export async function createStockOrder(workId: string, input: { requestKey: string; addressId: string }) {
+  return (await request.post<ApiResult<OrderVO>>(`/works/${workId}/orders`, input)).data.data
+}
 export const getCreator = (id: string) => get<CreatorPublicVO>(`/creators/${id}`)
 export const getManagedWorks = (params: WorkQuery, admin = false) => get<PageVO<WorkVO>>(scope(admin), { ...params, status: params.status || 'ALL' })
 export const getManagedWork = (id: string, admin = false) => get<WorkVO>(`${scope(admin)}/${id}`)

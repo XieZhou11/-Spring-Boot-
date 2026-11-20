@@ -55,6 +55,7 @@ export function fulfillmentApplied(order: OrderVO, attempt: FulfillmentAttempt):
     // 更正历史按服务端提交顺序返回，首条原值还原首次发货输入，不拿当前单号猜原提交。
     const originalTrackingNo = order.trackingHistory?.[0]?.oldTrackingNo || order.trackingNo
     if (!order.shippedAt || originalTrackingNo !== attempt.input.trackingNo) return false
+    if (order.orderType === 'STOCK') return true
   }
   const recordType = attempt.kind === 'supplement' ? 'SUPPLEMENT' : attempt.kind === 'skip' ? 'SKIP' : 'CHECKIN'
   return !!order.progressNodes?.find(node => node.id === attempt.nodeId)?.records?.some(record => record.requestKey === attempt.input.requestKey && record.recordType === recordType && (record.content || '') === attempt.input.content && sameImages(record.imageIds, attempt.input.imageIds) && (record.skipReason || '') === (attempt.kind === 'skip' ? attempt.input.skipReason : ''))
