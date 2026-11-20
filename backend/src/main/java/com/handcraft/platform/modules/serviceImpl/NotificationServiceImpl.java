@@ -54,6 +54,7 @@ public class NotificationServiceImpl implements NotificationService {
                 case "ORDER_RECEIVED" -> "订单已确认收货";
                 case "ORDER_NO_START_REFUNDED" -> "未开工订单已无责退款";
                 case "ORDER_SHIPPING_OVERDUE" -> "订单发货已超期";
+                case "SETTLEMENT_DONE" -> "订单已模拟结算";
                 default -> throw new IllegalArgumentException("不支持的履约通知事件");
             };
             var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType(eventType);n.setEventKey(key);n.setTitle(title);

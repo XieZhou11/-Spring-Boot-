@@ -271,6 +271,8 @@ export interface OrderSettlementVO {
   status: string
   /** 已审核收款人的脱敏姓名和账号。 */
   maskedPayee: string
+  /** 模拟结算时间，仅已结算记录存在。 */
+  settledAt: string | null
 }
 export interface OrderProgressNodeVO {
   /** 固定制作节点编号。 */

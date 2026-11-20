@@ -36,7 +36,9 @@ interface Mailbox {
   /** 仅在随机库补足分页规模，模拟已有的下架收藏及认证失效关注。 */
   seedInteractionHistory: (userId: string, workId: string, creatorId: string) => Promise<void>
   /** 仅调整本worker隔离库内已由真实业务建立订单的时限，避免浏览器验收实际等待48小时或七天。 */
-  expireFulfillmentBoundary: (orderId: string, phase: 'NO_START' | 'AUTO_RECEIPT' | 'SHIPPING_OVERDUE' | 'COMPLETION') => Promise<void>
+  expireFulfillmentBoundary: (orderId: string, phase: 'NO_START' | 'AUTO_RECEIPT' | 'SHIPPING_OVERDUE' | 'COMPLETION' | 'FORCE_COMPLETE') => Promise<void>
+  /** 仅在本worker隔离库内按扫描同款结果落结算流水与已结算状态，用于收入页面浏览器验收。 */
+  markSettled: (orderId: string) => Promise<void>
 }
 
 /** 只在测试进程使用隔离库和 SMTP 夹具，生产后端无测试接口或假验证码。 */
@@ -53,6 +55,7 @@ export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabl
         promoteAdmin: async () => { throw new Error('测试数据库尚未就绪') },
         seedInteractionHistory: async () => { throw new Error('测试数据库尚未就绪') },
         expireFulfillmentBoundary: async () => { throw new Error('测试数据库尚未就绪') },
+        markSettled: async () => { throw new Error('测试数据库尚未就绪') },
       }
       // 经过真实 OSS SDK 的 HTTP 协议；仅接收本夹具随机对象，绝不访问真实云端。
       const objects = new Map<string, { bytes: Buffer; type: string }>()
@@ -153,9 +156,17 @@ export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabl
             AUTO_RECEIPT: "SET shipped_at=DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 8 DAY),auto_confirm_at=DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 1 SECOND) WHERE id=? AND order_type='CUSTOM' AND status='SHIPPED'",
             SHIPPING_OVERDUE: "SET ship_deadline_at=DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 1 SECOND) WHERE id=? AND order_type='CUSTOM' AND status IN ('PAID','IN_PRODUCTION','PENDING_SHIP')",
             COMPLETION: "SET original_completed_at=DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 8 DAY) WHERE id=? AND order_type='CUSTOM' AND status='COMPLETED'",
+            /** 收入页面浏览器验收：跳过履约节点直接完成订单并回拨原完成时间，等价结算扫描到期前置状态。 */
+            FORCE_COMPLETE: "SET status='COMPLETED',original_completed_at=DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 8 DAY) WHERE id=? AND order_type='CUSTOM' AND status IN ('PAID','IN_PRODUCTION','SHIPPED','COMPLETED')",
           }
           const [result] = await database.execute<ResultSetHeader>(`UPDATE \`${schema}\`.trade_order ${statements[phase]}`, [orderId])
           if (result.affectedRows !== 1) throw new Error(`履约时限夹具未命中本测试订单：${phase}`)
+        }
+        /** 收入页面浏览器验收专用：与结算扫描同款结果，直接落 SETTLEMENT 流水与已结算状态。 */
+        mailbox.markSettled = async (orderId) => {
+          await database.execute(`UPDATE \`${schema}\`.order_settlement SET status='SETTLED',settled_at=NOW(3) WHERE order_id=? AND status='PENDING'`, [orderId])
+          await database.execute(`INSERT INTO \`${schema}\`.fund_flow(flow_no,order_id,refund_application_id,flow_type,amount,result,idempotency_key,occurred_at) SELECT REPLACE(UUID(),'-',''),s.order_id,NULL,'SETTLEMENT',s.paid_amount,'SUCCESS',CONCAT('SETTLEMENT:ORDER:',s.order_id),NOW(3) FROM \`${schema}\`.order_settlement s WHERE s.order_id=? AND s.status='SETTLED' AND NOT EXISTS(SELECT 1 FROM \`${schema}\`.fund_flow f WHERE f.order_id=s.order_id AND f.flow_type='SETTLEMENT' AND f.result='SUCCESS')`, [orderId])
+          await database.execute(`UPDATE \`${schema}\`.order_settlement s SET s.settlement_flow_id=(SELECT f.id FROM \`${schema}\`.fund_flow f WHERE f.order_id=s.order_id AND f.flow_type='SETTLEMENT' AND f.result='SUCCESS') WHERE s.order_id=?`, [orderId])
         }
         mailbox.seedInteractionHistory = async (userId, workId, creatorId) => {
           // 主流程对象仍由真实发布审核建立；这里只准备20条历史关系，使真实关系落在末页。

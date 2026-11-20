@@ -346,7 +346,7 @@ test('补充未知结果刷新恢复，存储失败不发送，原请求重试�
 })
 
 /** 真正的定时扫描驱动收货和需求完结；隔离夹具只调整时间，不代写业务状态。 */
-test('定时自动收货与售后窗口后需求完结，不执行结算', async ({ page, browser, mailbox }) => {
+test('定时自动收货与售后窗口后需求完结，结算自动生效', async ({ page, browser, mailbox }) => {
   test.setTimeout(300_000)
   const adminContext = await browser.newContext({ baseURL: origin }); const creatorContext = await browser.newContext({ baseURL: origin })
   try {
@@ -364,8 +364,10 @@ test('定时自动收货与售后窗口后需求完结，不执行结算', async
     expect((await (await page.request.get(`${api}/custom-requests/${order.requestId}`)).json()).data.status).toBe('IN_TRADE')
     await mailbox.expireFulfillmentBoundary(order.id, 'COMPLETION')
     await expect.poll(async () => (await (await page.request.get(`${api}/custom-requests/${order.requestId}`)).json()).data.status, { timeout: 90_000, intervals: [1000] }).toBe('COMPLETED')
+    // 结算扫描每分钟运行一次：窗口结束后应自动生成结算流水并把结算状态推进为已结算。
+    await expect.poll(async () => (await (await creator.request.get(`${api}/orders/${order.id}`)).json()).data.settlement.status, { timeout: 120_000, intervals: [5000] }).toBe('SETTLED')
     const final = (await (await creator.request.get(`${api}/orders/${order.id}`)).json()).data
-    expect(final.settlement.status).toBe('PENDING')
+    expect(final.settlement.settledAt).toBeTruthy()
     expect(final.history.filter((item: { toStatus: string }) => item.toStatus === 'COMPLETED')).toHaveLength(1)
   } finally { await adminContext.close(); await creatorContext.close() }
 })

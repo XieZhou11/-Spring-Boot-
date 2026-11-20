@@ -187,3 +187,7 @@ npm run test:e2e -- e2e/work-interactions.spec.ts
 ## 普通售后与管理员裁定（T-014）
 
 专项：`npm run test:e2e -- e2e/order-refund.spec.ts e2e/order-refund-pagination.spec.ts e2e/order-refund-flow.spec.ts`。`order-refund.spec.ts`通过受控网络验证未知结果、原键核验、版本冲突重阅、存储失败、终态草稿只读与乱序隔离；`order-refund-pagination.spec.ts`验证双方和后台证据/聊天分页及队列条件保留；`order-refund-flow.spec.ts`从注册、入驻、定标及付款的真实链路建立订单，验证双方图文证据、状态恢复、管理员聊天只读、退回核验与原子退款。真实OSS独立结果在后端测试记录中区分，浏览器协议接收器不代替云端验证。详细结果见[T-014测试记录](../docs/testing/T-014-refund-adjudication.md)。
+
+## 收入记录与资金记录（T-015）
+
+创作者工作台新增`/creator/income`收入记录页（导航入口与我的报价同级），后台新增`/admin/settlements`资金记录页；两页均为只读查询，支持结算状态筛选与分页，焦点恢复静默刷新。收入页展示应结算金额、结算状态、结算时间与脱敏收款账户；资金记录页面向管理员展示收款人姓名与账号明文快照。订单详情创作者/管理员视角结算信息区补充结算时间，买家不可见应结算金额。专项：`npm run test:e2e -- e2e/settlement-income.spec.ts`；详细结果见[T-015测试记录](../docs/testing/T-015-settlement-income.md)。

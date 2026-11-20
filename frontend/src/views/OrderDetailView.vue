@@ -364,7 +364,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
             class="editor-section"
           >
             <h2>结算信息</h2><dl class="work-specifications">
-              <div><dt>应结算金额</dt><dd>¥ {{ order.settlement.paidAmount }}</dd></div><div><dt>结算状态</dt><dd>{{ settlementStatus[order.settlement.status] || order.settlement.status }}</dd></div><div><dt>收款账户</dt><dd>{{ order.settlement.maskedPayee }}</dd></div>
+              <div><dt>应结算金额</dt><dd>¥ {{ order.settlement.paidAmount }}</dd></div><div><dt>结算状态</dt><dd>{{ settlementStatus[order.settlement.status] || order.settlement.status }}</dd></div><div><dt>结算时间</dt><dd>{{ order.settlement.settledAt ? formatTime(order.settlement.settledAt) : '—' }}</dd></div><div><dt>收款账户</dt><dd>{{ order.settlement.maskedPayee }}</dd></div>
             </dl>
           </section>
           <section class="editor-section">

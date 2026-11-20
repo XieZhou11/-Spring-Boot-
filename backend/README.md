@@ -202,3 +202,7 @@ endpoint、region、bucket 仍在 `application.yml` 维护，access-key-id 与 a
 V6仅新增制作记录可空请求键及创作者范围唯一索引；历史迁移不变，新版启动时Flyway追加。进度/退款图片分别使用`order-progress/`、`order-refunds/`私有用途，实际解码与5MB限制复用既有存储；未绑定仅本人预览，绑定后双方读取短期签名，历史引用阻止24小时临时清理。创作者仅待发货及历史已发货阶段返回必要地址，列表无完整地址。
 
 验证记录见[T-013测试记录](../docs/testing/T-013-order-fulfillment.md)。本地专项使用隔离MySQL及可控时钟，执行`./mvnw.cmd -B -ntp -Dtest=OrderFulfillmentIntegrationTest,OrderImageAndNodeChatIntegrationTest test`；真实云端单独开启`HANDCRAFT_TEST_REAL_OSS=1`后执行`OrderImageCloudTest`，只清理本轮测试对象。完整检查使用`./mvnw.cmd -B -ntp verify`；后端测试代码仍按仓库约定仅本地保留。
+
+## 模拟结算与创作者收入记录（T-015）
+
+[T-015](../docs/development/tasks/T-015-settlement-income.md)承接支付时建立的待结算记录，新增每分钟定时扫描：订单原完成时间满七天、未全额退款且无处理中售后时，在锁内重检（账号升序→需求→订单→退款→结算→会话，锁后统一取时）后同事务落地`SETTLEMENT`成功流水（幂等键`SETTLEMENT:ORDER:{orderId}`）、回写`settlement_flow_id`/`settled_at`、系统操作日志及创作者专属通知，状态仅`PENDING→SETTLED`；与T-014退款批准原子取消待结算形成双向互斥，结算前校验收款快照三键与三方金额一致。查询接口`GET /api/me/settlements`（创作者收入记录，仅脱敏账户）与`GET /api/admin/settlements`（管理员资金记录，含姓名与账号明文）均为只读分页，`OrderSettlementVO`补充结算时间。脱敏与明文口径统一由`PayeeSnapshotService`维护。V1已含全部所需列与索引，本任务无新增迁移。验证见[T-015测试记录](../docs/testing/T-015-settlement-income.md)。

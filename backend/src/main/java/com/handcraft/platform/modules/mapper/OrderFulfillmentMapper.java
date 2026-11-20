@@ -31,6 +31,21 @@ public interface OrderFulfillmentMapper {
     @Select("SELECT * FROM fund_flow WHERE order_id=#{id} AND flow_type='REFUND' AND result='SUCCESS'") FundFlow refundFlowForOrder(Long id);
     @Update("UPDATE order_settlement SET status='CANCELLED',cancelled_at=#{now},updated_at=#{now} WHERE order_id=#{id} AND status='PENDING'")
     int cancelSettlement(@Param("id")Long id,@Param("now")LocalDateTime now);
+    @Insert("INSERT INTO fund_flow(flow_no,order_id,refund_application_id,flow_type,amount,result,idempotency_key,occurred_at) VALUES(#{flow.flowNo},#{flow.orderId},NULL,'SETTLEMENT',#{flow.amount},'SUCCESS',#{flow.idempotencyKey},#{flow.occurredAt})")
+    @Options(useGeneratedKeys=true,keyProperty="flow.id") int settlementFlow(@Param("flow")FundFlow flow);
+    @Select("SELECT * FROM fund_flow WHERE order_id=#{id} AND flow_type='SETTLEMENT' AND result='SUCCESS'") FundFlow settlementFlowForOrder(Long id);
+    @Update("UPDATE order_settlement SET status='SETTLED',settlement_flow_id=#{flowId},settled_at=#{now},updated_at=#{now} WHERE order_id=#{id} AND status='PENDING'")
+    int markSettled(@Param("id")Long id,@Param("flowId")Long flowId,@Param("now")LocalDateTime now);
+    /** 仅扫描已过七天完成窗口且无处理中售后的待结算订单；键集遍历保证单笔失败不饿死更高编号订单。 */
+    @Select("""
+        SELECT s.order_id FROM order_settlement s JOIN trade_order o ON o.id=s.order_id
+        WHERE s.status='PENDING' AND s.order_id>#{after}
+        AND o.status='COMPLETED' AND o.original_completed_at IS NOT NULL
+        AND DATE_ADD(o.original_completed_at,INTERVAL 7 DAY)<=#{now}
+        AND NOT EXISTS(SELECT 1 FROM refund_application a WHERE a.order_id=o.id AND a.status='WAIT_ADMIN')
+        ORDER BY s.order_id LIMIT 100
+        """)
+    List<Long> dueSettlements(@Param("after")Long after,@Param("now")LocalDateTime now);
     @Select("SELECT * FROM operation_log WHERE operator_id=#{creatorId} AND target_type='ORDER' AND action='TRACKING_CORRECT' AND JSON_UNQUOTE(JSON_EXTRACT(detail,'$.requestKey'))=#{key} ORDER BY id LIMIT 1")
     WorkOperation correctionByKey(@Param("creatorId")Long creatorId,@Param("key")String key);
     @Select("SELECT * FROM operation_log WHERE target_type='ORDER' AND target_id=#{orderId} AND action=#{action} ORDER BY id DESC LIMIT 1")

@@ -18,6 +18,12 @@ public class OrderSettlement {
     private String payeeSnapshot;
     /** PENDING待结算、SETTLED已结算或CANCELLED已取消。 */
     private String status;
+    /** 成功结算流水的fund_flow编号，仅已结算记录存在。 */
+    private Long settlementFlowId;
+    /** 模拟结算时间，仅已结算记录存在。 */
+    private LocalDateTime settledAt;
+    /** 退款取消待结算的时间，仅已取消记录存在。 */
+    private LocalDateTime cancelledAt;
     /** 支付建立结算记录的时间。 */
     private LocalDateTime createdAt;
 }

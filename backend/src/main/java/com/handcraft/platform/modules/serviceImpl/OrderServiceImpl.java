@@ -42,16 +42,17 @@ public class OrderServiceImpl implements OrderService {
     private final OrderFulfillmentMapper fulfillment;
     private final RefundApplicationMapper refundApplications;
     private final RefundApplicationService refundService;
+    private final PayeeSnapshotService payees;
 
     public OrderServiceImpl(TradeOrderMapper orders,QuoteMapper quotes,CustomRequestMapper requests,UserAccountMapper users,
             ShippingAddressMapper addresses,CategoryMapper categories,ConversationMapper conversationMapper,
             ConversationService conversations,CustomRequestPolicyService policy,QuoteLifecycleService lifecycle,
             NotificationService notifications,OperationLogService logs,ObjectMapper json,PlatformTransactionManager manager,
-            OrderPaymentMapper payments,OrderPaymentService paymentService,PaymentAccountCryptoService crypto,OrderFulfillmentMapper fulfillment,RefundApplicationMapper refundApplications,RefundApplicationService refundService) {
+            OrderPaymentMapper payments,OrderPaymentService paymentService,PaymentAccountCryptoService crypto,OrderFulfillmentMapper fulfillment,RefundApplicationMapper refundApplications,RefundApplicationService refundService,PayeeSnapshotService payees) {
         this.orders=orders;this.quotes=quotes;this.requests=requests;this.users=users;this.addresses=addresses;this.categories=categories;
         this.conversationMapper=conversationMapper;this.conversations=conversations;this.policy=policy;this.lifecycle=lifecycle;
         this.notifications=notifications;this.logs=logs;this.json=json;
-        this.payments=payments;this.paymentService=paymentService;this.crypto=crypto;this.fulfillment=fulfillment;this.refundApplications=refundApplications;this.refundService=refundService;
+        this.payments=payments;this.paymentService=paymentService;this.crypto=crypto;this.fulfillment=fulfillment;this.refundApplications=refundApplications;this.refundService=refundService;this.payees=payees;
         transaction=new TransactionTemplate(manager);transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
 
@@ -179,7 +180,7 @@ public class OrderServiceImpl implements OrderService {
         var paymentView=!detailed||payment==null?null:new OrderPaymentVO(payment.getFlowNo(),paidAmount,payment.getResult(),time(payment.getOccurredAt()),
                 terms==null?null:terms.path("termsVersion").asText(null),terms==null?null:terms.path("termsText").asText(null));
         var settlement=detailed&&!owned?payments.settlement(order.getId()):null;
-        var settlementView=settlement==null?null:new OrderSettlementVO(settlement.getPaidAmount().setScale(2).toPlainString(),settlement.getStatus(),maskedPayee(order,settlement));
+        var settlementView=settlement==null?null:new OrderSettlementVO(settlement.getPaidAmount().setScale(2).toPlainString(),settlement.getStatus(),maskedPayee(order,settlement),time(settlement.getSettledAt()));
         boolean pending=fulfillment.hasPending(order.getId());
         boolean active=!pending&&!Set.of("AFTER_SALE","CANCELLED","REFUNDED","COMPLETED").contains(status);
         var nodes=detailed?payments.nodes(order.getId()).stream().map(node->{
@@ -209,12 +210,9 @@ public class OrderServiceImpl implements OrderService {
                 detailed&&pending?refundService.view(refundApplications.current(order.getId()),order,userId):null);
     }
 
-    /** 只从本单原快照解密后生成脱敏文本，不返回申请编号、姓名原文或编码密文。 */
+    /** 只从本单原快照解密后生成脱敏文本，不返回申请编号、姓名原文或编码密文；口径统一由 PayeeSnapshotService 维护。 */
     private String maskedPayee(TradeOrder order,OrderSettlement settlement){
-        var snapshot=json.readTree(settlement.getPayeeSnapshot());
-        String name=snapshot.path("real_name").asText();
-        String account=crypto.decrypt(order.getCreatorId(),Base64.getDecoder().decode(snapshot.path("alipay_account_ciphertext").asText()));
-        return (name.isEmpty()?"**":name.substring(0,1)+"**")+" / "+(account.length()<5?"****":account.substring(0,1)+"****"+account.substring(account.length()-2));
+        return payees.masked(settlement.getPayeeSnapshot(),order.getCreatorId());
     }
 
     private LocalDateTime operationTime(WorkOperation operation) {

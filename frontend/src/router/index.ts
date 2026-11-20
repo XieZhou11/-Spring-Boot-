@@ -20,6 +20,7 @@ const router = createRouter({
     { path: '/requests/:id', name: 'custom-request-detail', component: () => import('@/views/CustomRequestDetailView.vue'), meta: { requiresAuth: true, title: '需求详情' } },
     { path: '/requests/:id/quotes', name: 'quote-comparison', component: () => import('@/views/QuoteComparisonView.vue'), meta: { requiresAuth: true, title: '报价对比' } },
     { path: '/creator/quotes', component: () => import('@/views/MyQuotesView.vue'), meta: { requiresAuth: true, title: '我的报价' } },
+    { path: '/creator/income', component: () => import('@/views/CreatorIncomeView.vue'), meta: { requiresAuth: true, title: '收入记录' } },
     { path: '/orders', component: () => import('@/views/OrdersView.vue'), meta: { requiresAuth: true, title: '我的订单' } },
     { path: '/orders/:id', name: 'order-detail', component: () => import('@/views/OrderDetailView.vue'), meta: { requiresAuth: true, title: '订单详情' } },
     { path: '/my-requests', component: () => import('@/views/CustomRequestsView.vue'), props: { scope: 'mine' }, meta: { requiresAuth: true, title: '我的需求' } },
@@ -80,6 +81,12 @@ const router = createRouter({
       name: 'admin-categories',
       component: () => import('@/views/AdminCategoriesView.vue'),
       meta: { requiresAuth: true, requiresAdmin: true, title: '品类管理' },
+    },
+    {
+      path: '/admin/settlements',
+      name: 'admin-settlements',
+      component: () => import('@/views/AdminSettlementsView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true, title: '资金记录' },
     },
     {
       path: '/login',
