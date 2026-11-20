@@ -33,7 +33,7 @@ V1.5 MVP 版正文仅描述完整实现范围，不划分功能优先级，也�
 
 `requirements/requirements.md` 与 `requirements/archive/手工定制作品分享与交易平台需求规格说明书_V1.5_MVP版.md` 是当前需求的两份相同内容文件。日常以 `requirements.md` 为编辑入口，每次修改后同步当前版本中文副本并验证逐字节一致。V1.4 MVP 版、`_修订版.md`、旧版 Markdown 与原始 Word 作为历史资料保留，不随当前正文同步；版本升级时保留上一版本文件及其原有内容，用于展示版本更替。
 
-用户已授权补齐框架。后端有启动入口、公共响应/异常处理、数据源与 Flyway、MyBatis-Plus 和 CORS/安全链；前端有 Router、Pinia、Axios/CSRF 封装，认证页面已接入对应后端接口。当前机器的 handcraft_trade_platform 开发库（MySQL 8.0.46）已完成 V1 初始化；另在独立 MySQL 8.4 验证 27 表迁移与失败补偿，人工整批回退脚本未执行。按用户要求，后端全部配置和开发数据库凭据集中在 `backend/src/main/resources/application.yml` 显式维护，不使用额外 local 文件或环境变量占位。实际业务功能开发按任务记录；文档修改、选型、初始化和纯设计不建立任务或对应检查记录。
+用户已授权补齐框架。后端有启动入口、公共响应/异常处理、数据源与 Flyway、MyBatis-Plus 和 CORS/安全链；前端有 Router、Pinia、Axios/CSRF 封装，认证页面已接入对应后端接口。当前机器的 handcraft_trade_platform 开发库（MySQL 8.0.46）已完成 V1 初始化；另在独立 MySQL 8.4 验证 27 表迁移与失败补偿，人工整批回退脚本未执行。按用户要求，后端非敏感配置和开发数据库凭据集中在 `backend/src/main/resources/application.yml` 显式维护，敏感凭据改由本机 `backend/src/main/resources/application-local.yml` 提供（已被 Git 忽略并由 `spring.config.import` 导入），不使用环境变量占位。实际业务功能开发按任务记录；文档修改、选型、初始化和纯设计不建立任务或对应检查记录。
 
 当前项目不涉及部署，不建立部署配置、部署文档或独立脚本目录。后续按实际产物创建必要目录，避免提前增加层级。
 

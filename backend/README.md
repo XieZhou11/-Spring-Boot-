@@ -77,7 +77,7 @@ macOS/Linux 使用 `sh ./mvnw` 替代 `.\mvnw.cmd`。项目不需要全局 Maven
 
 ## 本地连接与联调
 
-所有后端启动命令均在 `backend/` 执行。后端应用配置统一在 `src/main/resources/application.yml` 中显式填写：数据库 `localhost:3306/handcraft_trade_platform`、用户 `root`、密码 `123456`；不加载额外本地配置文件，不使用环境变量占位。
+所有后端启动命令均在 `backend/` 执行。后端非敏感配置统一在 `src/main/resources/application.yml` 中显式填写：数据库 `localhost:3306/handcraft_trade_platform`、用户 `root`、密码 `123456`；SMTP、加密与 OSS 访问密钥等敏感凭据放在本机 `src/main/resources/application-local.yml`（仓库已忽略），由 `spring.config.import` 导入，不使用环境变量占位。
 
 端口为 8080；数据库地址、账号密码、端口和 CORS 白名单如需调整，直接修改 `application.yml` 后重启。首次使用先由 MySQL 管理工具创建空数据库 `handcraft_trade_platform`，再运行 `./mvnw.cmd spring-boot:run`；Flyway 自动创建业务表和历史表，不插入测试账号或演示数据。普通重启会校验迁移，不重复建表。
 
@@ -111,7 +111,7 @@ MySQL DDL 隐式提交，整批建表不能靠 ROLLBACK 撤销。V1 使用临时
 
 接口、字段及错误码的维护入口是 [T-001](../docs/development/tasks/T-001-backend-auth.md)。注册时提交邮箱、验证码、密码、昵称，成功后另行登录。只支持 qq.com、163.com；邮箱去首尾空格并转小写，密码不去空格。注册与找回共用最新六位验证码，五分钟有效，重发立即失效旧码。
 
-在 `application.yml` 的 `spring.mail` 中填写平台 QQ 发件邮箱及 SMTP 授权码；默认 `smtp.qq.com:465` 使用 SSL。`app.auth.verification-secret` 填至少 32 字节的随机密钥并保持稳定。密钥不入库，轮换会使现有验证码失效。真实授权码、邮箱及密钥仅留本地，不加入提交、示例或日志；不拆本地配置、不使用环境变量占位。缺少凭据或密钥时接口返回 HTTP 503、业务码 50301，不创建账号或伪装发送成功。
+在本机 `src/main/resources/application-local.yml` 的 `spring.mail` 中填写平台 QQ 发件邮箱及 SMTP 授权码，并在 `app.auth.verification-secret` 填至少 32 字节的随机密钥；默认 `smtp.qq.com:465` 使用 SSL。密钥不入库，轮换会使现有验证码失效。真实授权码、邮箱及密钥仅留本地，不加入提交、示例或日志；不使用环境变量占位。缺少凭据或密钥时接口返回 HTTP 503、业务码 50301，不创建账号或伪装发送成功。
 
 2026-11-13 本机检查：用户填写的 QQ SMTP 配置连接与认证成功；检查发现验证码密钥为空，已生成并保存在本地配置。检查只调用 `JavaMailSenderImpl.testConnection()`，未发送邮件，不能据此宣称 QQ/163 收件成功。真实收件结果继续维护在 [T-001 测试记录](../docs/testing/T-001-backend-auth.md)。
 
@@ -125,7 +125,7 @@ MySQL DDL 隐式提交，整批建表不能靠 ROLLBACK 撤销。V1 使用临时
 
 头像由后端校验实际 JPEG/PNG 和 2MiB 大小，上传至私有 OSS，再短事务绑定本人头像。数据库仅保存文件对象键，读取本人资料时签发 15 分钟访问 URL；成功替换保留旧文件，失败的新上传通过持久化补偿清理，不把外部网络调用放在长数据库事务中。
 
-2026-11-13 已按用户提供的信息在本地 `application.yml` 配置北京地域私有 OSS，不使用空项、示例凭据或占位值。更换配置时维护 `app.oss` 下以下全部属性并重启后端：
+2026-11-13 已按用户提供的信息配置北京地域私有 OSS，不使用空项、示例凭据或占位值；现在 endpoint、region、bucket 在 `application.yml` 维护，访问密钥在本机 `src/main/resources/application-local.yml` 填写。更换配置时维护 `app.oss` 下以下全部属性并重启后端：
 
 | 属性 | 填写内容 |
 | --- | --- |
@@ -135,7 +135,7 @@ MySQL DDL 隐式提交，整批建表不能靠 ROLLBACK 撤销。V1 使用临时
 | `app.oss.access-key-id` | 具备该 Bucket 必要读写权限的访问密钥编号 |
 | `app.oss.access-key-secret` | 对应访问密钥秘密，仅在本地保存 |
 
-配置仍集中在 `application.yml`，不使用环境变量占位或额外 local 文件；真实密钥不加入 Git、前端或日志。缺少任一配置时应用仍可启动，上传明确返回 HTTP 503，昵称、简介和地址仍可保存；不会写入假文件或返回假上传成功。前端只呈现“头像上传暂时不可用”等用户提示。
+endpoint、region、bucket 仍在 `application.yml` 维护，access-key-id 与 access-key-secret 在本机 `src/main/resources/application-local.yml` 填写；不使用环境变量占位，真实密钥不加入 Git、前端或日志。缺少任一配置时应用仍可启动，上传明确返回 HTTP 503，昵称、简介和地址仍可保存；不会写入假文件或返回假上传成功。前端只呈现“头像上传暂时不可用”等用户提示。
 
 本地协议测试验证 SDK、文件状态和失败补偿；另已使用隔离账号与真实北京 OSS 完成页面上传、刷新、替换、签名读取及匿名访问拒绝，并推进浏览器时钟触发续签。测试账号数据库及本轮上传对象均已清理，结果维护在 [T-003 测试记录](../docs/testing/T-003-personal-center.md)。
 
@@ -143,7 +143,7 @@ MySQL DDL 隐式提交，整批建表不能靠 ROLLBACK 撤销。V1 使用临时
 
 完整接口与字段见 [T-004](../docs/development/tasks/T-004-creator-onboarding.md)。管理员账号由用户在开发库设置 `is_admin`，应用不创建默认管理员或内置密码。普通买家申请 1—3 个启用一级主品类、3—5 件原创作品；提交材料只读，撤回或驳回后重提新增记录，通过后姓名和收款资料只读。审核结论、账号资格、通知、操作记录在同一事务提交。品类提供两级新增、编辑、排序及停用，历史引用保留。
 
-`app.security.payment-account-key` 须为 Base64 编码的 32 字节随机密钥，已在本地 `application.yml` 显式配置；不向日志或版本库输出。AES-256-GCM 密文包含版本、随机 nonce 和认证标签，并绑定用户编号。保留密钥才能解密历史收款账号；更换时须迁移已有密文，不能直接覆盖密钥。密钥缺失、错误或密文损坏明确返回 50332。
+`app.security.payment-account-key` 须为 Base64 编码的 32 字节随机密钥，已在本机 `src/main/resources/application-local.yml` 填写；不向日志或版本库输出。AES-256-GCM 密文包含版本、随机 nonce 和认证标签，并绑定用户编号。保留密钥才能解密历史收款账号；更换时须迁移已有密文，不能直接覆盖密钥。密钥缺失、错误或密文损坏明确返回 50332。
 
 入驻图片与头像共用已配置的私有 OSS，实际解码 JPEG/PNG/WebP（WebP 使用 TwelveMonkeys 3.15.3），单张最大 5MiB。HTTP 单文件上限 5MB、请求上限 6MB；头像业务仍单独限制 2MiB。图片预留短事务后上传，失败对象持久化重试清理；超过 24 小时未被任何历史申请引用的临时图自动回收。所有历史申请图片保留，管理员仅能读取已引用材料；本人读取和管理员审核均返回 15 分钟签名。
 
@@ -153,7 +153,7 @@ MySQL DDL 隐式提交，整批建表不能靠 ROLLBACK 撤销。V1 使用临时
 
 ## 后续开发边界
 
-后端配置按用户要求集中在 `application.yml` 显式维护；SMTP、OSS 接入时也遵守此约定。建表使用真实迁移，不添加演示数据。新增业务功能时在 `modules` 下对应职责包中补齐三层实现、接口校验和业务测试，不在公共层放置具体业务规则。
+后端非敏感配置按用户要求集中在 `application.yml` 显式维护；SMTP、OSS 的真实凭据放在本机 `src/main/resources/application-local.yml`。建表使用真实迁移，不添加演示数据。新增业务功能时在 `modules` 下对应职责包中补齐三层实现、接口校验和业务测试，不在公共层放置具体业务规则。
 
 ## 作品发布、审核与浏览（T-005）
 

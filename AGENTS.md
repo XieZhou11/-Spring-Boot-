@@ -38,7 +38,7 @@
 - 优先保持一个后端工程，采用 Controller → Service → Mapper 三层架构。业务代码在 `modules` 下直接按职责组织：`controller`、`service`、`serviceImpl`、`mapper`、`dto`、`vo`、`entity` 等包保持同级，不再增加 `auth` 等业务域层级。`service` 只放 `XxxService` 接口，`serviceImpl` 放实现对应接口的 `XxxServiceImpl` 类；Controller 及业务协作依赖 Service 接口，事务注解放实现类的方法上。不预先创建空业务目录或引入微服务。
 - 不在根目录散放 SQL、图片、需求副本和临时脚本；遵守对应目录说明。
 - 不创建 `.gitkeep` 或其他仅用于保留空目录的占位文件；空目录只在本地保留，实际文件按功能需要添加。
-- 后端应用配置统一在 `backend/src/main/resources/application.yml` 中显式填写，不使用环境变量占位，不拆分 `application-local.yml` 或对应样例；本项目已授权的开发数据库连接信息也按此方式维护。
+- 后端非敏感配置统一在 `backend/src/main/resources/application.yml` 中显式填写，本项目已授权的开发数据库连接信息也按此方式维护；敏感凭据放在同目录的 `backend/src/main/resources/application-local.yml`，该文件已被 `.gitignore` 显式忽略、不进入提交，由 `application.yml` 的 `spring.config.import` 可选导入。本地构建 JAR 会包含该文件，不要分发；不使用环境变量占位，不提交被忽略的本地配置或含真实凭据的样例。
 - 工程初始化后，后端测试按 Spring Boot 工程约定组织，前端及浏览器测试按所选工具在前端工程内组织，不提前创建测试子目录。
 - 新增依赖应有当前任务的实际用途；初始化时补齐相应锁文件或构建工具 Wrapper，不手改生成文件。
 - 编写或修改代码、脚本和配置时，应添加简洁、准确的中文注释，说明职责、关键业务规则、不直观的实现原因及配置项用途，避免逐行复述代码；Entity、DTO 的每一个字段均须有中文注释，VO 的每个返回字段也须说明含义。Service 接口方法注明业务职责，修改实现时同步更新相关注释。配置格式不支持注释时，在就近的 README 中说明。

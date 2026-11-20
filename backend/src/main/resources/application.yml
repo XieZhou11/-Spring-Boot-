@@ -6,7 +6,9 @@ spring:
       max-request-size: 6MB
   application:
     name: handcraft-platform
-  # 后端配置统一在本文件显式维护，不加载额外本地配置。
+  # 非敏感配置入库；敏感凭据由同目录、被 Git 忽略的 application-local.yml 导入。
+  config:
+    import: optional:classpath:application-local.yml
   datasource:
     url: jdbc:mysql://localhost:3306/handcraft_trade_platform?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
     username: root
@@ -22,12 +24,9 @@ spring:
   jackson:
     time-zone: Asia/Shanghai
   mail:
-    # 平台只需一个发件账号，可同时向 QQ 与 163 邮箱发送验证码。
+    # 平台只需一个发件账号，可同时向 QQ 与 163 邮箱发送验证码；账号与授权码从本地配置读取。
     host: smtp.qq.com
     port: 465
-    username: ""
-    # 填 SMTP 授权码，不是邮箱登录密码；真实凭据仅在本地配置，不进入提交。
-    password: ""
     default-encoding: UTF-8
     properties:
       mail.smtp.auth: true
@@ -54,20 +53,12 @@ mybatis-plus:
     map-underscore-to-camel-case: true
 
 app:
-  security:
-    # 收款账号 AES-256-GCM 密钥：本地填写 Base64 编码的 32 字节随机密钥，需保留以解密历史资料。
-    payment-account-key: ""
-  # 私有 OSS 由后端使用；真实访问凭据仅保留本地，不纳入提交。
+  # 收款账号加密密钥、验证码 HMAC 密钥等敏感值只从本地配置读取；已有密文后密钥不可丢失或更换。
+  # 北京地域私有 OSS；endpoint/region/bucket 可入库，访问密钥只从本地配置读取。
   oss:
-    endpoint: ""
-    region: ""
-    bucket: ""
-    access-key-id: ""
-    access-key-secret: ""
-  auth:
-    # 本地填写至少 32 字节随机密钥，用于验证码 HMAC；留空时验证码接口明确不可用。
-    # 保持密钥稳定，轮换会使未消费验证码失效；真实密钥不进入提交。
-    verification-secret: ""
+    endpoint: https://oss-cn-beijing.aliyuncs.com
+    region: cn-beijing
+    bucket: handcraft-trade-platform
   cors:
     # 精确列出可携带 Session Cookie 的前端来源，不使用通配符。
     allowed-origins: http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173
