@@ -27,6 +27,8 @@ export interface WorkContent {
   stockPrice: string | null
   /** 同类定制参考自然日。 */
   customReferenceDays: number | null
+  /** 已同意公开的定制订单来源，普通作品为空。 */
+  sourceOrderId: string | null
 }
 /** 作品详情；管理端增加审核原因，公开接口不返回私密审核意见。 */
 export interface WorkVO extends WorkContent {
@@ -66,6 +68,17 @@ export interface WorkVO extends WorkContent {
   customizable: boolean
   /** 列表封面短时签名。 */
   coverImage: ImageVO | null
+}
+/** 可供创作者手动关联案例的授权订单摘要，不含买家地址。 */
+export interface PublicationOrderOptionVO {
+  /** 来源订单编号。 */
+  orderId: string
+  /** 订单标题快照。 */
+  title: string
+  /** 原完成时间。 */
+  completedAt: string
+  /** 买家授权时间。 */
+  consentedAt: string
 }
 export interface PublicationQuotaVO {
   /** 北京时间当日已用首次提交数。 */

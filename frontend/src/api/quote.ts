@@ -16,6 +16,10 @@ export const awardQuote = async (id: string, data: AwardDTO) => (await request.p
 export const getOrders = (params: object) => get<PageVO<OrderVO>>('/me/orders', params)
 export const getOrder = (id: string) => get<OrderVO>(`/orders/${id}`)
 export const cancelOrder = async (id: string) => (await request.put<ApiResult<OrderVO>>(`/orders/${id}/cancellation`)).data.data
+/** 创作者申请公开本次定制成品；服务端按订单状态和身份核验。 */
+export const requestPublicationConsent = async (id: string) => (await request.post<ApiResult<OrderVO>>(`/orders/${id}/publication-consent`)).data.data
+/** 买家通过按钮明确同意或拒绝，不以会话内容作为授权。 */
+export const respondPublicationConsent = async (id: string, decision: 'APPROVED' | 'REJECTED') => (await request.put<ApiResult<OrderVO>>(`/orders/${id}/publication-consent`, { decision })).data.data
 /** 同订单重试必须复用首次确认内容，由服务端返回原有流水。 */
 export const payOrder = async (id: string, data: OrderPaymentDTO) => (await request.put<ApiResult<OrderVO>>(`/orders/${id}/payment`, data)).data.data
 /** 履约始终由服务端核验参与方、顺序与当前状态，页面只提交原始输入。 */

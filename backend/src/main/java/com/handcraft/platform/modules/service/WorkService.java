@@ -31,6 +31,8 @@ public interface WorkService {
     CreatorPublicVO creator(Long userId,Long creatorId);
     /** 定向需求表单按末级品类选择同主品类且可接单的非本人创作者。 */
     PageVO<CreatorPublicVO> customCandidates(Long userId,Long categoryId,String keyword,int page,int size);
+    /** 查询本人买家已同意公开的定制订单摘要，供手动关联案例。 */
+    java.util.List<PublicationOrderOptionVO> approvedPublicationOrders(Long userId);
     /** @param work 草稿视图 @param created 是否首次创建 */
     record Creation(WorkVO work,boolean created) {}
 }

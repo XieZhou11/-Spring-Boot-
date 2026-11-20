@@ -200,6 +200,16 @@ export interface OrderVO {
   refundWindowEndsAt: string | null
   /** 当前处理中申请，无申请时为空。 */
   currentRefund: RefundApplicationVO | null
+  /** 定制成品公开授权状态。 */
+  publicationConsentStatus: 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED' | null
+  /** 创作者提出授权申请的时间。 */
+  publicationRequestedAt: string | null
+  /** 买家明确回复授权的时间。 */
+  publicationRespondedAt: string | null
+  /** 服务端核验当前创作者可申请公开。 */
+  canRequestPublicationConsent: boolean
+  /** 服务端核验当前买家可回复授权。 */
+  canRespondPublicationConsent: boolean
   /** 已过固定约定发货截止且尚未发货。 */
   shippingOverdue: boolean
   /** 运单号历次更正记录，不覆盖原值。 */

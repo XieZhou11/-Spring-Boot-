@@ -5,6 +5,7 @@ import com.handcraft.platform.modules.dto.*;
 import com.handcraft.platform.modules.security.AccountPrincipal;
 import com.handcraft.platform.modules.service.OrderService;
 import com.handcraft.platform.modules.service.OrderPaymentService;
+import com.handcraft.platform.modules.service.PublicationConsentService;
 import com.handcraft.platform.modules.vo.*;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -16,7 +17,8 @@ import org.springframework.web.bind.annotation.*;
 public class OrderController {
     private final OrderService orders;
     private final OrderPaymentService payments;
-    public OrderController(OrderService orders,OrderPaymentService payments){this.orders=orders;this.payments=payments;}
+    private final PublicationConsentService publicationConsent;
+    public OrderController(OrderService orders,OrderPaymentService payments,PublicationConsentService publicationConsent){this.orders=orders;this.payments=payments;this.publicationConsent=publicationConsent;}
     /** 首次现货建单201；相同请求键重试返回原订单200。 */
     @PostMapping("/api/works/{id}/orders")
     public ResponseEntity<Result<OrderVO>> createStock(@AuthenticationPrincipal AccountPrincipal principal,@PathVariable Long id,@Valid @RequestBody StockOrderDTO input){
@@ -40,4 +42,10 @@ public class OrderController {
     public Result<OrderVO> detail(@AuthenticationPrincipal AccountPrincipal principal,@PathVariable Long id){return Result.ok(orders.detail(principal.userId(),id));}
     @PutMapping("/api/orders/{id}/cancellation")
     public Result<OrderVO> cancel(@AuthenticationPrincipal AccountPrincipal principal,@PathVariable Long id){return Result.ok(orders.cancel(principal.userId(),id));}
+    /** 定制订单创作者申请买家授权公开本次成品。 */
+    @PostMapping("/api/orders/{id}/publication-consent")
+    public Result<OrderVO> requestPublicationConsent(@AuthenticationPrincipal AccountPrincipal principal,@PathVariable Long id){return Result.ok(publicationConsent.request(principal.userId(),id));}
+    /** 定制订单买家通过按钮明确同意或拒绝公开。 */
+    @PutMapping("/api/orders/{id}/publication-consent")
+    public Result<OrderVO> respondPublicationConsent(@AuthenticationPrincipal AccountPrincipal principal,@PathVariable Long id,@Valid @RequestBody PublicationConsentDecisionDTO input){return Result.ok(publicationConsent.respond(principal.userId(),id,input.getDecision()));}
 }

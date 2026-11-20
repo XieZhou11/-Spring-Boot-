@@ -266,7 +266,12 @@ public class OrderServiceImpl implements OrderService {
                 active&&!owned&&"PAID".equals(status),active&&!owned&&"PENDING_SHIP".equals(status),active&&!owned&&"SHIPPED".equals(status),active&&owned&&"SHIPPED".equals(status),
                 active&&owned&&"PAID".equals(status)&&order.getStartedAt()==null&&order.getPaidAt()!=null&&!now.isBefore(order.getPaidAt().plusHours(48)),
                 Set.of("PAID","IN_PRODUCTION","PENDING_SHIP").contains(status)&&order.getShippedAt()==null&&order.getShipDeadlineAt()!=null&&!now.isBefore(order.getShipDeadlineAt()),trackingHistory,refundView,owned&&!pending&&refundService.eligible(order,now),time(order.getOriginalCompletedAt()==null?null:order.getOriginalCompletedAt().plusDays(7)),
-                detailed&&pending?refundService.view(refundApplications.current(order.getId()),order,userId):null);
+                detailed&&pending?refundService.view(refundApplications.current(order.getId()),order,userId):null,
+                "CUSTOM".equals(order.getOrderType())?order.getPublicationConsentStatus():null,
+                "CUSTOM".equals(order.getOrderType())?time(order.getPublicationRequestedAt()):null,
+                "CUSTOM".equals(order.getOrderType())?time(order.getPublicationRespondedAt()):null,
+                detailed&&!owned&&"CUSTOM".equals(order.getOrderType())&&"COMPLETED".equals(status)&&order.getOriginalCompletedAt()!=null&&"NONE".equals(order.getPublicationConsentStatus()),
+                detailed&&owned&&"CUSTOM".equals(order.getOrderType())&&"PENDING".equals(order.getPublicationConsentStatus()));
     }
 
     /** 只从本单原快照解密后生成脱敏文本，不返回申请编号、姓名原文或编码密文；口径统一由 PayeeSnapshotService 维护。 */

@@ -27,14 +27,15 @@ public class WorkServiceImpl implements WorkService {
     private final OperationLogService logs; private final NotificationService notifications;
     private final WorkImageService images; private final AvatarService avatars; private final ObjectMapper json; private final Clock clock;
     private final CreatorReputationService reputations;
-    public WorkServiceImpl(WorkMapper works,UserAccountMapper users,CategoryMapper categories,FileAssetMapper files,CreatorApplicationMapper applications,OperationLogService logs,NotificationService notifications,WorkImageService images,AvatarService avatars,ObjectMapper json,Clock clock,CreatorReputationService reputations){this.works=works;this.users=users;this.categories=categories;this.files=files;this.applications=applications;this.logs=logs;this.notifications=notifications;this.images=images;this.avatars=avatars;this.json=json;this.clock=clock;this.reputations=reputations;}
+    private final TradeOrderMapper tradeOrders;
+    public WorkServiceImpl(WorkMapper works,UserAccountMapper users,CategoryMapper categories,FileAssetMapper files,CreatorApplicationMapper applications,OperationLogService logs,NotificationService notifications,WorkImageService images,AvatarService avatars,ObjectMapper json,Clock clock,CreatorReputationService reputations,TradeOrderMapper tradeOrders){this.works=works;this.users=users;this.categories=categories;this.files=files;this.applications=applications;this.logs=logs;this.notifications=notifications;this.images=images;this.avatars=avatars;this.json=json;this.clock=clock;this.reputations=reputations;this.tradeOrders=tradeOrders;}
     private <T>T run(String name,Long user,Supplier<T> action){return BusinessLog.run(LOGGER,name,user,action);}
 
     @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
     public Creation create(Long userId,WorkCreateDTO input){return run("作品草稿创建",userId,()->{
         lockCategory(input.getCategoryId());qualified(users.lockById(userId),false);
         Work repeated=works.findRequest(userId,input.getRequestKey());
-        Work candidate=new Work();candidate.setCreatorId(userId);candidate.setCreateRequestKey(input.getRequestKey());candidate.setVersion(0L);candidate.setReviewStatus("DRAFT");copy(candidate,input);tradingValues(candidate,false,false);
+        Work candidate=new Work();candidate.setCreatorId(userId);candidate.setCreateRequestKey(input.getRequestKey());candidate.setVersion(0L);candidate.setReviewStatus("DRAFT");copy(candidate,input);validateSourceOrder(userId,candidate,input.getSourceOrderId(),null);tradingValues(candidate,false,false);
         if(repeated!=null){String detail=works.creationDetail(repeated.getId());if(detail==null||!json.readTree(detail).get("snapshot").equals(json.valueToTree(snapshot(candidate))))throw conflict("同一请求键不能创建不同内容");return new Creation(view(repeated,false),false);}
         checkImages(userId,candidate);works.insert(candidate);Work current=works.find(candidate.getId());
         record(userId,false,current,"CREATE",null,Map.of("snapshot",snapshot(candidate)),null);return new Creation(view(current,false),true);
@@ -43,14 +44,14 @@ public class WorkServiceImpl implements WorkService {
     public WorkVO save(Long userId,Long id,WorkSaveDTO input){return run("作品草稿保存",userId,()->{
         lockCategory(input.getCategoryId());users.lockById(userId);Work w=own(userId,id);version(w,input.getVersion());
         if(!Set.of("DRAFT","REJECTED","OFFLINE").contains(w.getReviewStatus()))throw conflict("请先撤回审核，已上架作品请提交修改内容重新审核");
-        var before=snapshot(w);String status=w.getReviewStatus();copy(w,input);tradingValues(w,false,w.isSaleEnabled());checkImages(userId,w);
+        var before=snapshot(w);String status=w.getReviewStatus();Long originalSourceOrderId=w.getSourceOrderId();copy(w,input);validateSourceOrder(userId,w,input.getSourceOrderId(),originalSourceOrderId);tradingValues(w,false,w.isSaleEnabled());checkImages(userId,w);
         if(before.equals(snapshot(w)))return view(w,false);update(w);record(userId,false,w,"SAVE",status,changes(before,w),null);return view(works.find(id),false);
     });}
     @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
     public WorkVO submit(Long userId,Long id,WorkSaveDTO input){return run("作品提交审核",userId,()->{
         List<Category> path=lockCategory(input.getCategoryId());qualified(users.lockById(userId),true);Work w=own(userId,id);version(w,input.getVersion());
         if("PENDING".equals(w.getReviewStatus()))throw conflict("作品正在审核，请先撤回后修改");
-        var before=snapshot(w);String status=w.getReviewStatus();copy(w,input);validatePublication(w,path);tradingValues(w,true,!"ONLINE".equals(status)||!Boolean.TRUE.equals(before.get("saleEnabled")));checkImages(userId,w);
+        var before=snapshot(w);String status=w.getReviewStatus();Long originalSourceOrderId=w.getSourceOrderId();copy(w,input);validateSourceOrder(userId,w,input.getSourceOrderId(),originalSourceOrderId);validatePublication(w,path);tradingValues(w,true,!"ONLINE".equals(status)||!Boolean.TRUE.equals(before.get("saleEnabled")));checkImages(userId,w);
         // 正文相同的在线请求只更新交易设置，不能凭重复提交产生新审核轮次。
         if("ONLINE".equals(status)&&sameContent(before,snapshot(w))){if(before.equals(snapshot(w)))return view(w,false);update(w);record(userId,false,w,"TRADING_SETTINGS",status,changes(before,w),null);return view(works.find(id),false);}
         if(w.getFirstSubmittedAt()==null){if(used(userId)>=5)throw conflict("今日首次提交作品已达5件，请明日再试");w.setFirstSubmittedAt(now());}
@@ -118,11 +119,26 @@ public class WorkServiceImpl implements WorkService {
         var c=categories.find(categoryId);if(c==null||!c.isEnabled()||categories.all().stream().anyMatch(x->Objects.equals(x.getParentId(),categoryId)))throw invalid("请选择启用的末级品类");Long root=c.getParentId()==null?c.getId():c.getParentId();var parent=categories.find(root);if(parent==null||!parent.isEnabled())throw invalid("品类已停用");String query=keyword==null||keyword.isBlank()?null:keyword.strip();
         return new PageVO<>(users.customCandidates(userId,root,query,(page-1)*size,size).stream().map(u->creator(userId,u.getId())).toList(),users.customCandidateCount(userId,root,query),page,size);
     });}
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+    public List<PublicationOrderOptionVO> approvedPublicationOrders(Long userId){return run("授权成品案例订单列表",userId,()->{
+        qualified(requireUser(userId),false);
+        return tradeOrders.approvedPublicationOrders(userId).stream()
+                .map(o->new PublicationOrderOptionVO(text(o.getId()),o.getTitleSnapshot(),time(o.getOriginalCompletedAt()),time(o.getPublicationRespondedAt()))).toList();
+    });}
     private WorkVO view(Work w,boolean publicView){var u=users.findById(w.getCreatorId());var avatar=avatars.view(w.getCreatorId(),u.getAvatarFileId());List<String> main=ids(w.getMainImageIds());List<String> spec=ids(w.getSpecificationImageIds());var category=w.getCategoryId()==null?null:categories.find(w.getCategoryId());var path=new ArrayList<String>();if(category!=null){if(category.getParentId()!=null){var parent=categories.find(category.getParentId());if(parent!=null)path.add(parent.getName());}path.add(category.getName());}
         boolean eligible=eligibilityReason(u)==null&&"ONLINE".equals(w.getReviewStatus());ImageVO cover=main.isEmpty()?null:images.view(w.getCreatorId(),Long.valueOf(main.getFirst()));
-        return new WorkVO(w.getId().toString(),w.getCreatorId().toString(),u.getNickname(),avatar==null?null:avatar.url(),avatar==null?null:avatar.expiresAt(),text(w.getCategoryId()),path,w.getTitle(),main,spec,w.getMaterial(),w.getSpecification(),w.getDescription(),w.getProcessDescription(),w.isSaleEnabled(),w.isCustomEnabled(),w.getStockPrice()==null?null:w.getStockPrice().setScale(2).toPlainString(),w.getCustomReferenceDays(),w.getReviewStatus(),w.getStockStatus(),w.getVersion().toString(),time(w.getFirstSubmittedAt()),time(w.getSubmittedAt()),time(w.getOnlineAt()),time(w.getCreatedAt()),time(w.getUpdatedAt()),publicView?null:works.reviewReason(w.getId()),eligible&&w.isSaleEnabled()&&"AVAILABLE".equals(w.getStockStatus())&&w.getSourceOrderId()==null,eligible&&w.isCustomEnabled(),cover);
+        return new WorkVO(w.getId().toString(),w.getCreatorId().toString(),u.getNickname(),avatar==null?null:avatar.url(),avatar==null?null:avatar.expiresAt(),text(w.getCategoryId()),path,w.getTitle(),main,spec,w.getMaterial(),w.getSpecification(),w.getDescription(),w.getProcessDescription(),w.isSaleEnabled(),w.isCustomEnabled(),w.getStockPrice()==null?null:w.getStockPrice().setScale(2).toPlainString(),w.getCustomReferenceDays(),w.getReviewStatus(),w.getStockStatus(),w.getVersion().toString(),time(w.getFirstSubmittedAt()),time(w.getSubmittedAt()),time(w.getOnlineAt()),time(w.getCreatedAt()),time(w.getUpdatedAt()),publicView?null:works.reviewReason(w.getId()),eligible&&w.isSaleEnabled()&&"AVAILABLE".equals(w.getStockStatus())&&w.getSourceOrderId()==null,eligible&&w.isCustomEnabled(),cover,text(w.getSourceOrderId()));
     }
-    private void copy(Work w,WorkFieldsDTO in){w.setCategoryId(in.getCategoryId()==null?null:number(in.getCategoryId()));w.setTitle(trim(in.getTitle()));w.setMainImageIds(json.writeValueAsString(in.getMainImageIds()));w.setSpecificationImageIds(json.writeValueAsString(in.getSpecificationImageIds()));w.setMaterial(trim(in.getMaterial()));w.setSpecification(trim(in.getSpecification()));w.setDescription(trim(in.getDescription()));w.setProcessDescription(trim(in.getProcessDescription()));w.setSaleEnabled(Boolean.TRUE.equals(in.getSaleEnabled()));w.setCustomEnabled(Boolean.TRUE.equals(in.getCustomEnabled()));w.setStockPrice(in.getStockPrice());w.setCustomReferenceDays(in.getCustomReferenceDays());}
+    private void copy(Work w,WorkFieldsDTO in){w.setCategoryId(in.getCategoryId()==null?null:number(in.getCategoryId()));w.setTitle(trim(in.getTitle()));w.setMainImageIds(json.writeValueAsString(in.getMainImageIds()));w.setSpecificationImageIds(json.writeValueAsString(in.getSpecificationImageIds()));w.setMaterial(trim(in.getMaterial()));w.setSpecification(trim(in.getSpecification()));w.setDescription(trim(in.getDescription()));w.setProcessDescription(trim(in.getProcessDescription()));w.setSaleEnabled(Boolean.TRUE.equals(in.getSaleEnabled()));w.setCustomEnabled(Boolean.TRUE.equals(in.getCustomEnabled()));w.setStockPrice(in.getStockPrice());w.setCustomReferenceDays(in.getCustomReferenceDays());w.setSourceOrderId(in.getSourceOrderId()==null?null:number(in.getSourceOrderId()));}
+    /** 案例来源只能在创建作品时选择一次，之后不可清除或换绑；授权依据始终从锁定订单读取。 */
+    private void validateSourceOrder(Long creatorId,Work work,String requestedSourceOrderId,Long originalSourceOrderId){
+        Long requested=requestedSourceOrderId==null?null:number(requestedSourceOrderId);
+        if(originalSourceOrderId!=null&&!Objects.equals(originalSourceOrderId,requested))throw conflict("成品案例来源订单不可修改或解除关联");
+        if(requested==null){work.setSourceOrderId(null);return;}
+        TradeOrder order=tradeOrders.lock(requested);
+        if(order==null||!creatorId.equals(order.getCreatorId())||!"CUSTOM".equals(order.getOrderType())||!"APPROVED".equals(order.getPublicationConsentStatus()))throw forbidden("仅可关联本人买家已明确同意公开的定制订单");
+        work.setSourceOrderId(requested);work.setSaleEnabled(false);work.setStockPrice(null);
+    }
     private void tradingValues(Work w,boolean complete,boolean opening){
         if(complete&&w.isSaleEnabled()&&w.getStockPrice()==null)throw invalid("出售现货必须填写售价");if(complete&&w.isCustomEnabled()&&w.getCustomReferenceDays()==null)throw invalid("接受定制必须填写参考周期");
         // 草稿保存也要阻止重新打开已锁定/已售出入口；授权成品案例始终禁止出售现货。
@@ -151,7 +167,7 @@ public class WorkServiceImpl implements WorkService {
     private LocalDateTime now(){return LocalDateTime.ofInstant(clock.instant(),BEIJING);}
     private void version(Work w,Long version){if(!Objects.equals(w.getVersion(),version))throw conflict("作品版本已更新，请刷新后重试");}
     private void update(Work w){if(works.update(w)!=1)throw conflict("作品版本已更新，请刷新后重试");w.setVersion(w.getVersion()+1);}
-    private Map<String,Object> snapshot(Work w){Map<String,Object> m=new LinkedHashMap<>();m.put("title",w.getTitle());m.put("categoryId",text(w.getCategoryId()));m.put("mainImageIds",ids(w.getMainImageIds()));m.put("specificationImageIds",ids(w.getSpecificationImageIds()));m.put("material",w.getMaterial());m.put("specification",w.getSpecification());m.put("description",w.getDescription());m.put("processDescription",w.getProcessDescription());m.put("saleEnabled",w.isSaleEnabled());m.put("customEnabled",w.isCustomEnabled());m.put("stockPrice",w.getStockPrice()==null?null:w.getStockPrice().setScale(2).toPlainString());m.put("customReferenceDays",w.getCustomReferenceDays());return m;}
+    private Map<String,Object> snapshot(Work w){Map<String,Object> m=new LinkedHashMap<>();m.put("title",w.getTitle());m.put("categoryId",text(w.getCategoryId()));m.put("mainImageIds",ids(w.getMainImageIds()));m.put("specificationImageIds",ids(w.getSpecificationImageIds()));m.put("material",w.getMaterial());m.put("specification",w.getSpecification());m.put("description",w.getDescription());m.put("processDescription",w.getProcessDescription());m.put("saleEnabled",w.isSaleEnabled());m.put("customEnabled",w.isCustomEnabled());m.put("stockPrice",w.getStockPrice()==null?null:w.getStockPrice().setScale(2).toPlainString());m.put("customReferenceDays",w.getCustomReferenceDays());m.put("sourceOrderId",text(w.getSourceOrderId()));return m;}
     private Map<String,Object> changes(Map<String,Object> before,Work w){Map<String,Object>d=new LinkedHashMap<>();d.put("before",before);d.put("after",snapshot(w));return d;}
     private boolean sameContent(Map<String,Object>a,Map<String,Object>b){for(String key:List.of("title","categoryId","mainImageIds","specificationImageIds","material","specification","description","processDescription"))if(!Objects.equals(a.get(key),b.get(key)))return false;return true;}
     private void record(Long actor,boolean admin,Work w,String action,String before,Map<String,Object> detail,String reason){logs.record(actor,admin,"WORK",w.getId(),action,before,w.getReviewStatus(),reason,detail);}
@@ -163,6 +179,7 @@ public class WorkServiceImpl implements WorkService {
     private static String text(Long id){return id==null?null:id.toString();}
     private static OffsetDateTime time(LocalDateTime t){return t==null?null:t.atZone(BEIJING).toOffsetDateTime();}
     private static BusinessException invalid(String reason){return new BusinessException(CommonErrorCode.INVALID_REQUEST,reason);}
+    private static BusinessException forbidden(String reason){return new BusinessException(CommonErrorCode.FORBIDDEN,reason);}
     private static BusinessException conflict(String reason){return new BusinessException(CommonErrorCode.CONFLICT,reason);}
     private static BusinessException missing(){return new BusinessException(CommonErrorCode.NOT_FOUND);}
 }

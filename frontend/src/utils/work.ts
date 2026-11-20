@@ -8,9 +8,9 @@ export function priceLabel(value: string | null) {
   return `${integer}.${decimal.padEnd(2, '0')}`
 }
 export function emptyWork(): WorkContent {
-  return { title: '', categoryId: null, mainImageIds: [], specificationImageIds: [], material: '', specification: '', description: '', processDescription: '', saleEnabled: false, customEnabled: false, stockPrice: null, customReferenceDays: null }
+  return { title: '', categoryId: null, mainImageIds: [], specificationImageIds: [], material: '', specification: '', description: '', processDescription: '', saleEnabled: false, customEnabled: false, stockPrice: null, customReferenceDays: null, sourceOrderId: null }
 }
 /** 只发送允许编辑的字段，避免把状态、库存等响应字段写回服务端。 */
 export function workContent(work: WorkContent): WorkContent {
-  return { title: work.title || '', categoryId: work.categoryId, mainImageIds: [...work.mainImageIds], specificationImageIds: [...work.specificationImageIds], material: work.material || '', specification: work.specification || '', description: work.description || '', processDescription: work.processDescription || '', saleEnabled: work.saleEnabled, customEnabled: work.customEnabled, stockPrice: work.saleEnabled ? work.stockPrice : null, customReferenceDays: work.customEnabled ? work.customReferenceDays : null }
+  return { title: work.title || '', categoryId: work.categoryId, mainImageIds: [...work.mainImageIds], specificationImageIds: [...work.specificationImageIds], material: work.material || '', specification: work.specification || '', description: work.description || '', processDescription: work.processDescription || '', saleEnabled: work.saleEnabled, customEnabled: work.customEnabled, stockPrice: work.saleEnabled ? work.stockPrice : null, customReferenceDays: work.customEnabled ? work.customReferenceDays : null, sourceOrderId: work.sourceOrderId }
 }

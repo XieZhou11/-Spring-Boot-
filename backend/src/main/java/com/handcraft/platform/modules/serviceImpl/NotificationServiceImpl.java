@@ -80,10 +80,13 @@ public class NotificationServiceImpl implements NotificationService {
                 case "ORDER_PAID" -> "订单已付款";
                 case "ORDER_REVIEWED" -> "订单收到新评价";
                 case "REVIEW_REPORT_PROCESSED" -> "评价举报已处理";
+                case "PUBLICATION_REQUESTED" -> "创作者申请公开定制成品";
+                case "PUBLICATION_APPROVED" -> "买家已同意公开定制成品";
+                case "PUBLICATION_REJECTED" -> "买家不同意公开定制成品";
                 default -> throw new IllegalArgumentException("不支持的交易通知事件");
             };
             var notice=new SystemNotification();notice.setRecipientId(recipientId);notice.setEventType(eventType);notice.setEventKey(eventKey);
-            notice.setTitle(title);notice.setContent("QUOTE_LOST".equals(eventType)?"买家已选择其他方案，可查看本人报价及历史沟通。":title+"，请查看对应业务详情。");
+            notice.setTitle(title);notice.setContent(switch(eventType){case "QUOTE_LOST"->"买家已选择其他方案，可查看本人报价及历史沟通。";case "PUBLICATION_REQUESTED"->"请在订单详情通过同意或不同意按钮明确回复；未回复不代表同意。";case "PUBLICATION_APPROVED"->"创作者可手动整理本次成品案例并提交作品审核；授权不包含收货资料和聊天记录。";case "PUBLICATION_REJECTED"->"本次成品案例不能公开。";default->title+"，请查看对应业务详情。";});
             var reference=new LinkedHashMap<String,String>();reference.put("type",businessType);reference.put("id",businessId.toString());
             if(requestId!=null)reference.put("requestId",requestId.toString());
             notice.setBusinessReference(json.writeValueAsString(reference));notices.insert(notice);

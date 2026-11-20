@@ -43,4 +43,7 @@ public class WorkFieldsDTO {
     /** 条件必填的定制参考天数。 */
     @Min(3) @Max(180)
     private Integer customReferenceDays;
+    /** 买家已同意公开的定制订单编号；仅用于手动发布成品案例。 */
+    @Pattern(regexp="[1-9][0-9]{0,18}",message="来源订单编号无效")
+    private String sourceOrderId;
 }

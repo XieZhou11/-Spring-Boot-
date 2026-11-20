@@ -14,6 +14,9 @@ public interface TradeOrderMapper {
     @Select("SELECT * FROM trade_order WHERE id=#{id}") TradeOrder find(Long id);
     @Select("SELECT * FROM trade_order WHERE id=#{id} FOR UPDATE")
     @Options(flushCache=Options.FlushCachePolicy.TRUE) TradeOrder lock(Long id);
+    /** 仅列出本人作为创作者且买家已同意的定制订单，供案例手动关联。 */
+    @Select("SELECT * FROM trade_order WHERE creator_id=#{creatorId} AND order_type='CUSTOM' AND publication_consent_status='APPROVED' ORDER BY publication_responded_at DESC,id DESC")
+    List<TradeOrder> approvedPublicationOrders(Long creatorId);
     @Select("SELECT * FROM trade_order WHERE buyer_id=#{buyerId} AND create_request_key=#{key}")
     TradeOrder findKey(@Param("buyerId") Long buyerId,@Param("key") String key);
     @Select("SELECT * FROM trade_order WHERE request_id=#{requestId}") TradeOrder byRequest(Long requestId);
@@ -30,6 +33,9 @@ public interface TradeOrderMapper {
     /** 调用方锁后检查截止及需求状态，条件更新不覆盖取消或已付款结果。 */
     @Update("UPDATE trade_order SET status=#{status},paid_at=#{paidAt},terms_confirmed_at=#{termsConfirmedAt},ship_deadline_at=#{shipDeadlineAt},updated_at=#{updatedAt} WHERE id=#{id} AND order_type=#{orderType} AND status='PENDING_PAY'")
     int pay(TradeOrder order);
+    /** 订单持有行锁后原子落授权状态，条件状态避免覆盖并发回复。 */
+    @Update("UPDATE trade_order SET publication_consent_status=#{publicationConsentStatus},publication_requested_at=#{publicationRequestedAt},publication_responded_at=#{publicationRespondedAt},updated_at=CURRENT_TIMESTAMP(3) WHERE id=#{id} AND publication_consent_status=#{expectedConsentStatus}")
+    int updatePublicationConsent(TradeOrder order);
     String FILTER="""
         <where>
         <choose><when test='query.side == "CREATOR"'>creator_id=#{userId}</when><otherwise>buyer_id=#{userId}</otherwise></choose>

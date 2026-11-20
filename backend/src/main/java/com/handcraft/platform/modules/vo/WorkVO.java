@@ -62,4 +62,6 @@ public record WorkVO(
     /** 当前创作者与作品满足接受定制条件。 */
     boolean customizable,
     /** 封面签名，无图为空。 */
-    ImageVO coverImage) {}
+    ImageVO coverImage,
+    /** 授权成品案例来源定制订单，普通作品为空。 */
+    String sourceOrderId) {}

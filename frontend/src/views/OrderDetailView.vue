@@ -7,7 +7,7 @@ import PrivateImage from '@/components/PrivateImage.vue'
 import OrderFulfillmentPanel from '@/components/OrderFulfillmentPanel.vue'
 import OrderRefundPanel from '@/components/OrderRefundPanel.vue'
 import OrderReviewPanel from '@/components/OrderReviewPanel.vue'
-import { cancelOrder, checkInProgress, confirmReceipt, correctTracking, getOrder, payOrder, requestNoStartRefund, shipOrder, skipProgress, startProduction, supplementProgress } from '@/api/quote'
+import { cancelOrder, checkInProgress, confirmReceipt, correctTracking, getOrder, payOrder, requestNoStartRefund, requestPublicationConsent, respondPublicationConsent, shipOrder, skipProgress, startProduction, supplementProgress } from '@/api/quote'
 import type { OrderPaymentDTO, OrderVO } from '@/types/quote'
 import { orderReason, orderStatus, settlementStatus } from '@/utils/quote'
 import { formatTime } from '@/utils/creator'
@@ -26,7 +26,8 @@ const order = ref<OrderVO>(); const loading = ref(false); const cancelling = ref
 const paymentState = ref<'idle' | 'submitting' | 'unknown'>('idle'); const paymentError = ref(''); const confirmationOpen = ref(false); const agreed = ref(false); const retryChecked = ref(false)
 const fulfillmentState = ref<'idle' | 'submitting' | 'unknown'>('idle'); const fulfillmentAttempt = ref<FulfillmentAttempt>(); const fulfillmentError = ref(''); const fulfillmentRetryChecked = ref(false); const fulfillmentReset = ref(0); const fulfillmentUploading = ref(false)
 const refundBusy = ref(false); const refundBlocked = ref(false)
-const baseBusy = computed(() => cancelling.value || paymentState.value === 'submitting' || fulfillmentState.value === 'submitting' || fulfillmentUploading.value)
+const publicationBusy = ref(false)
+const baseBusy = computed(() => cancelling.value || publicationBusy.value || paymentState.value === 'submitting' || fulfillmentState.value === 'submitting' || fulfillmentUploading.value)
 const baseBlocked = computed(() => fulfillmentState.value === 'unknown' || paymentState.value === 'unknown')
 const busy = computed(() => baseBusy.value || refundBusy.value)
 const fulfillmentBlocked = computed(() => baseBlocked.value || refundBlocked.value)
@@ -82,6 +83,24 @@ async function cancel() {
   try { const result = await cancelOrder(context.orderId); if (current === revision && sameContext(context)) { order.value = result; confirmationOpen.value = false } }
   catch (failure) { if (current === revision && sameContext(context)) error.value = `${failure instanceof Error ? failure.message : '取消请求失败'}。请刷新订单核对结果，再决定是否重试。` }
   finally { if (sameContext(context)) { cancelling.value = false; finishDeferredRefresh() } }
+}
+/** 授权只通过订单详情按钮提交，聊天内容不参与授权状态判断。 */
+async function publicationAction(decision?: 'APPROVED' | 'REJECTED') {
+  if (!order.value || busy.value || publicationBusy.value) return
+  const prompt = decision === 'APPROVED'
+    ? '确认同意创作者展示本次定制成品？授权不包含你的收货资料和聊天记录。'
+    : decision === 'REJECTED'
+      ? '确认不同意公开本次定制成品案例？'
+      : '向买家申请公开本次定制成品案例？买家需要在订单页面明确回复。'
+  if (!window.confirm(prompt)) return
+  const context = currentContext(); if (!context.orderId || !sameContext(context)) return
+  publicationBusy.value = true; error.value = ''
+  try {
+    order.value = decision
+      ? await respondPublicationConsent(context.orderId, decision)
+      : await requestPublicationConsent(context.orderId)
+  } catch (failure) { error.value = failure instanceof Error ? failure.message : '公开授权操作失败，请刷新订单核对结果' }
+  finally { publicationBusy.value = false }
 }
 function openPayment() { if (!busy.value && !fulfillmentBlocked.value && order.value?.canPay && paymentState.value === 'idle') { confirmationOpen.value = true; agreed.value = false; paymentError.value = '' } }
 /** 首次确认与未知结果重试冻结同一输入；提交前作废所有旧GET，杜绝旧快照回写。 */
@@ -454,7 +473,9 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
               role="status"
             >
               正在确认支付，请勿重复提交…
-            </p><button
+            </p><RouterLink v-if="order.publicationConsentStatus === 'APPROVED' && !order.owned" to="/creator/works/new" class="button-primary">
+              手动发布定制成品案例
+            </RouterLink><button
               v-if="order.canCancel"
               class="button-secondary"
               :disabled="busy || fulfillmentBlocked"
@@ -478,6 +499,17 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
             >
               订单取消后仍可在原会话核对方案和补充沟通。
             </p>
+          </section>
+          <section v-if="order.orderType === 'CUSTOM'" class="editor-section request-summary">
+            <h2>定制成品公开授权</h2><p v-if="order.publicationConsentStatus === 'NONE'">尚未申请。授权仅用于展示本次成品，不包含收货资料或聊天记录。</p><p v-else-if="order.publicationConsentStatus === 'PENDING'">等待买家在订单页面明确回复；未回复不代表同意。</p><p v-else-if="order.publicationConsentStatus === 'APPROVED'">买家已同意公开本次成品。创作者可手动整理案例并提交作品审核。</p><p v-else>买家不同意公开本次成品案例。</p><p v-if="order.publicationRequestedAt" class="field-help">
+              申请时间：{{ formatTime(order.publicationRequestedAt) }}<template v-if="order.publicationRespondedAt"> · 回复时间：{{ formatTime(order.publicationRespondedAt) }}</template>
+            </p><button
+              v-if="order.canRequestPublicationConsent"
+              type="button"
+              class="button-secondary"
+              :disabled="busy"
+              @click="publicationAction()"
+            >申请公开成品案例</button><template v-if="order.canRespondPublicationConsent"><p>授权决定只影响本次定制成品展示，不影响订单、退款、评价或结算。</p><button type="button" class="button-primary" :disabled="busy" @click="publicationAction('APPROVED')">同意公开</button><button type="button" class="button-secondary" :disabled="busy" @click="publicationAction('REJECTED')">不同意公开</button></template>
           </section>
           <section class="editor-section">
             <h2>订单历史</h2><ol class="order-timeline">

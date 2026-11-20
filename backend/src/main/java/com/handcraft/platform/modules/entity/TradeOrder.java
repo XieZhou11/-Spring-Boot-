@@ -56,6 +56,14 @@ public class TradeOrder {
     private LocalDateTime originalCompletedAt;
     /** 买家范围建单幂等键。 */
     private String createRequestKey;
+    /** 买家对定制成品案例公开授权的当前状态。 */
+    private String publicationConsentStatus;
+    /** 条件更新时读取到的原授权状态。 */
+    private String expectedConsentStatus;
+    /** 创作者申请公开成品案例的时间。 */
+    private LocalDateTime publicationRequestedAt;
+    /** 买家明确回复公开授权的时间。 */
+    private LocalDateTime publicationRespondedAt;
     /** 建单时间。 */
     private LocalDateTime createdAt;
     /** 状态变更时间。 */

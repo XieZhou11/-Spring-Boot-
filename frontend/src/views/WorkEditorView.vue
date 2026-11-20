@@ -6,10 +6,10 @@ import WorkImagePicker from '@/components/WorkImagePicker.vue'
 import WorkHistory from '@/components/WorkHistory.vue'
 import WorkMaterials from '@/components/WorkMaterials.vue'
 import { getCategories } from '@/api/creator'
-import { createWork, getManagedWork, getPublicationQuota, saveWork, submitWork, updateTrading, withdrawWork } from '@/api/work'
+import { createWork, getApprovedPublicationOrders, getManagedWork, getPublicationQuota, saveWork, submitWork, updateTrading, withdrawWork } from '@/api/work'
 import { emptyWork, workContent, workStatusLabels } from '@/utils/work'
 import type { CategoryVO } from '@/types/creator'
-import type { PublicationQuotaVO, WorkVO } from '@/types/work'
+import type { PublicationOrderOptionVO, PublicationQuotaVO, WorkVO } from '@/types/work'
 import { ApiError } from '@/utils/request'
 import { useAuthStore } from '@/stores/auth'
 
@@ -20,6 +20,7 @@ const form = reactive(emptyWork())
 const work = ref<WorkVO>()
 const categories = ref<CategoryVO[]>([])
 const quota = ref<PublicationQuotaVO>()
+const publicationOrders = ref<PublicationOrderOptionVO[]>([])
 const error = ref('')
 const notice = ref('')
 const fieldErrors = ref<Record<string, string>>({})
@@ -41,9 +42,9 @@ let disposed = false
 async function initialize() {
   loading.value = true; error.value = ''
   try {
-    const [available, limits, current] = await Promise.all([getCategories(), getPublicationQuota(), route.params.id ? getManagedWork(String(route.params.id)) : Promise.resolve(undefined)])
+    const [available, limits, current, orders] = await Promise.all([getCategories(), getPublicationQuota(), route.params.id ? getManagedWork(String(route.params.id)) : Promise.resolve(undefined), getApprovedPublicationOrders()])
     if (disposed) return
-    categories.value = available; quota.value = limits
+    categories.value = available; quota.value = limits; publicationOrders.value = orders
     if (current) { work.value = current; Object.assign(form, workContent(current)) }
     baseline.value = JSON.stringify(form)
     ready.value = true
@@ -65,6 +66,8 @@ function validate() {
   if (Object.keys(errors).length) { error.value = '请检查标记的字段'; requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()); return false }
   return true
 }
+/** 关联订单后立即关闭现货销售；已保存来源由服务端禁止解除或替换。 */
+function sourceOrderChanged() { if (form.sourceOrderId) { form.saleEnabled = false; form.stockPrice = null } }
 /** 创建响应丢失时复用请求键重查；提交未知时先查状态，禁止盲目二次提交。 */
 async function ensureCreated() {
   if (!work.value) work.value = await createWork(workContent(form), requestKey)
@@ -242,6 +245,18 @@ onBeforeUnmount(() => { disposed = true; window.removeEventListener('beforeunloa
               v-if="fieldErrors.categoryId"
               class="field-error"
             >{{ fieldErrors.categoryId }}</small></label>
+            <label class="work-field">关联已授权的定制成品（选填）<select
+              v-model="form.sourceOrderId"
+              aria-label="关联已授权的定制成品"
+              :disabled="Boolean(work?.sourceOrderId)"
+              @change="sourceOrderChanged"
+            ><option :value="null">普通作品，不关联定制订单</option><option
+              v-for="item in publicationOrders"
+              :key="item.orderId"
+              :value="item.orderId"
+            >订单 {{ item.orderId }} · {{ item.title }} · 完成于 {{ item.completedAt.slice(0, 10) }}</option></select><small class="field-help">
+              {{ work?.sourceOrderId ? `此案例来源订单 ${work.sourceOrderId} 已固定，不能更换或解除关联。` : '只显示买家已明确同意公开的定制订单；关联后仍需手动整理内容并通过作品审核。' }}
+            </small></label>
           </section><section class="editor-section">
             <header><span>02</span><div><h2>作品图片</h2><p>让细节和质感被看见。</p></div></header><WorkImagePicker
               v-model="form.mainImageIds"
@@ -304,7 +319,10 @@ onBeforeUnmount(() => { disposed = true; window.removeEventListener('beforeunloa
               type="checkbox"
               role="switch"
               aria-label="出售现货"
-            ></label><label
+              :disabled="Boolean(form.sourceOrderId)"
+            ></label><p v-if="form.sourceOrderId" class="field-help">
+              定制成品案例不得出售现货；可以继续接受新的同类定制。
+            </p><label
               v-if="form.saleEnabled"
               class="work-field"
             >成品售价（元）<input

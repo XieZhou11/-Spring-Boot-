@@ -2,7 +2,7 @@ import request from '@/utils/request'
 import type { ApiResult } from '@/types/api'
 import type { ImageVO, PageVO } from '@/types/creator'
 import type { OrderVO } from '@/types/quote'
-import type { CreatorPublicVO, PublicationQuotaVO, WorkContent, WorkHistoryVO, WorkQuery, WorkVO } from '@/types/work'
+import type { CreatorPublicVO, PublicationOrderOptionVO, PublicationQuotaVO, WorkContent, WorkHistoryVO, WorkQuery, WorkVO } from '@/types/work'
 
 /** 全部作品请求复用会话、CSRF 与统一错误处理。 */
 async function get<T>(path: string, params?: object) {
@@ -20,6 +20,7 @@ export const getManagedWorks = (params: WorkQuery, admin = false) => get<PageVO<
 export const getManagedWork = (id: string, admin = false) => get<WorkVO>(`${scope(admin)}/${id}`)
 export const getWorkHistory = (id: string, page = 1, admin = false) => get<PageVO<WorkHistoryVO>>(`${scope(admin)}/${id}/history`, { page })
 export const getPublicationQuota = () => get<PublicationQuotaVO>('/me/work-publication-quota')
+export const getApprovedPublicationOrders = () => get<PublicationOrderOptionVO[]>('/me/approved-publication-orders')
 export const getWorkImage = (id: string) => get<ImageVO>(`/work-images/${id}`)
 export async function uploadWorkImage(file: File) {
   const data = new FormData()
