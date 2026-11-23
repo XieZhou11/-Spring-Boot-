@@ -52,6 +52,8 @@ async function openApplication(notification: NotificationVO) {
   if (notification.businessReference?.type === 'CUSTOM_REQUEST') await router.push(`/requests/${notification.businessReference.id}`)
   if (notification.businessReference?.type === 'QUOTE' && notification.businessReference.requestId) await router.push(`/requests/${notification.businessReference.requestId}#quotes`)
   if (notification.businessReference?.type === 'ORDER') await router.push(`/orders/${notification.businessReference.id}`)
+  if (notification.businessReference?.type === 'REPORT' || notification.businessReference?.type === 'REVIEW_REPORT') await router.push('/me/reports')
+  if (notification.businessReference?.type === 'USER') await router.push('/account/profile')
 }
 function refreshOnFocus() {
   void load()

@@ -29,6 +29,7 @@
 | 订单评价与创作者口碑 | T-017完成评价资格、图文评价、统一口碑统计、评价举报补证、管理员处置/更正与前后端入口；重要后端真实 MySQL 用例通过，浏览器 E2E 由其他 AI 验收 | [T-017](development/tasks/T-017-order-reviews-reputation.md)、[测试记录](testing/T-017-order-reviews-reputation.md) |
 | 定制成品公开授权与案例发布 | T-018已完成前后端实现，订单按钮授权、持久化通知、案例来源校验及现货禁售已接入；测试与浏览器验收按用户安排交由其他 AI | [T-018](development/tasks/T-018-custom-publication-consent.md) |
 | 后台管理模块补齐 | T-019已增加看板、用户暂停处置、订单综合检索与详情、资金筛选及本人暂停接单入口；测试与浏览器验收交由其他 AI | [T-019](development/tasks/T-019-admin-management.md) |
+| 内容治理举报扩展与处置通知 | T-020已完成：作品/评论/主页举报入口、我的举报列表、后台统一举报队列与按类型处置（下架/隐藏/暂停及恢复更正）、举报处置与账号处置通知；真实 MySQL 专项 6 项及受影响回归 24 项、浏览器 E2E 通过 | [T-020](development/tasks/T-020-content-report-governance.md)、[测试记录](testing/T-020-content-report-governance.md) |
 | 主流程演示反馈 | T-012 已完成详情离页请求、管理员聊天未读、状态提示及订单排版修复；相关 25 项用例经复测通过，初次主流程检查和修复复测维护在同一报告 | [T-012](development/tasks/T-012-demo-feedback.md)、[主流程演示报告](testing/demo-main-flow.md) |
 | 业务接口、自动化测试与 CI | 已交付业务用真实MySQL、HTTP、WebSocket及协议接收器验证；T-015最终后端verify323项、0失败/错误、14项真实OSS条件跳过，全量浏览器87/87、前端类型/lint/构建通过，历史云端结果单独保留；后端测试源码仅本地保留且被Git忽略；无CI文件，未执行远端CI | [当前集成回归](testing/T-015-settlement-income.md)、[互动历史回归](testing/T-006-work-interactions.md)、[全部业务测试记录](testing/README.md) |
 
@@ -129,7 +130,8 @@ docs/
 │       ├── T-016-stock-order.md      # 现货直购建单与模拟支付
 │       ├── T-017-order-reviews-reputation.md # 订单评价与创作者口碑
 │       ├── T-018-custom-publication-consent.md # 定制成品公开授权及案例发布
-│       └── T-019-admin-management.md # 后台看板、用户、订单和资金筛选
+│       ├── T-019-admin-management.md # 后台看板、用户、订单和资金筛选
+│       └── T-020-content-report-governance.md # 内容举报扩展、处置与账号处置通知
 └── testing/                          # 简短测试结果，不存测试代码、不建子目录
     ├── README.md                     # 业务功能测试记录方式与格式示例
     ├── T-001-backend-auth.md          # 账号后端测试与复测结果
@@ -148,7 +150,8 @@ docs/
     ├── T-014-refund-adjudication.md      # 售后裁定、原子退款及未知结果恢复
     ├── T-015-settlement-income.md        # 结算扫描、双向竞争及收入页面回归
     ├── T-016-stock-order.md             # 现货直购及模拟支付回归
-    └── T-017-order-reviews-reputation.md # 评价资格、口碑与举报治理
+    ├── T-017-order-reviews-reputation.md # 评价资格、口碑与举报治理
+    └── T-020-content-report-governance.md # 内容举报、处置及账号处置通知
 ```
 
 补充说明：
@@ -157,7 +160,7 @@ docs/
 - `prototypes/README.md` 是当前导航，`assets/原型说明.md` 是原始设计说明，两者职责接近；后续若精简，可以合并说明并减少一层目录，本轮未改写原始材料。
 - 原 `design/database.md` 已删除，现有 [数据库表结构](design/数据库表结构.md)为按当前需求编写的新草稿，对应 SQL 位于后端 `src/main/resources/db/migration/`，V1 已执行且包含异常结构补偿；人工结构回退位于相邻 `rollback/`，未执行。
 - `decisions/` 中的 ADR-001 记录已选技术；选型和框架验证不代表全部业务已经实现，SMTP 公网实收补充验收已由用户明确暂缓，OSS 实际结果见 T-003。
-- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端T-001、认证前端T-002、个人中心T-003、入驻审核T-004、作品链路T-005、作品互动T-006、定制需求/会话T-007、导航交互修复T-008、报价/待付款订单T-009、聊天优化T-010、模拟付款T-011、演示反馈修复T-012、定制履约T-013、普通售后T-014、模拟结算T-015、现货直购T-016、订单评价与口碑T-017、定制案例授权T-018及后台管理T-019。
+- `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端T-001、认证前端T-002、个人中心T-003、入驻审核T-004、作品链路T-005、作品互动T-006、定制需求/会话T-007、导航交互修复T-008、报价/待付款订单T-009、聊天优化T-010、模拟付款T-011、演示反馈修复T-012、定制履约T-013、普通售后T-014、模拟结算T-015、现货直购T-016、订单评价与口碑T-017、定制案例授权T-018、后台管理T-019及内容举报治理T-020。
 - `testing/README.md` 只规定业务功能测试结果如何填写；功能开发时再增加实际记录，复测更新同一文件，任务只保留总体结果和链接。
 
 ## 3. 已有资料迁移对照
@@ -226,4 +229,4 @@ docs/
 
 后续统一以[当前 V1.5 MVP 版需求](requirements/requirements.md)为依据，其中所列需求均须实现；[后续功能清单](requirements/archive/手工定制作品分享与交易平台后续功能清单.md)独立留存，供完成后选择补充。数据库设计及 SQL 待审核，原型待按当前范围调整。
 
-后续从[当前需求](requirements/requirements.md)、[数据库表结构](design/数据库表结构.md)及 [ADR-001](design/decisions/ADR-001-technology-stack.md)继续。工程说明见[后端README](../backend/README.md)与[前端README](../frontend/README.md)。互动集成交接见[T-006](development/tasks/T-006-work-interactions.md)及其测试记录；QQ/163公网收件及找回密码补充验收仍按T-001/T-002暂缓。定制履约及退款已由[T-013](development/tasks/T-013-order-fulfillment.md)完成，普通售后由[T-014](development/tasks/T-014-refund-adjudication.md)完成，模拟结算与收入记录由[T-015](development/tasks/T-015-settlement-income.md)完成，现货直购由[T-016](development/tasks/T-016-stock-order.md)完成；订单评价与口碑实现及验证见[T-017](development/tasks/T-017-order-reviews-reputation.md)，浏览器 E2E 由其他 AI 验收；定制成品公开授权与案例发布见[T-018](development/tasks/T-018-custom-publication-consent.md)，测试及浏览器验收交由其他 AI；后台看板、用户处置、综合订单及资金筛选见[T-019](development/tasks/T-019-admin-management.md)，测试与浏览器验收交由其他 AI。
+后续从[当前需求](requirements/requirements.md)、[数据库表结构](design/数据库表结构.md)及 [ADR-001](design/decisions/ADR-001-technology-stack.md)继续。工程说明见[后端README](../backend/README.md)与[前端README](../frontend/README.md)。互动集成交接见[T-006](development/tasks/T-006-work-interactions.md)及其测试记录；QQ/163公网收件及找回密码补充验收仍按T-001/T-002暂缓。定制履约及退款已由[T-013](development/tasks/T-013-order-fulfillment.md)完成，普通售后由[T-014](development/tasks/T-014-refund-adjudication.md)完成，模拟结算与收入记录由[T-015](development/tasks/T-015-settlement-income.md)完成，现货直购由[T-016](development/tasks/T-016-stock-order.md)完成；订单评价与口碑实现及验证见[T-017](development/tasks/T-017-order-reviews-reputation.md)，浏览器 E2E 由其他 AI 验收；定制成品公开授权与案例发布见[T-018](development/tasks/T-018-custom-publication-consent.md)，测试及浏览器验收交由其他 AI；后台看板、用户处置、综合订单及资金筛选见[T-019](development/tasks/T-019-admin-management.md)，测试与浏览器验收交由其他 AI；内容治理举报扩展与处置通知见[T-020](development/tasks/T-020-content-report-governance.md)，状态为待验收。

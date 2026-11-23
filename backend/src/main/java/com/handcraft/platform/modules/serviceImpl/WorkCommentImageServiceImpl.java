@@ -33,13 +33,14 @@ public class WorkCommentImageServiceImpl implements WorkCommentImageService {
     private final FileAssetMapper files;
     private final CommentImageMapper comments;
     private final OrderReviewMapper reviewImages;
+    private final ContentReportMapper reportImages;
     private final OssProperties properties;
     private final ObjectProvider<OSS> clients;
     private final Clock clock;
     private final TransactionTemplate tx;
     private final Set<Long> active=ConcurrentHashMap.newKeySet();
-    public WorkCommentImageServiceImpl(UserAccountMapper accounts,FileAssetMapper files,CommentImageMapper comments,OrderReviewMapper reviewImages,OssProperties properties,ObjectProvider<OSS> clients,Clock clock,PlatformTransactionManager manager){
-        this.accounts=accounts;this.files=files;this.comments=comments;this.reviewImages=reviewImages;this.properties=properties;this.clients=clients;this.clock=clock;
+    public WorkCommentImageServiceImpl(UserAccountMapper accounts,FileAssetMapper files,CommentImageMapper comments,OrderReviewMapper reviewImages,ContentReportMapper reportImages,OssProperties properties,ObjectProvider<OSS> clients,Clock clock,PlatformTransactionManager manager){
+        this.accounts=accounts;this.files=files;this.comments=comments;this.reviewImages=reviewImages;this.reportImages=reportImages;this.properties=properties;this.clients=clients;this.clock=clock;
         tx=new TransactionTemplate(manager);tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);tx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
     public ImageVO upload(Long userId,MultipartFile input){
@@ -73,6 +74,14 @@ public class WorkCommentImageServiceImpl implements WorkCommentImageService {
         var user=accounts.findById(userId);var file=files.findById(fileId);
         if(user==null)throw new BusinessException(CommonErrorCode.UNAUTHORIZED);
         boolean related=file!=null&&(reviewImages.canReadReviewImage(userId,fileId,user.isAdmin())>0||reviewImages.canReadReportImage(userId,fileId,user.isAdmin())>0);
+        if(file==null||!file.getObjectKey().startsWith("work-comments/")||!"AVAILABLE".equals(file.getUploadStatus())||(!userId.equals(file.getUploaderId())&&comments.publicReferences(fileId)==0&&!related))throw new BusinessException(CommonErrorCode.NOT_FOUND);
+        return signed(file);
+    });}
+    /** 全类型内容举报证据：按举报人、被处理人及管理员关系核验。 */
+    public ImageVO viewReport(Long userId,Long fileId){return BusinessLog.run(LOGGER,"举报证据图片读取",userId,()->{
+        var user=accounts.findById(userId);var file=files.findById(fileId);
+        if(user==null)throw new BusinessException(CommonErrorCode.UNAUTHORIZED);
+        boolean related=file!=null&&(reportImages.canReadReportImage(userId,fileId,user.isAdmin())>0);
         if(file==null||!file.getObjectKey().startsWith("work-comments/")||!"AVAILABLE".equals(file.getUploadStatus())||(!userId.equals(file.getUploaderId())&&comments.publicReferences(fileId)==0&&!related))throw new BusinessException(CommonErrorCode.NOT_FOUND);
         return signed(file);
     });}

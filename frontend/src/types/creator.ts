@@ -156,8 +156,8 @@ export interface NotificationVO {
   content: string
   /** 通知关联的业务资源。 */
   businessReference: {
-    /** 对应的业务资源类型。 */
-    type: 'CREATOR_APPLICATION' | 'WORK' | 'CUSTOM_REQUEST' | 'QUOTE' | 'ORDER'
+    /** 对应的业务资源类型；REPORT 指向我的举报，USER 指向个人资料。 */
+    type: 'CREATOR_APPLICATION' | 'WORK' | 'CUSTOM_REQUEST' | 'QUOTE' | 'ORDER' | 'REPORT' | 'REVIEW_REPORT' | 'USER'
     /** 报价所属需求，用于进入有权查看的报价区域。 */
     requestId?: string
     /** 作品审核轮次，申请通知不含此字段。 */

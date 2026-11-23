@@ -7,6 +7,9 @@ import WorkCard from '@/components/WorkCard.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
 import { getCreator, getWorks } from '@/api/work'
 import { addReviewReportEvidence, getCreatorReviews, getReviewReportsForActor, reportReview, uploadReviewImage } from '@/api/review'
+import { reportCreatorProfile } from '@/api/report'
+import type { ReportInput } from '@/types/report'
+import ReportDialog from '@/components/ReportDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { CreatorPublicVO, WorkVO } from '@/types/work'
 import type { CreatorReviewVO } from '@/types/review'
@@ -54,8 +57,20 @@ async function uploadReportImage(event: Event) { const file=(event.target as HTM
 async function loadRelatedReports(reviewId:string) { try { relatedReports.value[reviewId]=await getReviewReportsForActor(reviewId) } catch (failure) { reviewError.value=failure instanceof Error?failure.message:'当前账号没有该评价举报的查询权限' } }
 async function uploadEvidenceImage(reviewId:string,event:Event) { const file=(event.target as HTMLInputElement).files?.[0];const list=evidenceImages.value[reviewId]??[];if(!file||list.length>=6)return;try{evidenceImages.value[reviewId]=[...list,await uploadReviewImage(file)]}catch(failure){reportStatus.value[reviewId]=failure instanceof Error?failure.message:'证据图片上传失败'}finally{(event.target as HTMLInputElement).value=''} }
 async function submitEvidence(reviewId:string,reportId:string) { const list=evidenceImages.value[reviewId]??[];try{await addReviewReportEvidence(reportId,{content:evidenceText.value[reviewId]?.trim()??'',imageIds:list.map(x=>x.id)});reportStatus.value[reviewId]='材料已提交';evidenceText.value[reviewId]='';evidenceImages.value[reviewId]=[];await loadRelatedReports(reviewId)}catch(failure){reportStatus.value[reviewId]=failure instanceof Error?failure.message:'材料提交失败'} }
+// 主页举报入口：管理员不显示，提交后收起表单并提示。
+const profileReportOpen = ref(false)
+const profileReportMessage = ref('')
+const profileReportError = ref('')
+async function submitProfileReport(input: ReportInput) {
+  profileReportError.value = ''
+  try {
+    await reportCreatorProfile(String(route.params.id), input)
+    profileReportMessage.value = '举报已提交，管理员将核查处理；可在“我的举报”中查看进度。'
+    profileReportOpen.value = false
+  } catch (failure) { profileReportError.value = failure instanceof Error ? failure.message : '举报提交失败' }
+}
 // 同账号凭证回读保留当前作者与分页，实际身份或主页变化仍清理旧内容。
-watch([() => route.params.id, () => auth.session?.userId, () => auth.session?.activeRole], () => { creator.value = undefined; works.value = []; void load(1) }, { immediate: true })
+watch([() => route.params.id, () => auth.session?.userId, () => auth.session?.activeRole], () => { creator.value = undefined; works.value = []; profileReportOpen.value = false; void load(1) }, { immediate: true })
 onBeforeUnmount(() => { revision++; clearTimeout(timer) })
 </script>
 <template>
@@ -102,7 +117,28 @@ onBeforeUnmount(() => { revision++; clearTimeout(timer) })
         v-if="!creator.paused && creator.id !== auth.session?.userId && !auth.session?.roles.includes('ADMIN')"
         class="button-primary"
         :to="{ path: '/my-requests/new', query: { creatorId: creator.id } }"
-      >邀请定制 ↗</RouterLink><header class="work-section-heading">
+      >邀请定制 ↗</RouterLink><button
+        v-if="creator.id !== auth.session?.userId && !auth.session?.roles.includes('ADMIN')"
+        class="inline-button profile-report-toggle"
+        @click="profileReportOpen = !profileReportOpen; profileReportMessage = ''"
+      >
+        {{ profileReportOpen ? '收起主页举报' : '举报主页' }}
+      </button><p
+        v-if="profileReportMessage"
+        role="status"
+      >
+        {{ profileReportMessage }}
+      </p><p
+        v-if="profileReportError"
+        class="field-error"
+        role="alert"
+      >
+        {{ profileReportError }}
+      </p><ReportDialog
+        v-if="profileReportOpen"
+        submit-label="提交主页举报"
+        @submit="submitProfileReport"
+      /><header class="work-section-heading">
         <h2>手作作品</h2><span class="muted">{{ total }} 件已上架作品</span>
       </header><div
         v-if="!works.length && !loading"

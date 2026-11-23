@@ -121,6 +121,25 @@ public class NotificationServiceImpl implements NotificationService {
         n.setContent("APPROVED".equals(decision)?"你的创作者认证已通过，可以切换创作者身份。":"申请被驳回，请查看原因并补正材料。"+(reason.isBlank()?"":"原因："+reason));n.setBusinessReference(json.writeValueAsString(Map.of("type","CREATOR_APPLICATION","id",applicationId.toString())));notices.insert(n);
         afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(n.getId()))));publishUnread(recipientId);});return null;
     });}
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void contentReportDecided(Long recipientId,Long reportId,String decision,String title,String content){BusinessLog.run(LoggerFactory.getLogger(getClass()),"举报处置通知保存",recipientId,()->{
+        // 处置结论参与去重键：更正产生不同结论时仍能再次通知相关用户。
+        String key="REPORT_PROCESSED:"+reportId+":"+decision;if(notices.event(recipientId,key)!=null)return null;
+        var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType("REPORT_PROCESSED");n.setEventKey(key);n.setTitle(title);n.setContent(content);
+        n.setBusinessReference(json.writeValueAsString(Map.of("type","REPORT","id",reportId.toString())));notices.insert(n);
+        afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(n.getId()))));publishUnread(recipientId);});return null;
+    });}
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void accountBusinessChanged(Long recipientId,boolean paused,String reason){BusinessLog.run(LoggerFactory.getLogger(getClass()),"账号处置通知保存",recipientId,()->{
+        // 仅在状态真实变化时调用；键携带当前时间戳避免后续暂停-恢复周期被历史事件去重。
+        String eventType=paused?"ACCOUNT_BUSINESS_PAUSE":"ACCOUNT_BUSINESS_RESUME";
+        String key=eventType+":"+recipientId+":"+System.currentTimeMillis();
+        var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType(eventType);n.setEventKey(key);
+        n.setTitle(paused?"账号新业务已被暂停":"账号新业务已恢复");
+        n.setContent(paused?"管理员已暂停你的新业务资格，已有订单的履约、售后与结算不受影响。":"管理员已恢复你的新业务资格，可以继续发布、报价和接单。"+(reason==null||reason.isBlank()?"":"依据："+reason));
+        n.setBusinessReference(json.writeValueAsString(Map.of("type","USER","id",recipientId.toString())));notices.insert(n);
+        afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(n.getId()))));publishUnread(recipientId);});return null;
+    });}
     public PageVO<NotificationVO> list(Long userId,int page,int size){return BusinessLog.run(LoggerFactory.getLogger(getClass()),"本人通知查询",userId,()->{
         if(page<1||page>1_000_000||size<1||size>50)throw new BusinessException(CommonErrorCode.INVALID_REQUEST,"分页参数无效");
         return new PageVO<>(notices.list(userId,(page-1)*size,size).stream().map(this::view).toList(),notices.count(userId),page,size);

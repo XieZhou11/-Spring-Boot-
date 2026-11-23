@@ -7,6 +7,9 @@ import type { InteractionStats, WorkComment } from '@/types/interaction'
 import type { ImageVO } from '@/types/creator'
 import WorkPagination from './WorkPagination.vue'
 import CommentImage from './CommentImage.vue'
+import ReportDialog from './ReportDialog.vue'
+import { reportWork, reportComment } from '@/api/report'
+import type { ReportInput } from '@/types/report'
 const props = defineProps<{ workId: string }>()
 const auth = useAuthStore()
 const allowed = computed(() => !!auth.session && !auth.session.roles.includes('ADMIN'))
@@ -87,6 +90,20 @@ async function remove(id: string) {
   catch (failure) { if (current === revision) error.value = failure instanceof Error ? failure.message : '删除失败，可刷新核对后重试' }
   finally { if (current === revision) busy.value = false }
 }
+// 作品及评论举报入口：'work' 或 'comment:<id>'，提交后提示结果并收起表单。
+const reportTarget = ref('')
+const reportMessage = ref('')
+const reportError = ref('')
+async function submitReport(input: ReportInput) {
+  reportError.value = ''
+  try {
+    if (reportTarget.value === 'work') await reportWork(props.workId, input)
+    else if (reportTarget.value.startsWith('comment:')) await reportComment(reportTarget.value.slice('comment:'.length), input)
+    else return
+    reportMessage.value = '举报已提交，管理员将核查处理；可在“我的举报”中查看进度。'
+    reportTarget.value = ''
+  } catch (failure) { reportError.value = failure instanceof Error ? failure.message : '举报提交失败' }
+}
 // 会话对象同账号刷新时保留草稿及未知提交保护，仅实际身份或作品变化才清理。
 watch([() => props.workId, () => auth.session?.userId, () => auth.session?.activeRole], () => {
   revision++; readRevision++; clearTimeout(timer)
@@ -123,7 +140,30 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
       >
         {{ stats.favorited ? '取消收藏' : '收藏' }}
       </button>
+      <button
+        class="inline-button"
+        @click="reportTarget = reportTarget === 'work' ? '' : 'work'; reportMessage = ''"
+      >
+        举报作品
+      </button>
     </div>
+    <p
+      v-if="reportMessage"
+      role="status"
+    >
+      {{ reportMessage }}
+    </p>
+    <p
+      v-if="reportError"
+      class="field-error"
+      role="alert"
+    >
+      {{ reportError }}
+    </p>
+    <ReportDialog
+      v-if="reportTarget === 'work'"
+      @submit="submitReport"
+    />
     <p
       v-if="error"
       class="form-alert"
@@ -249,6 +289,24 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
       >
         删除评论
       </button>
+      <button
+        v-if="allowed && !comment.canDelete"
+        class="inline-button"
+        @click="reportTarget = reportTarget === `comment:${comment.id}` ? '' : `comment:${comment.id}`; reportMessage = ''"
+      >
+        举报评论
+      </button>
+      <p
+        v-if="reportTarget === `comment:${comment.id}`"
+        class="field-help"
+      >
+        举报将提交管理员核查，不会直接隐藏该评论。
+      </p>
+      <ReportDialog
+        v-if="reportTarget === `comment:${comment.id}`"
+        submit-label="提交评论举报"
+        @submit="submitReport"
+      />
     </article>
     <WorkPagination
       :page="page"

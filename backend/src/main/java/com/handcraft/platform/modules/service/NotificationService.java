@@ -16,6 +16,10 @@ public interface NotificationService {
     void creatorReviewed(Long recipientId,Long applicationId,String decision,String reason);
     /** 作品审核或管理员下架通知，事件按作品及提交版本去重并在提交后推送。 */
     void workChanged(Long recipientId,Long workId,Long submittedVersion,String eventType,String decision,String reason);
+    /** 举报处置及更正通知，按举报编号与处置结论去重，跳转本人举报列表。 */
+    void contentReportDecided(Long recipientId,Long reportId,String decision,String title,String content);
+    /** 账号统一暂停新业务或人工恢复通知，仅在状态实际变化时产生。 */
+    void accountBusinessChanged(Long recipientId,boolean paused,String reason);
     /** 读取本人通知分页，最新优先。 */
     PageVO<NotificationVO> list(Long userId,int page,int size);
     /** 查询本人未读总数。 */

@@ -17,8 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AdminUserServiceImpl implements AdminUserService {
     private static final Logger LOG=LoggerFactory.getLogger(AdminUserServiceImpl.class);
-    private final AdminUserMapper data; private final UserAccountMapper users; private final com.handcraft.platform.modules.service.OperationLogService logs;
-    public AdminUserServiceImpl(AdminUserMapper data,UserAccountMapper users,com.handcraft.platform.modules.service.OperationLogService logs){this.data=data;this.users=users;this.logs=logs;}
+    private final AdminUserMapper data; private final UserAccountMapper users; private final com.handcraft.platform.modules.service.OperationLogService logs; private final com.handcraft.platform.modules.service.NotificationService notifications;
+    public AdminUserServiceImpl(AdminUserMapper data,UserAccountMapper users,com.handcraft.platform.modules.service.OperationLogService logs,com.handcraft.platform.modules.service.NotificationService notifications){this.data=data;this.users=users;this.logs=logs;this.notifications=notifications;}
 
     @Override public PageVO<Map<String,Object>> list(Long admin,AdminUserQueryDTO q){return BusinessLog.run(LOG,"管理员用户查询",admin,()->{requireAdmin(admin);if(q.getEmail()!=null)q.setEmail(q.getEmail().strip());if(q.getNickname()!=null)q.setNickname(q.getNickname().strip());var items=data.list(q,(q.getPage()-1)*q.getSize());return new PageVO<>(items,data.count(q),q.getPage(),q.getSize());});}
     @Override public AdminUserDetailVO detail(Long admin,Long id){return BusinessLog.run(LOG,"管理员用户详情查询",admin,()->{requireAdmin(admin);var user=data.user(id);if(user==null)throw missing();return new AdminUserDetailVO(user,data.workCount(id),data.requestCount(id),data.orderCount(id),data.works(id),data.requests(id),data.orders(id),data.pauseHistory(id));});}
@@ -27,7 +27,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     public AdminUserBusinessVO setBusinessPause(Long admin,Long id,AdminBusinessPauseDTO input){return BusinessLog.run(LOG,"管理员账号新业务暂停处置",admin,()->{
         requireAdmin(admin);var user=users.lockById(id);if(user==null||user.isAdmin())throw missing();boolean before=user.isAdminBusinessPaused();
         if(input.isPaused()&&(input.getRecoveryCondition()==null||input.getRecoveryCondition().isBlank()))throw new BusinessException(com.handcraft.platform.common.exception.CommonErrorCode.INVALID_REQUEST,"暂停新业务时必须填写恢复条件");
-        if(before!=input.isPaused()){if(users.updateAdminBusinessPause(id,input.isPaused())!=1)throw conflict();String from=before?"PAUSED":"ACTIVE",to=input.isPaused()?"PAUSED":"ACTIVE";var facts=new LinkedHashMap<String,Object>();facts.put("creatorPaused",user.isCreatorPaused());facts.put("recoveryCondition",input.getRecoveryCondition());logs.record(admin,true,"USER",id,input.isPaused()?"ADMIN_BUSINESS_PAUSE":"ADMIN_BUSINESS_RESUME",from,to,input.getReason(),facts);LOG.info("管理员账号新业务状态变更已准备：adminId={}, userId={}, from={}, to={}",admin,id,from,to);}
+        if(before!=input.isPaused()){if(users.updateAdminBusinessPause(id,input.isPaused())!=1)throw conflict();String from=before?"PAUSED":"ACTIVE",to=input.isPaused()?"PAUSED":"ACTIVE";var facts=new LinkedHashMap<String,Object>();facts.put("creatorPaused",user.isCreatorPaused());facts.put("recoveryCondition",input.getRecoveryCondition());logs.record(admin,true,"USER",id,input.isPaused()?"ADMIN_BUSINESS_PAUSE":"ADMIN_BUSINESS_RESUME",from,to,input.getReason(),facts);notifications.accountBusinessChanged(id,input.isPaused(),input.getReason());LOG.info("管理员账号新业务状态变更已准备：adminId={}, userId={}, from={}, to={}",admin,id,from,to);}
         return new AdminUserBusinessVO(id.toString(),input.isPaused(),user.isCreatorPaused());
     });}
 

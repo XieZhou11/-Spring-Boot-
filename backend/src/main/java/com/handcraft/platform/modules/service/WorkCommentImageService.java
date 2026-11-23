@@ -13,4 +13,7 @@ public interface WorkCommentImageService {
 
     /** 举报人、交易参与方和管理员按举报关系读取私有评价举报证据。 */
     ImageVO viewReview(Long userId, Long fileId);
+
+    /** 举报人、被处理人和管理员按全部类型举报关系读取私有举报证据。 */
+    ImageVO viewReport(Long userId, Long fileId);
 }

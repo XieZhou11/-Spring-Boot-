@@ -22,5 +22,9 @@ const auth = useAuthStore()
       v-if="notifications.unreadCount"
       class="unread-badge"
     >{{ countLabel(notifications.unreadCount) }}</span></RouterLink>
+    <RouterLink
+      v-if="!auth.session?.roles.includes('ADMIN')"
+      to="/me/reports"
+    >我的举报</RouterLink>
   </nav>
 </template>

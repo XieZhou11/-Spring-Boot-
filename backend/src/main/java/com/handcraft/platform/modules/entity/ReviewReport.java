@@ -4,13 +4,13 @@ import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 
-/** 评价举报当前记录。 */
+/** 内容举报当前记录：评价举报由评价流程使用，其余类型由内容举报流程处理。 */
 @Getter @Setter
 public class ReviewReport {
     /** 举报编号。 */ private Long id;
     /** 举报人编号。 */ private Long reporterId;
-    /** 当前仅为评价举报。 */ private String targetType;
-    /** 被举报评价编号。 */ private Long targetId;
+    /** WORK/COMMENT/REVIEW/CREATOR_PROFILE。 */ private String targetType;
+    /** 被举报对象编号。 */ private Long targetId;
     /** 举报理由编码。 */ private String reasonCode;
     /** 初次说明。 */ private String description;
     /** 初次图片 JSON。 */ private String imageIds;

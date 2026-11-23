@@ -14,6 +14,8 @@ const router = createRouter({
     },
     { path: '/account/favorites', component: () => import('@/views/SavedInteractionsView.vue'), meta: { requiresAuth: true, title: '收藏作品' } },
     { path: '/account/following', component: () => import('@/views/SavedInteractionsView.vue'), meta: { requiresAuth: true, title: '关注创作者' } },
+    { path: '/me/reports', component: () => import('@/views/MyReportsView.vue'), meta: { requiresAuth: true, title: '我的举报' } },
+    { path: '/reports/:id', component: () => import('@/views/ContentReportDetailView.vue'), meta: { requiresAuth: true, title: '举报详情' } },
     { path: '/works/:id', component: () => import('@/views/WorkDetailView.vue'), meta: { requiresAuth: true, title: '作品详情' } },
     { path: '/creators/:id', component: () => import('@/views/CreatorPublicView.vue'), meta: { requiresAuth: true, title: '创作者主页' } },
     { path: '/requests', component: () => import('@/views/CustomRequestsView.vue'), props: { scope: 'hall' }, meta: { requiresAuth: true, requiresCreator: true, title: '需求大厅' } },
@@ -46,6 +48,7 @@ const router = createRouter({
       { path: ':id', name: 'admin-refund-detail', component: () => import('@/views/AdminRefundDetailView.vue'), meta: { title: '售后查证与裁定' } },
     ] },
     { path: '/admin/review-reports', name: 'admin-review-reports', component: () => import('@/views/AdminReviewReportsView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: '评价举报' } },
+    { path: '/admin/content-reports', name: 'admin-content-reports', component: () => import('@/views/AdminContentReportsView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: '内容举报' } },
     { path: '/admin/works', component: () => import('@/views/AdminWorksView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: '作品审核' }, children: [
       { path: ':id', component: () => import('@/views/AdminWorkReviewView.vue'), meta: { title: '作品材料审核' } },
     ] },
