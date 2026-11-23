@@ -42,7 +42,7 @@ interface Mailbox {
 }
 
 /** 只在测试进程使用隔离库和 SMTP 夹具，生产后端无测试接口或假验证码。 */
-export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabled' | 'receiver'; databaseGroup: 'shared' | 'interactions' }>({
+export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabled' | 'receiver'; databaseGroup: 'shared' | 'interactions' | 'content-reports' }>({
   storageMode: ['disabled', { scope: 'worker', option: true }],
   // 公开作品会被其他账号浏览，独立库组避免跨功能空首页用例受前序发布影响。
   databaseGroup: ['shared', { scope: 'worker', option: true }],

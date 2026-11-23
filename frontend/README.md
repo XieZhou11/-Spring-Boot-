@@ -118,7 +118,7 @@ npx playwright test e2e/creator-onboarding.spec.ts
 
 已安装 Microsoft Edge 时无需执行安装命令。测试使用 Edge 的 Chromium 内核，默认自动启动 5173 的 Vite 和 18080 的真实后端；运行前确认测试端口空闲，或按下文设置独立前后端端口。夹具创建随机 `handcraft_browser_` 测试库、运行原有 Flyway、启动本地 SMTP 接收端，正常结束后停止测试服务并仅删除自己的测试库。互动使用独立随机库组，避免其已发布作品污染既有空首页断言。生产 `application.yml` 不会改写，不使用假 API 或生产测试接口。只有断网、响应延迟用例使用浏览器网络故障注入。测试期间固定源码及后端JAR，避免热更新重置表单或替换运行中的包。
 
-测试源码位于 `e2e/`，截图、失败 trace 和后端日志写入被忽略的 `test-results/`。个人中心覆盖资料保存/刷新、Unicode 与长度校验、头像本地格式/大小拒绝及真实服务不可用反馈、地区联动与手动补全、字段错误及断网重试、默认地址维护和删除确认、十条容量与他人地址拒绝，并检查 1366/1440 及窄屏布局。常规夹具显式禁用 OSS，保证配置真实凭据后也不会向云端写测试对象；云端上传、签名读取、替换及浏览器计时器续签已单独联调，详见 [T-003 测试记录](../docs/testing/T-003-personal-center.md)。认证结果见 [T-002 测试记录](../docs/testing/T-002-frontend-auth.md)。本地 SMTP 只证明邮件协议与页面闭环，不代表 QQ/163 公网收件；公网收件及找回密码补充验收用户明确暂缓，恢复后仍须真实收件验证。
+测试源码位于 `e2e/`，截图、失败 trace 和后端日志写入被忽略的 `test-results/`。个人中心覆盖资料保存/刷新、Unicode 与长度校验、头像本地格式/大小拒绝及真实服务不可用反馈、地区联动与手动补全、字段错误及断网重试、默认地址维护和删除确认、十条容量与他人地址拒绝，并检查 1366/1440 及窄屏布局。常规夹具显式禁用 OSS，保证配置真实凭据后也不会向云端写测试对象；云端上传、签名读取、替换及浏览器计时器续签已单独联调，详见 [T-003 测试记录](../docs/testing/T-003-personal-center.md)。认证结果见 [T-002 测试记录](../docs/testing/T-002-frontend-auth.md)。本地 SMTP 只证明邮件协议与页面闭环，不代表 QQ/163 公网收件；公网收件及找回密码补充验收已由用户于 2026-11-23 手动验证通过，见 [T-002 测试记录](../docs/testing/T-002-frontend-auth.md)。
 
 入驻套件以 `storageMode: 'receiver'` 启动本地 OSS HTTP 接收器，真实 SDK 执行上传、签名读取和删除；管理员提权只作用于夹具随机库，无生产测试接口。用例覆盖撤回重提、驳回补正、丢失提交响应、审核通过、实时通知、已读保持、多会话身份及两级品类，结果见 [T-004 测试记录](../docs/testing/T-004-creator-onboarding.md)。
 
@@ -128,7 +128,7 @@ npx playwright test e2e/creator-onboarding.spec.ts
 
 认证创作者在 `/creator/works` 管理草稿、撤回、驳回补正和下架；`/creator/works/new`、`/creator/works/:id/edit` 为四段式表单，图片真实上传、排序并按短时签名续签。创建复用请求键，修改携带版本，响应未知时先核验；上传期间禁用提交，失败与版本冲突保留输入，离开未保存内容须确认。已上架作品的交易设置即时更新，图文修改转待审核并立即停止公开。管理员在 `/admin/works` 及详情审核、比较历史、驳回或说明原因下架。定制需求入口见T-007；互动见T-006，现货购买随后续任务实现。
 
-复测作品链路：`npx playwright test e2e/work-publication.spec.ts`；完整回归：`npm run test:e2e`。作品套件使用隔离 MySQL、真实后端和本地 OSS 协议接收器，云端 OSS 另行验证，实际结果见 [T-005 测试记录](../docs/testing/T-005-work-publication.md)。QQ/163 公网收件及找回密码补充验收为“用户明确暂缓”，保留认证回归。
+复测作品链路：`npx playwright test e2e/work-publication.spec.ts`；完整回归：`npm run test:e2e`。作品套件使用隔离 MySQL、真实后端和本地 OSS 协议接收器，云端 OSS 另行验证，实际结果见 [T-005 测试记录](../docs/testing/T-005-work-publication.md)。QQ/163 公网收件及找回密码补充验收已由用户于 2026-11-23 手动验证通过，保留认证回归。
 
 ## 作品互动与个人收藏、关注（T-006）
 

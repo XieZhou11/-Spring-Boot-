@@ -1,6 +1,6 @@
 # 后端工程
 
-已有账号、个人资料、头像、收货地址，以及创作者入驻、管理员审核、两级品类和系统通知接口。真实 SMTP 发送逻辑已接入，本机 QQ SMTP 连接与认证已验证，QQ/163 公网收件及找回密码补充验收用户明确暂缓；头像已完成真实 OSS 联调。认证页面见 [T-002](../docs/development/tasks/T-002-frontend-auth.md)，个人中心见 [T-003](../docs/development/tasks/T-003-personal-center.md)，入驻接口与联调结果见 [T-004](../docs/development/tasks/T-004-creator-onboarding.md)。作品发布、审核、检索及基础公开资料接口已完成，见 [T-005](../docs/development/tasks/T-005-work-publication.md)。
+已有账号、个人资料、头像、收货地址，以及创作者入驻、管理员审核、两级品类和系统通知接口。真实 SMTP 发送逻辑已接入，本机 QQ SMTP 连接与认证已验证，QQ/163 公网收件及找回密码补充验收已由用户于 2026-11-23 手动验证通过；头像已完成真实 OSS 联调。认证页面见 [T-002](../docs/development/tasks/T-002-frontend-auth.md)，个人中心见 [T-003](../docs/development/tasks/T-003-personal-center.md)，入驻接口与联调结果见 [T-004](../docs/development/tasks/T-004-creator-onboarding.md)。作品发布、审核、检索及基础公开资料接口已完成，见 [T-005](../docs/development/tasks/T-005-work-publication.md)。
 
 ## 环境与依赖
 
@@ -159,7 +159,7 @@ endpoint、region、bucket 仍在 `application.yml` 维护，access-key-id 与 a
 
 接口、状态、版本与验收约定见 [T-005](../docs/development/tasks/T-005-work-publication.md)。新增 V3 为作品补齐创作者范围创建请求键及版本；已有 V1、V2 保持原样，启动时由 Flyway 追加迁移。所有浏览接口均要求登录；资格、归属、状态、额度和图片引用在服务端复核。图片使用独立 OSS 前缀，复用当前私有配置；无引用且超过 24 小时的临时作品图定时清理，草稿与历史引用继续保留。审核状态、通知、快照同事务写入，推送与成功日志在提交后执行。
 
-本轮使用本地隔离 MySQL 验证 V1—V3、额度及审核竞争、事务回滚，另执行真实 HTTP 和真实 OSS；结果见 [测试记录](../docs/testing/T-005-work-publication.md)。QQ/163 公网收件及找回密码的补充验收为“用户明确暂缓”，保留已有实现。后端业务测试源码仍只在本地，重新检出没有相同测试用例；构建通过不能替代业务验证。
+本轮使用本地隔离 MySQL 验证 V1—V3、额度及审核竞争、事务回滚，另执行真实 HTTP 和真实 OSS；结果见 [测试记录](../docs/testing/T-005-work-publication.md)。QQ/163 公网收件及找回密码的补充验收已由用户于 2026-11-23 手动验证通过，保留已有实现。后端业务测试源码仍只在本地，重新检出没有相同测试用例；构建通过不能替代业务验证。
 
 ## 作品互动（T-006）
 

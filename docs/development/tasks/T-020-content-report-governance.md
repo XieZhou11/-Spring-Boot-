@@ -1,6 +1,6 @@
 # T-020 内容治理举报扩展与处置通知
 
-- 状态：待验收
+- 状态：已完成
 - 更新日期：2026-11-23
 - 需求依据：[V1.5 MVP 版需求](../../requirements/requirements.md) 4.2.4（评论举报）、4.2.5（内容治理与举报）、4.8.1（举报与账号处置通知）、3.1 角色权限矩阵
 - 关联设计：复用 [T-017](T-017-order-reviews-reputation.md) 已建立的评价举报流程与 `report`/`report_evidence`/`work_comment.moderation_status` 数据结构，无新增迁移
@@ -59,15 +59,16 @@
 
 - 总体结果：通过（详见测试记录）
 - 测试记录：[T-020 测试记录](../../testing/T-020-content-report-governance.md)
-- 后端：`ContentReportIntegrationTest` 6/6 通过；受影响回归 24 项通过（真实 MySQL）
-- 前端：类型检查与构建通过；E2E `content-report.spec.ts` 通过（Playwright Chromium）
+- 后端：`ContentReportIntegrationTest` 6/6 通过；受影响回归（含 `InteractionCoreTest` 16 项）通过（真实 MySQL）
+- 前端：`npm run build` 通过；E2E `content-report.spec.ts` 通过（Playwright Chromium）
+- 2026-11-23 独立验收：复核后端 14 项与 `InteractionCoreTest` 16 项均通过；E2E `content-report.spec.ts` 1 项通过；将 `databaseGroup: 'content-reports'` 加入 `fixtures.ts` 类型联合，修复此前 `npm run build` 的 TS2322 阻断，`npm run build` 已通过。
 
 ## 审查与遗留问题
 
 - 仓库存在此前任务遗留的 229 条前端 lint 警告（T-017—T-019 相关文件），`npm run lint` 因 max-warnings=0 失败；本次新增文件 0 警告，未扩大处理范围。
 - 通用处置端点对已处理举报允许再次执行动作（与评价举报更正能力一致），已由集成测试覆盖状态守卫。
-- 运行 E2E 产生的 `frontend/test-results-*` 临时目录因 IDE 批量删除保护未能自动清理，已被 .gitignore 排除，请手动删除。
+- 运行 E2E 产生的 `frontend/test-results-*` 临时目录因 IDE 批量删除保护未能自动清理，已被 .gitignore 排除，可手动删除。
 
 ## 交接
 
-MVP 范围内 4.2.4/4.2.5/4.8.1 举报与账号处置通知已补齐。后续入口：[docs/README.md](../../README.md) 索引；T-017—T-019 的测试与浏览器验收仍待用户安排；QQ/163 公网收件补充验收暂缓事项不变。
+MVP 范围内 4.2.4/4.2.5/4.8.1 举报与账号处置通知已补齐，T-017—T-020 测试与浏览器验收均已完成。后续入口：[docs/README.md](../../README.md) 索引；QQ/163 公网收件补充验收暂缓事项不变。
