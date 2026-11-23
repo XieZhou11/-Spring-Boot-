@@ -18,6 +18,10 @@ public interface OrderSettlementMapper {
         <where>
           <if test='q.status != null and q.status != "ALL"'>AND s.status=#{q.status}</if>
           <if test='q.orderNo != null and q.orderNo != ""'>AND LOCATE(#{q.orderNo},o.order_no)>0</if>
+          <if test='q.createdFrom != null'>AND s.created_at&gt;=#{q.createdFrom}</if>
+          <if test='q.createdTo != null'>AND s.created_at&lt;=#{q.createdTo}</if>
+          <if test='q.minAmount != null'>AND s.paid_amount&gt;=#{q.minAmount}</if>
+          <if test='q.maxAmount != null'>AND s.paid_amount&lt;=#{q.maxAmount}</if>
         </where>
         """;
     @Select("<script>SELECT s.* FROM order_settlement s JOIN trade_order o ON o.id=s.order_id "+CREATOR_FILTER+" ORDER BY s.id DESC LIMIT #{q.size} OFFSET #{offset}</script>")

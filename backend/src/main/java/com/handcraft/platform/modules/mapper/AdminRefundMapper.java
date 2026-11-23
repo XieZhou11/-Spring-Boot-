@@ -11,6 +11,10 @@ public interface AdminRefundMapper {
           <if test='q.status != null and q.status != "ALL"'>AND r.status=#{q.status}</if>
           <if test='q.applicationType != null and q.applicationType != "ALL"'>AND r.application_type=#{q.applicationType}</if>
           <if test='q.orderNo != null and q.orderNo != ""'>AND LOCATE(#{q.orderNo},o.order_no)>0</if>
+          <if test='q.createdFrom != null'>AND r.created_at&gt;=#{q.createdFrom}</if>
+          <if test='q.createdTo != null'>AND r.created_at&lt;=#{q.createdTo}</if>
+          <if test='q.minAmount != null'>AND o.total_amount&gt;=#{q.minAmount}</if>
+          <if test='q.maxAmount != null'>AND o.total_amount&lt;=#{q.maxAmount}</if>
         </where>
         """;
     @Select("<script>SELECT r.* FROM refund_application r JOIN trade_order o ON o.id=r.order_id "+FILTER+" ORDER BY r.created_at,r.id LIMIT #{q.size} OFFSET #{offset}</script>")

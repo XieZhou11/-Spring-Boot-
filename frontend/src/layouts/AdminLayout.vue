@@ -40,6 +40,9 @@ async function signOut() {
         <strong>拾作管理台</strong>
       </RouterLink>
       <nav aria-label="后台管理">
+        <RouterLink to="/admin/dashboard" active-class="active"><AppIcon name="grid" />数据看板</RouterLink>
+        <RouterLink to="/admin/users" active-class="active"><AppIcon name="shield" />用户管理</RouterLink>
+        <RouterLink to="/admin/orders" active-class="active"><AppIcon name="grid" />订单查询</RouterLink>
         <RouterLink
           to="/admin/works"
           active-class="active"
@@ -78,7 +81,7 @@ async function signOut() {
     <div class="admin-main">
       <header class="admin-topbar">
         <nav aria-label="后台位置">
-          <RouterLink to="/admin/works">后台管理</RouterLink><span>/</span><span>{{ title }}</span>
+          <RouterLink to="/admin/dashboard">后台管理</RouterLink><span>/</span><span>{{ title }}</span>
         </nav>
         <div class="admin-user-tools">
           <RouterLink

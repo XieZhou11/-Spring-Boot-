@@ -11,6 +11,8 @@ public interface ConversationMapper {
     @Select("SELECT * FROM conversation WHERE id=#{id} FOR UPDATE") @Options(flushCache=Options.FlushCachePolicy.TRUE) Conversation lock(Long id);
     @Select("SELECT * FROM conversation WHERE request_id=#{requestId} AND creator_id=#{creatorId}") Conversation byRequest(@Param("requestId")Long requestId,@Param("creatorId")Long creatorId);
     @Select("SELECT * FROM conversation WHERE order_id=#{orderId}") Conversation byOrder(Long orderId);
+    /** 管理员订单详情只读展示最近消息，不推进参与方已读游标。 */
+    @Select("SELECT m.*,n.node_code AS referenced_node_code FROM chat_message m LEFT JOIN order_progress_node n ON n.id=m.referenced_node_id WHERE m.conversation_id=#{id} ORDER BY m.seq_no DESC LIMIT 50") List<ChatMessage> recentMessages(Long id);
     @Insert("INSERT INTO conversation(buyer_id,creator_id,request_id,order_id,last_message_at,created_at) VALUES(#{buyerId},#{creatorId},#{requestId},#{orderId},#{lastMessageAt},#{createdAt})")
     @Options(useGeneratedKeys=true,keyProperty="id") int insert(Conversation c);
     /** 查询不可变订单快照与期限，展示有效状态时不触发取消写操作。 */

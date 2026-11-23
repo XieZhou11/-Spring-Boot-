@@ -9,6 +9,8 @@ import org.apache.ibatis.annotations.*;
 public interface OrderPaymentMapper {
     @Select("SELECT * FROM fund_flow WHERE order_id=#{id} AND flow_type='PAYMENT' AND result='SUCCESS'")
     FundFlow payment(Long id);
+    /** 管理员只读查看本单成功的支付、退款与结算流水。 */
+    @Select("SELECT * FROM fund_flow WHERE order_id=#{id} AND result='SUCCESS' ORDER BY occurred_at,id") List<FundFlow> successfulFlows(Long id);
     @Insert("INSERT INTO fund_flow(flow_no,order_id,flow_type,amount,result,idempotency_key,occurred_at) VALUES(#{flowNo},#{orderId},'PAYMENT',#{amount},'SUCCESS',#{idempotencyKey},#{occurredAt})")
     @Options(useGeneratedKeys=true,keyProperty="id") int insertPayment(FundFlow flow);
     @Select("SELECT * FROM order_settlement WHERE order_id=#{id}")

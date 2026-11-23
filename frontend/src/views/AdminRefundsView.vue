@@ -13,18 +13,18 @@ import { ApiError } from '@/utils/request'
 import '@/assets/styles/quote.css'
 import '@/assets/styles/refund.css'
 const route = useRoute(); const router = useRouter(); const auth = useAuthStore(); const notifications = useNotificationsStore()
-const rows = ref<AdminRefundQueueVO[]>([]); const total = ref(0); const page = ref(1); const status = ref('WAIT_ADMIN'); const applicationType = ref('NORMAL'); const orderNo = ref(''); const loading = ref(false); const error = ref('')
+const rows = ref<AdminRefundQueueVO[]>([]); const total = ref(0); const page = ref(1); const status = ref('WAIT_ADMIN'); const applicationType = ref('NORMAL'); const orderNo = ref(''); const createdFrom = ref(''); const createdTo = ref(''); const minAmount = ref(''); const maxAmount = ref(''); const loading = ref(false); const error = ref('')
 let revision = 0
 /** 队列条件保存到URL，选择申请及返回时保留筛选与页码。 */
 async function filter(next = 1) {
-  const target = { path: '/admin/refunds', query: { status: status.value || 'ALL', applicationType: applicationType.value || 'ALL', orderNo: orderNo.value.trim() || undefined, page: next > 1 ? String(next) : undefined } }
+  const target = { path: '/admin/refunds', query: { status: status.value || 'ALL', applicationType: applicationType.value || 'ALL', orderNo: orderNo.value.trim() || undefined, createdFrom: createdFrom.value || undefined, createdTo: createdTo.value || undefined, minAmount: minAmount.value || undefined, maxAmount: maxAmount.value || undefined, page: next > 1 ? String(next) : undefined } }
   if (router.resolve(target).fullPath === route.fullPath) void load(next)
   else await router.push(target)
 }
 async function load(next = page.value) {
   const userId = auth.session?.userId; if (!userId || !auth.session?.roles.includes('ADMIN')) { rows.value = []; return }
   const current = ++revision; loading.value = true; error.value = ''; page.value = next
-  try { const result = await getAdminRefunds({ status: status.value || 'ALL', applicationType: applicationType.value || 'ALL', orderNo: orderNo.value.trim(), page: next }); if (current === revision && userId === auth.session?.userId && auth.session?.roles.includes('ADMIN')) { rows.value = result.items; total.value = result.total } }
+  try { const result = await getAdminRefunds({ status: status.value || 'ALL', applicationType: applicationType.value || 'ALL', orderNo: orderNo.value.trim(), createdFrom: createdFrom.value || undefined, createdTo: createdTo.value || undefined, minAmount: minAmount.value || undefined, maxAmount: maxAmount.value || undefined, page: next }); if (current === revision && userId === auth.session?.userId && auth.session?.roles.includes('ADMIN')) { rows.value = result.items; total.value = result.total } }
   catch (failure) { if (current === revision && userId === auth.session?.userId) { if (failure instanceof ApiError && [401, 403, 404].includes(failure.status)) rows.value = []; error.value = failure instanceof Error ? failure.message : '售后队列读取失败' } }
   finally { if (current === revision) loading.value = false }
 }
@@ -34,7 +34,7 @@ watch([() => route.query, () => auth.session?.userId, () => auth.session?.roles.
   revision++; if (!auth.session?.roles.includes('ADMIN')) { rows.value = []; total.value = 0; loading.value = false; return }
   status.value = route.query.status === 'ALL' ? '' : ['WAIT_ADMIN', 'REFUNDED', 'REJECTED', 'WITHDRAWN'].includes(String(route.query.status)) ? String(route.query.status) : 'WAIT_ADMIN'
   applicationType.value = route.query.applicationType === 'ALL' ? '' : route.query.applicationType === 'NO_START_TIMEOUT' ? 'NO_START_TIMEOUT' : 'NORMAL'
-  orderNo.value = typeof route.query.orderNo === 'string' ? route.query.orderNo : ''; page.value = Math.max(1, Number(route.query.page) || 1); void load()
+  orderNo.value = typeof route.query.orderNo === 'string' ? route.query.orderNo : ''; createdFrom.value = typeof route.query.createdFrom === 'string' ? route.query.createdFrom : ''; createdTo.value = typeof route.query.createdTo === 'string' ? route.query.createdTo : ''; minAmount.value = typeof route.query.minAmount === 'string' ? route.query.minAmount : ''; maxAmount.value = typeof route.query.maxAmount === 'string' ? route.query.maxAmount : ''; page.value = Math.max(1, Number(route.query.page) || 1); void load()
 }, { immediate: true })
 watch(() => notifications.connected, (value, old) => { if (value && !old) refresh() })
 onMounted(() => { window.addEventListener('order-updated', refresh); window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', visible) })
@@ -82,7 +82,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
             v-model="orderNo"
             aria-label="按订单编号筛选"
             placeholder="输入订单编号"
-          ></label><button class="button-secondary">
+          ></label><label class="work-field">申请创建时间从<input v-model="createdFrom" type="datetime-local"></label><label class="work-field">至<input v-model="createdTo" type="datetime-local"></label><label class="work-field">金额从<input v-model="minAmount" type="number" min="0" step="0.01"></label><label class="work-field">至<input v-model="maxAmount" type="number" min="0" step="0.01"></label><button class="button-secondary">
             筛选申请
           </button>
         </form>

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import AccountLayout from '@/layouts/AccountLayout.vue'
 import AccountField from '@/components/AccountField.vue'
 import { getProfile, updateProfile, uploadAvatar } from '@/api/account'
+import { getCreatorPauseState, setCreatorPause } from '@/api/admin'
 import { useAuthForm } from '@/composables/useAuthForm'
 import { useAuthStore } from '@/stores/auth'
 import { validateNickname } from '@/utils/auth'
@@ -23,6 +24,11 @@ const avatarUploading = ref(false)
 const selectedAvatarPreview = ref('')
 const avatarBroken = ref(false)
 const avatarRefreshing = ref(false)
+const creatorPause = ref(false)
+const adminBusinessPause = ref(false)
+const creatorPauseBusy = ref(false)
+const creatorPauseMessage = ref('')
+const creatorPauseError = ref('')
 const initials = computed(() => Array.from(form.nickname.trim())[0] || '拾')
 const { errors, message, submitting, validate, showError } = useAuthForm()
 let expiryTimer: ReturnType<typeof setTimeout> | undefined
@@ -78,11 +84,29 @@ async function load() {
     Object.assign(form, { nickname: profile.nickname, bio: profile.bio || '' })
     email.value = profile.email
     applyAvatar(profile)
+    if (auth.session?.roles.includes('CREATOR')) {
+      try {
+        const state = await getCreatorPauseState()
+        if (!disposed) { creatorPause.value = state.creatorPaused; adminBusinessPause.value = state.adminBusinessPaused }
+      } catch { if (!disposed) creatorPauseError.value = '接单状态暂时无法读取' }
+    }
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : '资料读取失败，请重试'
   } finally {
     loading.value = false
   }
+}
+
+/** 本人只切换创作者接单标记，后台暂停仍由管理员独立控制。 */
+async function toggleCreatorPause() {
+  if (creatorPauseBusy.value) return
+  creatorPauseBusy.value = true; creatorPauseError.value = ''; creatorPauseMessage.value = ''
+  try {
+    const state = await setCreatorPause(!creatorPause.value)
+    creatorPause.value = state.creatorPaused; adminBusinessPause.value = state.adminBusinessPaused
+    creatorPauseMessage.value = state.creatorPaused ? '已暂停接单；现有订单仍可继续履约。' : '已恢复接单。'
+  } catch (failure) { creatorPauseError.value = failure instanceof Error ? failure.message : '接单状态更新失败' }
+  finally { creatorPauseBusy.value = false }
 }
 
 async function save() {
@@ -320,6 +344,15 @@ onBeforeUnmount(() => {
           </p>
         </div>
       </form>
+      <section v-if="auth.session?.roles.includes('CREATOR')" class="creator-pause-panel">
+        <div><h2>创作者接单状态</h2><p>本人暂停只限制新的创作者业务，不影响已有订单履约。管理员暂停与此状态分别生效。</p><p v-if="adminBusinessPause" class="field-help">账号同时处于管理员新业务暂停状态，恢复本人接单不会解除管理员暂停。</p></div>
+        <button class="button-secondary" :disabled="creatorPauseBusy" @click="toggleCreatorPause">{{ creatorPauseBusy ? '正在保存…' : creatorPause ? '恢复接单' : '暂停接单' }}</button>
+        <p v-if="creatorPauseError" class="form-alert" role="alert">{{ creatorPauseError }}</p><p v-if="creatorPauseMessage" role="status">{{ creatorPauseMessage }}</p>
+      </section>
     </template>
   </AccountLayout>
 </template>
+
+<style scoped>
+.creator-pause-panel{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:22px;padding:18px;border:1px solid #e7e2d8;border-radius:12px;background:#fff}.creator-pause-panel h2{font-size:17px;margin:0 0 6px}.creator-pause-panel p{margin:5px 0;color:#70736d}.creator-pause-panel button{flex:none}@media(max-width:620px){.creator-pause-panel{align-items:flex-start;flex-direction:column}}
+</style>

@@ -54,4 +54,12 @@ public interface UserAccountMapper {
     /** 认证结论及通过申请引用由审核事务统一维护。 */
     @Update("UPDATE user_account SET certification_status=#{status},approved_application_id=#{applicationId} WHERE id=#{id}")
     int updateCertification(@Param("id")Long id,@Param("status")String status,@Param("applicationId")Long applicationId);
+
+    /** 用户行锁内单独改变管理员暂停标记，不覆盖创作者本人暂停选择。 */
+    @Update("UPDATE user_account SET admin_business_paused=#{paused} WHERE id=#{id}")
+    int updateAdminBusinessPause(@Param("id")Long id,@Param("paused")boolean paused);
+
+    /** 用户行锁内单独改变创作者本人暂停标记，不覆盖管理员处置。 */
+    @Update("UPDATE user_account SET creator_paused=#{paused} WHERE id=#{id}")
+    int updateCreatorPause(@Param("id")Long id,@Param("paused")boolean paused);
 }

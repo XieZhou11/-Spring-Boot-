@@ -7,13 +7,13 @@ import type { AdminSettlementVO } from '@/types/income'
 import { settlementStatus } from '@/utils/quote'
 import { formatTime } from '@/utils/creator'
 
-const rows = ref<AdminSettlementVO[]>([]); const status = ref(''); const orderNo = ref(''); const page = ref(1); const total = ref(0); const error = ref(''); const loading = ref(false)
+const rows = ref<AdminSettlementVO[]>([]); const status = ref(''); const orderNo = ref(''); const createdFrom = ref(''); const createdTo = ref(''); const minAmount = ref(''); const maxAmount = ref(''); const page = ref(1); const total = ref(0); const error = ref(''); const loading = ref(false)
 let revision = 0
 /** 资金记录只读查询；订单号精确到字面包含匹配，避免跨页误导。 */
 async function load(next = page.value) {
   const current = ++revision; page.value = next; loading.value = true; error.value = ''
   try {
-    const result = await getAdminSettlements({ status: status.value || undefined, orderNo: orderNo.value.trim() || undefined, page: next })
+    const result = await getAdminSettlements({ status: status.value || undefined, orderNo: orderNo.value.trim() || undefined, createdFrom: createdFrom.value || undefined, createdTo: createdTo.value || undefined, minAmount: minAmount.value || undefined, maxAmount: maxAmount.value || undefined, page: next })
     if (current !== revision) return
     rows.value = result.items; total.value = result.total
   } catch (failure) { if (current === revision) error.value = failure instanceof Error ? failure.message : '资金记录读取失败' }
@@ -47,7 +47,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('focus', refresh)
         maxlength="32"
         aria-label="订单号"
         placeholder="按订单号包含匹配"
-      ></label><button
+      ></label><label>记录创建时间从<input v-model="createdFrom" type="datetime-local"></label><label>至<input v-model="createdTo" type="datetime-local"></label><label>实付金额从<input v-model="minAmount" type="number" min="0" step="0.01"></label><label>至<input v-model="maxAmount" type="number" min="0" step="0.01"></label><button
         class="button-secondary"
         :disabled="loading"
       >

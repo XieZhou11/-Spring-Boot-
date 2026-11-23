@@ -38,7 +38,10 @@ const router = createRouter({
     { path: '/creator/works', component: () => import('@/views/MyWorksView.vue'), meta: { requiresAuth: true, requiresCreator: true, title: '我的作品' } },
     { path: '/creator/works/new', component: () => import('@/views/WorkEditorView.vue'), meta: { requiresAuth: true, requiresCreator: true, title: '发布作品' } },
     { path: '/creator/works/:id/edit', component: () => import('@/views/WorkEditorView.vue'), meta: { requiresAuth: true, requiresCreator: true, title: '编辑作品' } },
-    { path: '/admin', redirect: '/admin/works' },
+    { path: '/admin', redirect: '/admin/dashboard' },
+    { path: '/admin/dashboard', name: 'admin-dashboard', component: () => import('@/views/AdminDashboardView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: '数据看板' } },
+    { path: '/admin/users', name: 'admin-users', component: () => import('@/views/AdminUsersView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: '用户管理' } },
+    { path: '/admin/orders', name: 'admin-orders', component: () => import('@/views/AdminOrdersView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: '订单查询' } },
     { path: '/admin/refunds', name: 'admin-refunds', component: () => import('@/views/AdminRefundsView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: '售后与退款' }, children: [
       { path: ':id', name: 'admin-refund-detail', component: () => import('@/views/AdminRefundDetailView.vue'), meta: { title: '售后查证与裁定' } },
     ] },
@@ -125,7 +128,7 @@ router.beforeEach(async (to) => {
   if (to.meta.requiresAuth && !auth.session)
     return { path: '/login', query: { redirect: to.fullPath } }
   // 管理员默认进入工作后台，显式访问 /discover 时仍可查看前台作品。
-  if (to.path === '/' && auth.session?.roles.includes('ADMIN')) return { path: '/admin/works' }
+  if (to.path === '/' && auth.session?.roles.includes('ADMIN')) return { path: '/admin/dashboard' }
   if (to.meta.requiresAdmin && !auth.session?.roles.includes('ADMIN')) return '/'
   if (to.meta.requiresCreator && !auth.session?.roles.includes('CREATOR')) return '/account/creator-certification'
   if (to.meta.guestOnly && auth.session) {
