@@ -1,6 +1,7 @@
 package com.handcraft.platform.modules.service;
 
 import com.handcraft.platform.modules.dto.AdminOrderQueryDTO;
+import com.handcraft.platform.modules.vo.AdminOrderDetailVO;
 import com.handcraft.platform.modules.vo.AdminOrderVO;
 import com.handcraft.platform.modules.vo.PageVO;
 

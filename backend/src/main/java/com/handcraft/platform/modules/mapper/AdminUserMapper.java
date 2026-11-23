@@ -9,7 +9,7 @@ import org.apache.ibatis.annotations.Select;
 /** 管理员账号检索及关联业务摘要，不返回认证申请中的私人材料。 */
 @Mapper
 public interface AdminUserMapper {
-    String FILTER="<where>u.is_admin=0 <if test='q.email != null and q.email != &quot;&quot;'>AND LOCATE(LOWER(#{q.email}),u.email)&gt;0</if><if test='q.nickname != null and q.nickname != &quot;&quot;'>AND LOCATE(#{q.nickname},u.nickname)&gt;0</if><if test='q.certificationStatus != null and q.certificationStatus != &quot;ALL&quot;'>AND u.certification_status=#{q.certificationStatus}</if></where>";
+    String FILTER="<where>u.is_admin=0 <if test='q.email != null and q.email != &quot;&quot;'>AND LOCATE(LOWER(#{q.email}),u.email)&gt;0 </if><if test='q.nickname != null and q.nickname != &quot;&quot;'>AND LOCATE(#{q.nickname},u.nickname)&gt;0 </if><if test='q.certificationStatus != null and q.certificationStatus != &quot;ALL&quot;'>AND u.certification_status=#{q.certificationStatus}</if></where>";
     String USER_COLUMNS="u.id AS userId,u.email AS email,u.nickname AS nickname,u.certification_status AS certificationStatus,u.creator_paused AS creatorPaused,u.admin_business_paused AS adminBusinessPaused,u.created_at AS createdAt";
     @Select("<script>SELECT "+USER_COLUMNS+" FROM user_account u "+FILTER+" ORDER BY u.created_at DESC,u.id DESC LIMIT #{q.size} OFFSET #{offset}</script>")
     List<Map<String,Object>> list(@Param("q")com.handcraft.platform.modules.dto.AdminUserQueryDTO query,@Param("offset")int offset);
