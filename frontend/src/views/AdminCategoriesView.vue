@@ -57,7 +57,6 @@ onMounted(() => void load())
 <template>
   <AdminLayout
     title="手作品类管理"
-    presentation="craftflow"
   >
     <template #actions>
       <div class="category-actions">

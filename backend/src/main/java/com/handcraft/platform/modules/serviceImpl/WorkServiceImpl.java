@@ -77,13 +77,53 @@ public class WorkServiceImpl implements WorkService {
         if(before.equals(snapshot(w)))return view(w,false);update(w);record(userId,false,w,"TRADING_SETTINGS","ONLINE",changes(before,w),null);return view(works.find(id),false);
     });}
     @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
-    public WorkVO offline(Long userId,Long id,WorkVersionDTO input,String reason,boolean admin){return run("作品下架",userId,()->{
+    public WorkVO offline(Long userId,Long id,WorkVersionDTO input,String reason,boolean admin){
+        return offline(userId,id,input,reason,admin,null);
+    }
+    @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
+    public WorkVO offline(Long userId,Long id,WorkVersionDTO input,String reason,boolean admin,Long reportId){return run("作品下架",userId,()->{
         Work initial=works.find(id);if(initial==null)throw missing();lockUsers(userId,initial.getCreatorId());if(admin)requireAdmin(userId);
         Work w=admin?available(works.lock(id)):own(userId,id);version(w,input.getVersion());if(!"ONLINE".equals(w.getReviewStatus()))throw conflict("仅已上架作品可以下架");
         if(admin&&(reason==null||reason.isBlank()))throw invalid("管理员下架必须填写原因");w.setReviewStatus("OFFLINE");update(w);
         record(userId,admin,w,admin?"ADMIN_OFFLINE":"OFFLINE","ONLINE",Map.of("snapshot",snapshot(w),"submittedVersion",submittedVersion(w)),reason);
-        if(admin)notifications.workChanged(w.getCreatorId(),id,Long.valueOf(submittedVersion(w)),"WORK_OFFLINED","OFFLINE",reason);return view(works.find(id),false);
+        if(admin)notifications.workChanged(w.getCreatorId(),id,Long.valueOf(submittedVersion(w)),"WORK_OFFLINED","OFFLINE",reason,w.getVersion(),reportId);
+        return view(works.find(id),false);
     });}
+    @Override
+    public boolean canRestoreReportedWork(Long workId,Long expectedOfflineVersion,Long reportOperationId){
+        return restorable(works.find(workId),expectedOfflineVersion,reportOperationId);
+    }
+    @Override
+    @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
+    public void restoreReportedWork(Long adminId,Long workId,Long expectedOfflineVersion,Long reportOperationId,String reason){
+        run("举报更正恢复作品",adminId,()->{
+            requireAdmin(adminId);
+            Work initial=available(works.find(workId));
+            lockUsers(adminId,initial.getCreatorId());
+            requireAdmin(adminId);
+            Work work=available(works.lock(workId));
+            if(!restorable(work,expectedOfflineVersion,reportOperationId))throw conflict("作品下架后已发生变化，请由作者重新提交审核");
+            work.setReviewStatus("ONLINE");
+            update(work);
+            record(adminId,true,work,"REPORT_RESTORE","OFFLINE",Map.of("snapshot",snapshot(work),"submittedVersion",submittedVersion(work)),reason);
+            return null;
+        });
+    }
+    /** 旧举报按日志顺序定位同一次下架，防止更正历史记录恢复后续另一次下架。 */
+    private boolean restorable(Work work,Long expectedOfflineVersion,Long reportOperationId){
+        if(work==null||work.getDeletedAt()!=null||!"OFFLINE".equals(work.getReviewStatus())
+                ||expectedOfflineVersion!=null&&!expectedOfflineVersion.equals(work.getVersion()))return false;
+        WorkOperation last=works.latestOperation(work.getId());
+        return last!=null&&"ADMIN_OFFLINE".equals(last.getAction())&&last.getDetail()!=null
+                &&(expectedOfflineVersion!=null||reportOperationId!=null&&last.getId()<reportOperationId)
+                &&json.valueToTree(snapshot(work)).equals(json.readTree(last.getDetail()).path("snapshot"));
+    }
+    @Override
+    public String reportedWorkTitle(Long workId){
+        Work work=works.find(workId);
+        if(work==null)return null;
+        return work.getDeletedAt()==null&&"ONLINE".equals(work.getReviewStatus())?work.getTitle():works.lastPublishedTitle(workId);
+    }
     @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
     public WorkVO review(Long userId,Long id,WorkReviewDTO input){return run("作品审核",userId,()->{
         requireAdmin(userId);Work initial=available(works.find(id));lockUsers(userId,initial.getCreatorId());requireAdmin(userId);Work w=available(works.lock(id));
@@ -96,16 +136,54 @@ public class WorkServiceImpl implements WorkService {
         record(userId,true,w,"REVIEW","PENDING",Map.of("snapshot",snapshot(w),"submittedVersion",submitted,"decision",input.getDecision(),"reason",reason),reason);
         notifications.workChanged(w.getCreatorId(),id,Long.valueOf(submitted),"WORK_REVIEWED",input.getDecision(),reason);return view(works.find(id),false);
     });}
-    public WorkVO detail(Long userId,Long id,String mode){return run("作品详情查询",userId,()->{requireUser(userId);if("ADMIN".equals(mode))requireAdmin(userId);Work w=available(works.find(id));if("OWN".equals(mode)&&!userId.equals(w.getCreatorId()))throw missing();if("PUBLIC".equals(mode)&&!"ONLINE".equals(w.getReviewStatus()))throw missing();return view(w,"PUBLIC".equals(mode));});}
+    public WorkVO detail(Long userId,Long id,String mode){return run("作品详情查询",userId,()->{
+        requireUser(userId);
+        if("ADMIN".equals(mode)){
+            requireAdmin(userId);
+            return adminView(available(works.adminWork(id)));
+        }
+        Work work=available(works.find(id));
+        if(("OWN".equals(mode)&&!userId.equals(work.getCreatorId()))||("PUBLIC".equals(mode)&&!"ONLINE".equals(work.getReviewStatus())))throw missing();
+        return view(work,"PUBLIC".equals(mode));
+    });}
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
     public PageVO<WorkVO> list(Long userId,String mode,WorkQueryDTO q){return run("作品列表查询",userId,()->{
-        requireUser(userId);if("ADMIN".equals(mode)){requireAdmin(userId);if(q.getStatus()==null)q.setStatus("PENDING");}else if("OWN".equals(mode)&&q.getStatus()==null)q.setStatus("ALL");
+        requireUser(userId);
+        if("ADMIN".equals(mode))requireAdmin(userId);
         if(q.getMinPrice()!=null&&q.getMaxPrice()!=null&&q.getMinPrice().compareTo(q.getMaxPrice())>0)throw invalid("最低价格不能高于最高价格");
+        if("ADMIN".equals(mode)){
+            if(q.getStatus()==null)q.setStatus("PENDING");
+            return new PageVO<>(works.adminList(q,(q.getPage()-1)*q.getSize(),q.getSize()).stream().map(this::adminView).toList(),
+                    works.adminCount(q),q.getPage(),q.getSize());
+        }
+        if("OWN".equals(mode)&&q.getStatus()==null)q.setStatus("ALL");
         int size="PUBLIC".equals(mode)?20:q.getSize();return new PageVO<>(works.list(userId,mode,q,(q.getPage()-1)*size,size).stream().map(w->view(w,"PUBLIC".equals(mode))).toList(),works.count(userId,mode,q),q.getPage(),size);
     });}
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
     public PageVO<WorkHistoryVO> history(Long userId,Long id,boolean admin,int page,int size){return run("作品历史查询",userId,()->{
-        requireUser(userId);if(admin)requireAdmin(userId);Work w=works.find(id);if(w==null||(!admin&&!userId.equals(w.getCreatorId())))throw missing();if(page<1||page>1000000||size<1||size>50)throw invalid("分页参数无效");
-        return new PageVO<>(works.history(id,(page-1)*size,size).stream().map(x->new WorkHistoryVO(x.getId().toString(),x.getAction(),x.getBeforeStatus(),x.getAfterStatus(),x.getReason(),text(x.getOperatorId()),x.getOperatorType(),time(x.getCreatedAt()),json.readValue(x.getDetail(),new TypeReference<Map<String,Object>>(){}))).toList(),works.historyCount(id),page,size);
+        requireUser(userId);
+        if(admin)requireAdmin(userId);
+        Work work=works.find(id);
+        if(work==null||(admin?work.getDeletedAt()!=null||"DRAFT".equals(work.getReviewStatus()):!userId.equals(work.getCreatorId())))throw missing();
+        if(page<1||page>1000000||size<1||size>50)throw invalid("分页参数无效");
+        return new PageVO<>(works.history(id,admin,(page-1)*size,size).stream().map(operation->historyView(id,operation,admin)).toList(),
+                works.historyCount(id,admin),page,size);
     });}
+    /** 管理员比较的是两次提交材料，作者保存而未提交的中间版本只保留在本人历史。 */
+    private WorkHistoryVO historyView(Long id,WorkOperation operation,boolean admin){
+        Map<String,Object> detail=operation.getDetail()==null?new LinkedHashMap<>():json.readValue(operation.getDetail(),new TypeReference<>(){});
+        if(admin&&"SUBMIT".equals(operation.getAction())){
+            detail.remove("before");
+            detail.remove("after");
+            String previous=works.precedingSubmittedSnapshot(id,operation.getId());
+            if(previous!=null&&detail.get("snapshot")!=null){
+                detail.put("before",json.readValue(previous,new TypeReference<Map<String,Object>>(){}));
+                detail.put("after",detail.get("snapshot"));
+            }
+        }
+        return new WorkHistoryVO(operation.getId().toString(),operation.getAction(),operation.getBeforeStatus(),operation.getAfterStatus(),
+                operation.getReason(),text(operation.getOperatorId()),operation.getOperatorType(),time(operation.getCreatedAt()),detail);
+    }
     public WorkPublicationQuotaVO quota(Long userId){return run("作品发布额度查询",userId,()->{UserAccount u=requireUser(userId);long used=used(userId);String reason=eligibilityReason(u);if(reason==null&&used>=5)reason="今日首次提交作品已达5件";return new WorkPublicationQuotaVO(used,5,Math.max(0,5-used),reason==null,reason);});}
     public CreatorPublicVO creator(Long userId,Long creatorId){return run("创作者公开资料查询",userId,()->{
         requireUser(userId);UserAccount u=users.findById(creatorId);if(u==null||u.isAdmin()||!"APPROVED".equals(u.getCertificationStatus()))throw missing();var a=u.getApprovedApplicationId()==null?null:applications.find(u.getApprovedApplicationId());var avatar=avatars.view(creatorId,u.getAvatarFileId());
@@ -125,6 +203,15 @@ public class WorkServiceImpl implements WorkService {
         return tradeOrders.approvedPublicationOrders(userId).stream()
                 .map(o->new PublicationOrderOptionVO(text(o.getId()),o.getTitleSnapshot(),time(o.getOriginalCompletedAt()),time(o.getPublicationRespondedAt()))).toList();
     });}
+    /** 驳回、下架状态下当前行仍可编辑，后台用已提交或已公开的材料构建视图。 */
+    private WorkVO adminView(Work work){
+        if(Set.of("REJECTED","OFFLINE").contains(work.getReviewStatus())){
+            WorkFieldsDTO material=work.getAdminSnapshot()==null?new WorkFieldsDTO():json.readValue(work.getAdminSnapshot(),WorkFieldsDTO.class);
+            copy(work,material);
+        }
+        work.setUpdatedAt(work.getAdminUpdatedAt());
+        return view(work,false);
+    }
     private WorkVO view(Work w,boolean publicView){var u=users.findById(w.getCreatorId());var avatar=avatars.view(w.getCreatorId(),u.getAvatarFileId());List<String> main=ids(w.getMainImageIds());List<String> spec=ids(w.getSpecificationImageIds());var category=w.getCategoryId()==null?null:categories.find(w.getCategoryId());var path=new ArrayList<String>();if(category!=null){if(category.getParentId()!=null){var parent=categories.find(category.getParentId());if(parent!=null)path.add(parent.getName());}path.add(category.getName());}
         boolean eligible=eligibilityReason(u)==null&&"ONLINE".equals(w.getReviewStatus());ImageVO cover=main.isEmpty()?null:images.view(w.getCreatorId(),Long.valueOf(main.getFirst()));
         return new WorkVO(w.getId().toString(),w.getCreatorId().toString(),u.getNickname(),avatar==null?null:avatar.url(),avatar==null?null:avatar.expiresAt(),text(w.getCategoryId()),path,w.getTitle(),main,spec,w.getMaterial(),w.getSpecification(),w.getDescription(),w.getProcessDescription(),w.isSaleEnabled(),w.isCustomEnabled(),w.getStockPrice()==null?null:w.getStockPrice().setScale(2).toPlainString(),w.getCustomReferenceDays(),w.getReviewStatus(),w.getStockStatus(),w.getVersion().toString(),time(w.getFirstSubmittedAt()),time(w.getSubmittedAt()),time(w.getOnlineAt()),time(w.getCreatedAt()),time(w.getUpdatedAt()),publicView?null:works.reviewReason(w.getId()),eligible&&w.isSaleEnabled()&&"AVAILABLE".equals(w.getStockStatus())&&w.getSourceOrderId()==null,eligible&&w.isCustomEnabled(),cover,text(w.getSourceOrderId()));

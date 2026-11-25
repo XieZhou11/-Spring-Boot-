@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -10,13 +10,18 @@ import '@/assets/styles/work.css'
 import '@/assets/styles/admin.css'
 import '@/assets/styles/craftflow-admin.css'
 
-/** 审核和品类页面启用新版后台样式，其他管理流程可分批接入。 */
-defineProps<{ title: string; subtitle?: string; presentation?: 'craftflow' }>()
+defineProps<{ title: string }>()
 const auth = useAuthStore()
 const notifications = useNotificationsStore()
+const route = useRoute()
 const router = useRouter()
 const leaving = ref(false)
 const error = ref('')
+/** 详情深链接沿用所属队列的导航状态。 */
+const workReview = computed(() => route.path === '/admin/works' || route.path.startsWith('/admin/works/'))
+const creatorReview = computed(() => route.path === '/admin/creator-applications' || route.path.startsWith('/admin/creator-applications/'))
+const reviewCenter = computed(() => workReview.value || creatorReview.value)
+const reportCenter = computed(() => route.name === 'admin-content-reports' || route.name === 'admin-review-reports')
 
 /** 后台退出沿用真实会话；请求失败时留在当前工作区。 */
 async function signOut() {
@@ -29,10 +34,7 @@ async function signOut() {
 </script>
 
 <template>
-  <div
-    class="admin-page"
-    :class="{ 'craft-admin': presentation === 'craftflow' }"
-  >
+  <div class="admin-page craft-admin">
     <aside class="admin-sidebar">
       <RouterLink
         to="/admin/dashboard"
@@ -41,10 +43,7 @@ async function signOut() {
         <span
           class="admin-brand-seal"
           aria-hidden="true"
-        ><AppIcon
-          v-if="presentation === 'craftflow'"
-          name="hammer"
-        /><template v-else>匠</template></span>
+        ><AppIcon name="hammer" /></span>
         <strong>匠心集管理台</strong>
       </RouterLink>
       <nav aria-label="后台管理">
@@ -53,37 +52,29 @@ async function signOut() {
           active-class="active"
         ><AppIcon name="grid" />数据看板</RouterLink>
         <RouterLink
+          to="/admin/works"
+          :class="{ active: reviewCenter }"
+        ><AppIcon name="check" />审核中心</RouterLink>
+        <RouterLink
+          to="/admin/content-reports"
+          :class="{ active: reportCenter }"
+        ><AppIcon name="shield" />内容举报</RouterLink>
+        <RouterLink
           to="/admin/users"
           active-class="active"
-        ><AppIcon name="shield" />用户管理</RouterLink>
-        <RouterLink
-          to="/admin/orders"
-          active-class="active"
-        ><AppIcon name="grid" />订单查询</RouterLink>
-        <RouterLink
-          to="/admin/works"
-          active-class="active"
-        ><AppIcon name="image" />作品审核</RouterLink>
-        <RouterLink
-          to="/admin/creator-applications"
-          active-class="active"
-        ><AppIcon name="shield" />入驻审核</RouterLink>
+        ><AppIcon name="user" />用户管理</RouterLink>
         <RouterLink
           to="/admin/categories"
           active-class="active"
         ><AppIcon name="grid" />品类管理</RouterLink>
         <RouterLink
+          to="/admin/orders"
+          active-class="active"
+        ><AppIcon name="search" />订单查询</RouterLink>
+        <RouterLink
           to="/admin/refunds"
           active-class="active"
-        ><AppIcon name="shield" />售后与退款</RouterLink>
-        <RouterLink
-          to="/admin/review-reports"
-          active-class="active"
-        ><AppIcon name="shield" />评价举报</RouterLink>
-        <RouterLink
-          to="/admin/content-reports"
-          active-class="active"
-        ><AppIcon name="shield" />内容举报</RouterLink>
+        ><AppIcon name="message" />售后与退款</RouterLink>
         <RouterLink
           to="/admin/settlements"
           active-class="active"
@@ -127,6 +118,20 @@ async function signOut() {
         <header class="admin-heading">
           <h1>{{ title }}</h1><slot name="actions" />
         </header>
+        <nav
+          v-if="reviewCenter"
+          class="admin-review-tabs"
+          aria-label="审核中心"
+        >
+          <RouterLink
+            to="/admin/works"
+            :aria-current="workReview ? 'page' : undefined"
+          >作品审核</RouterLink>
+          <RouterLink
+            to="/admin/creator-applications"
+            :aria-current="creatorReview ? 'page' : undefined"
+          >入驻审核</RouterLink>
+        </nav>
         <p
           v-if="error"
           class="form-alert"

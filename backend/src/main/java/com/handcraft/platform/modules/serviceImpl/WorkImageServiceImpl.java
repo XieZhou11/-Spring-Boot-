@@ -63,7 +63,9 @@ public class WorkImageServiceImpl implements WorkImageService {
     public ImageVO view(Long userId,Long fileId){return BusinessLog.run(LOGGER,"作品图片读取",userId,()->{
         var user=accounts.findById(userId);var file=files.findById(fileId);
         if(user==null)throw new BusinessException(CommonErrorCode.UNAUTHORIZED);
-        if(file==null||!file.getObjectKey().startsWith("works/")||!"AVAILABLE".equals(file.getUploadStatus())||(!userId.equals(file.getUploaderId())&&works.countPublicImageReferences(fileId)==0&&(!user.isAdmin()||works.countImageReferences(file.getUploaderId(),fileId)==0)))throw new BusinessException(CommonErrorCode.NOT_FOUND);
+        if(file==null||!file.getObjectKey().startsWith("works/")||!"AVAILABLE".equals(file.getUploadStatus()))throw new BusinessException(CommonErrorCode.NOT_FOUND);
+        if(!userId.equals(file.getUploaderId())&&works.countPublicImageReferences(fileId)==0
+                &&(!user.isAdmin()||works.countAdminImageReferences(file.getUploaderId(),fileId)==0))throw new BusinessException(CommonErrorCode.NOT_FOUND);
         return signed(file);
     });}
     /** 清理失败资源和超过24小时的无引用临时图；被历史作品引用的图永远跳过。 */

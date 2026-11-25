@@ -3,25 +3,31 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 import { getPrivateImage } from '@/api/customRequest'
 import { getAdminRefundImage } from '@/api/refund'
 import { getReviewImage } from '@/api/review'
-const props = defineProps<{ imageId: string; scope: 'request' | 'chat' | 'quote' | 'progress' | 'refund' | 'review'; label: string; adminApplicationId?: string }>()
+import { getReportImage, getReportedCommentImage } from '@/api/report'
+import { useAuthStore } from '@/stores/auth'
+const props = defineProps<{ imageId: string; scope: 'request' | 'chat' | 'quote' | 'progress' | 'refund' | 'review' | 'report'; label: string; adminApplicationId?: string; adminReportId?: string }>()
+const auth = useAuthStore()
 const url = ref(''); const error = ref(''); const loading = ref(false)
 let revision = 0; let timer: ReturnType<typeof setTimeout> | undefined
 /** 续签重新核验业务图片的读取权限；失败立即撤下旧签名。 */
 async function load() {
   const current = ++revision; clearTimeout(timer); loading.value = true; error.value = ''
   try {
-    const result = props.scope === 'review'
-      ? await getReviewImage(props.imageId)
-      : props.adminApplicationId
-        ? await getAdminRefundImage(props.adminApplicationId, props.imageId)
-        : await getPrivateImage(props.imageId, props.scope)
+    const result = await read()
     if (current !== revision) return
     url.value = result.url
     timer = setTimeout(() => void load(), Math.max(5000, Date.parse(result.expiresAt) - Date.now() - 20_000))
   } catch (failure) { if (current === revision) { url.value = ''; error.value = failure instanceof Error ? failure.message : '图片读取失败' } }
   finally { if (current === revision) loading.value = false }
 }
-watch(() => [props.imageId, props.scope, props.adminApplicationId], () => { url.value = ''; void load() }, { immediate: true })
+function read() {
+  if (props.adminReportId) return getReportedCommentImage(props.adminReportId, props.imageId)
+  if (props.scope === 'report') return getReportImage(props.imageId)
+  if (props.scope === 'review') return getReviewImage(props.imageId)
+  if (props.adminApplicationId) return getAdminRefundImage(props.adminApplicationId, props.imageId)
+  return getPrivateImage(props.imageId, props.scope)
+}
+watch([() => props.imageId, () => props.scope, () => props.adminApplicationId, () => props.adminReportId, () => auth.session?.userId, () => auth.session?.roles.includes('ADMIN')], () => { url.value = ''; void load() }, { immediate: true })
 onBeforeUnmount(() => { revision++; clearTimeout(timer) })
 </script>
 <template>

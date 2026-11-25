@@ -17,6 +17,14 @@ public interface WorkService {
     WorkVO trading(Long userId,Long id,WorkTradingDTO input);
     /** 作者或管理员下架，管理员原因必填并发送通知。 */
     WorkVO offline(Long userId,Long id,WorkVersionDTO input,String reason,boolean admin);
+    /** 举报处置下架，通知关联本次举报详情。 */
+    WorkVO offline(Long userId,Long id,WorkVersionDTO input,String reason,boolean admin,Long reportId);
+    /** 举报可恢复同一次下架的原公开版本时返回真。 */
+    boolean canRestoreReportedWork(Long workId,Long expectedOfflineVersion,Long reportOperationId);
+    /** 举报更正后恢复同一次下架的原公开版本，保留原处置结果。 */
+    void restoreReportedWork(Long adminId,Long workId,Long expectedOfflineVersion,Long reportOperationId,String reason);
+    /** 举报证据只引用作品公开过的标题。 */
+    String reportedWorkTitle(Long workId);
     /** 审核待审核版本，通知、状态与内容快照同事务保存。 */
     WorkVO review(Long userId,Long id,WorkReviewDTO input);
     /** 按PUBLIC、OWN、ADMIN查询对应权限详情。 */

@@ -1,49 +1,92 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { addReportEvidence, getReport, getReportImage } from '@/api/report'
-import type { ContentReportDetailVO, ReportEvidenceVO, ReviewReportHistoryEntry, ReportInput } from '@/types/report'
-import type { ImageVO } from '@/types/creator'
 import ReportDialog from '@/components/ReportDialog.vue'
+import ReportMaterials from '@/components/ReportMaterials.vue'
+import { addReportEvidence, getReport } from '@/api/report'
+import { addReviewReportEvidence, getReviewReport } from '@/api/review'
+import { useAuthStore } from '@/stores/auth'
+import { formatTime } from '@/utils/creator'
+import { matchesReportMaterial, reportTypes } from '@/utils/report'
+import type { ReportInput } from '@/types/report'
 
+const props = defineProps<{ review?: boolean }>()
 const route = useRoute()
-const detail = ref<ContentReportDetailVO>()
+const auth = useAuthStore()
+const id = computed(() => String(route.params.id))
+const detail = ref<Awaited<ReturnType<typeof getReport | typeof getReviewReport>>>()
+const loading = ref(false)
 const error = ref('')
 const message = ref('')
-const busy = ref(false)
-const images = ref<Record<string, ImageVO>>({})
-const objectionOpen = ref(false)
+const formOpen = ref(false)
+let revision = 0
+const target = computed(() => {
+  const result = detail.value
+  if (!result) return
+  if ('review' in result) {
+    return { title: '评价', summary: result.review.content, processedAt: result.report.processedAt }
+  }
+  return { title: reportTypes[result.report.targetType], summary: result.targetSummary, processedAt: result.report.lastProcessedAt }
+})
+const back = computed(() => ({
+  path: '/me/reports',
+  query: typeof route.query.page === 'string' ? { page: route.query.page } : {},
+}))
 
-const typeLabel: Record<string, string> = { WORK: '作品', COMMENT: '评论', CREATOR_PROFILE: '创作者主页', REVIEW: '评价' }
-
-/** 举报详情、证据图片与处置历史统一读取；证据图片按关系签名。 */
-async function load() {
-  busy.value = true; error.value = ''
-  try {
-    const result = await getReport(String(route.params.id))
-    detail.value = result
-    const ids = [...result.report.imageIds, ...result.evidence.flatMap(e => e.imageIds)]
-    for (const id of ids) if (!images.value[id]) images.value[id] = await getReportImage(id)
-  } catch (failure) { error.value = failure instanceof Error ? failure.message : '举报详情读取失败' } finally { busy.value = false }
+function read() {
+  return props.review ? getReviewReport(id.value) : getReport(id.value)
 }
-/** 处理中补证或对已处理结论提出异议；举报表单的说明字段映射为补证内容。 */
-async function submitEvidence(input: ReportInput) {
+
+async function load() {
+  const current = ++revision
+  loading.value = true
   error.value = ''
   try {
-    detail.value = await addReportEvidence(String(route.params.id), { content: input.description, imageIds: input.imageIds })
-    message.value = '材料已提交。'
-    objectionOpen.value = false
-    await load()
-  } catch (failure) { error.value = failure instanceof Error ? failure.message : '材料提交失败' }
+    const result = await read()
+    if (current === revision) detail.value = result
+  } catch (failure) {
+    if (current === revision) error.value = failure instanceof Error ? failure.message : '举报详情读取失败'
+  } finally { if (current === revision) loading.value = false }
 }
-function evidenceTitle(item: ReportEvidenceVO) { return item.evidenceType === 'OBJECTION' ? '处置异议' : '补充证据' }
-function historyTitle(entry: ReviewReportHistoryEntry) { return entry.action === 'CORRECT' ? '更正' : '处置' }
-onMounted(() => void load())
+
+async function submit(input: ReportInput) {
+  const current = revision
+  const save = props.review ? addReviewReportEvidence : addReportEvidence
+  const result = await save(id.value, { content: input.description, imageIds: input.imageIds })
+  if (current !== revision) return
+  detail.value = result
+  message.value = '材料已提交。'
+  formOpen.value = false
+}
+
+async function prepareVerification(input: ReportInput) {
+  const current = revision
+  const previousId = (await read()).evidence.at(-1)?.id
+  return async () => {
+    const result = await read()
+    if (current !== revision) return false
+    const found = result.evidence.some(item => item.submitterId === auth.session?.userId
+      && (!previousId || BigInt(item.id) > BigInt(previousId)) && matchesReportMaterial(item, input))
+    if (found) {
+      detail.value = result
+      message.value = '已核对到本次材料。'
+      formOpen.value = false
+    }
+    return found
+  }
+}
+
+watch([id, () => props.review, () => auth.session?.userId, () => auth.session?.roles.includes('ADMIN')], () => {
+  detail.value = undefined; formOpen.value = false; message.value = ''
+  void load()
+}, { immediate: true })
+onBeforeUnmount(() => { revision++ })
 </script>
+
 <template>
-  <div class="page-container">
+  <div class="report-public-page">
     <nav class="work-breadcrumb">
-      <RouterLink to="/me/reports">我的举报</RouterLink><span>/</span><span>举报详情</span>
+      <RouterLink :to="back">我的举报</RouterLink><span>/</span><span>举报详情</span>
     </nav>
     <p
       v-if="error"
@@ -52,118 +95,66 @@ onMounted(() => void load())
     >
       {{ error }} <button
         class="inline-button"
-        @click="load()"
+        @click="load"
       >
         重新读取
       </button>
     </p>
-    <template v-if="detail">
-      <header class="work-section-heading">
-        <h1>举报 #{{ detail.report.id }} · 举报{{ typeLabel[detail.report.targetType] ?? detail.report.targetType }}</h1>
+    <p
+      v-if="loading && !detail"
+      role="status"
+    >
+      正在读取举报详情…
+    </p>
+    <article v-if="detail && target">
+      <header class="report-heading">
+        <h1>举报 #{{ detail.report.id }} · 举报{{ target.title }}</h1>
         <span
           class="report-status"
-          :class="detail.report.status === 'PENDING' ? 'pending' : 'processed'"
+          :class="{ pending: detail.report.status === 'PENDING' }"
         >{{ detail.report.status === 'PENDING' ? '处理中' : detail.report.latestResult === 'ACTION_TAKEN' ? '已处理：已处置' : '已处理：未成立' }}</span>
       </header>
-      <dl class="report-detail-facts">
-        <div><dt>被举报内容</dt><dd>{{ detail.targetSummary }}</dd></div>
-        <div><dt>当前状态</dt><dd>{{ detail.targetState }}</dd></div>
-        <div><dt>提交时间</dt><dd>{{ new Date(detail.report.createdAt).toLocaleString('zh-CN') }}</dd></div>
-        <div v-if="detail.report.lastProcessedAt">
-          <dt>最近处理</dt><dd>{{ new Date(detail.report.lastProcessedAt).toLocaleString('zh-CN') }}</dd>
+      <p
+        v-if="target.summary"
+        class="report-target"
+      >
+        {{ target.summary }}
+      </p>
+      <dl class="report-facts">
+        <div><dt>提交时间</dt><dd>{{ formatTime(detail.report.createdAt) }}</dd></div>
+        <div v-if="target.processedAt">
+          <dt>最近处置</dt><dd>{{ formatTime(target.processedAt) }}</dd>
         </div>
       </dl>
+      <ReportMaterials
+        :report="detail.report"
+        :evidence="detail.evidence"
+        :history="detail.history"
+        :scope="review ? 'review' : 'report'"
+      />
       <p
         v-if="message"
         role="status"
       >
         {{ message }}
       </p>
-      <section class="report-section">
-        <h2>初次举报</h2>
-        <p>理由：{{ detail.report.reasonCode }}</p>
-        <p>{{ detail.report.description || '举报人仅附图片证据' }}</p>
-        <div class="report-image-row">
-          <img
-            v-for="id in detail.report.imageIds"
-            :key="id"
-            :src="images[id]?.url"
-            alt="举报证据"
-          >
-        </div>
-      </section>
-      <section class="report-section">
-        <h2>补充材料（{{ detail.evidence.length }}）</h2>
-        <p
-          v-if="!detail.evidence.length"
-          class="muted"
-        >
-          暂无补充材料。
-        </p>
-        <article
-          v-for="item in detail.evidence"
-          :key="item.id"
-          class="report-evidence"
-        >
-          <h3>{{ evidenceTitle(item) }} · {{ new Date(item.createdAt).toLocaleString('zh-CN') }}</h3>
-          <p>{{ item.content }}</p>
-          <div class="report-image-row">
-            <img
-              v-for="id in item.imageIds"
-              :key="id"
-              :src="images[id]?.url"
-              alt="补充材料图片"
-            >
-          </div>
-        </article>
-        <button
-          v-if="detail.canSupplement"
-          class="inline-button"
-          @click="objectionOpen = !objectionOpen; message = ''"
-        >
-          补充证据
-        </button>
-        <button
-          v-if="detail.canObjection"
-          class="inline-button"
-          @click="objectionOpen = !objectionOpen; message = ''"
-        >
-          对处置结论提出异议
-        </button>
-        <ReportDialog
-          v-if="objectionOpen && (detail.canSupplement || detail.canObjection)"
-          :submit-label="detail.canSupplement ? '提交补充证据' : '提交处置异议'"
-          @submit="submitEvidence"
-        />
-      </section>
-      <section
-        v-if="detail.history.length"
-        class="report-section"
+      <button
+        v-if="detail.canSupplement || detail.canObjection"
+        type="button"
+        class="button-secondary"
+        @click="formOpen = !formOpen; message = ''"
       >
-        <h2>处置历史</h2>
-        <ol>
-          <li
-            v-for="entry in detail.history"
-            :key="entry.id"
-          >
-            <strong>{{ historyTitle(entry) }} · {{ entry.afterStatus }}</strong>
-            <p>{{ entry.reason }}</p>
-            <small>{{ new Date(entry.createdAt).toLocaleString('zh-CN') }}</small>
-          </li>
-        </ol>
-      </section>
-    </template>
+        {{ detail.canSupplement ? '补充证据' : '对处置结论提出异议' }}
+      </button>
+      <ReportDialog
+        v-if="formOpen"
+        evidence
+        :submit-label="detail.canSupplement ? '提交补充证据' : '提交处置异议'"
+        :submit-report="submit"
+        :prepare-verification="prepareVerification"
+      />
+    </article>
   </div>
 </template>
-<style scoped>
-.page-container { max-width: 860px; margin: 0 auto; padding: 24px; }
-.report-status.pending { color: #a35a2a; }
-.report-status.processed { color: #68765d; }
-.report-detail-facts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 18px 0; }
-.report-detail-facts dt { font-size: 12px; color: #777; }
-.report-section { margin-top: 28px; padding-top: 18px; border-top: 1px solid #e5dfd3; }
-.report-evidence { padding: 12px 0; }
-.report-image-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-.report-image-row img { width: 110px; height: 110px; object-fit: cover; border-radius: 6px; }
-@media(max-width: 620px) { .report-detail-facts { grid-template-columns: 1fr; } }
-</style>
+
+<style src="@/assets/styles/craftflow-reports.css"></style>

@@ -48,7 +48,6 @@ onBeforeUnmount(() => revision++)
 <template>
   <AdminLayout
     title="作品审核"
-    presentation="craftflow"
   >
     <div
       class="admin-review-grid"
@@ -142,7 +141,7 @@ onBeforeUnmount(() => revision++)
               <span
                 class="work-status"
                 :class="work.reviewStatus"
-              >{{ workStatusLabels[work.reviewStatus] }}</span><h3>{{ work.title || '未命名草稿' }}</h3><p>{{ work.creatorNickname }} · {{ work.categoryPath.join(' / ') }}</p><p>{{ formatTime(work.submittedAt || work.updatedAt) }}</p>
+              >{{ workStatusLabels[work.reviewStatus] }}</span><h3>{{ work.title || `作品 ${work.id}` }}</h3><p>{{ work.creatorNickname }} · {{ work.categoryPath.join(' / ') }}</p><p>{{ formatTime(work.submittedAt || work.updatedAt) }}</p>
             </div><RouterLink
               class="text-link"
               :to="{ path: `/admin/works/${work.id}`, query: route.query }"

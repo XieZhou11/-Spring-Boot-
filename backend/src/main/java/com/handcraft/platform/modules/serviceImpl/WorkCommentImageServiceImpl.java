@@ -77,6 +77,15 @@ public class WorkCommentImageServiceImpl implements WorkCommentImageService {
         if(file==null||!file.getObjectKey().startsWith("work-comments/")||!"AVAILABLE".equals(file.getUploadStatus())||(!userId.equals(file.getUploaderId())&&comments.publicReferences(fileId)==0&&!related))throw new BusinessException(CommonErrorCode.NOT_FOUND);
         return signed(file);
     });}
+    @Override
+    public ImageVO viewReportedComment(Long userId,Long reportId,Long fileId){return BusinessLog.run(LOGGER,"原评论证据读取",userId,()->{
+        var user=accounts.findById(userId);
+        var file=files.findById(fileId);
+        if(user==null)throw new BusinessException(CommonErrorCode.UNAUTHORIZED);
+        if(!user.isAdmin()||file==null||!file.getObjectKey().startsWith("work-comments/")||!"AVAILABLE".equals(file.getUploadStatus())
+                ||reportImages.originalCommentImage(reportId,fileId)==0)throw new BusinessException(CommonErrorCode.NOT_FOUND);
+        return signed(file);
+    });}
     /** 全类型内容举报证据：按举报人、被处理人及管理员关系核验。 */
     public ImageVO viewReport(Long userId,Long fileId){return BusinessLog.run(LOGGER,"举报证据图片读取",userId,()->{
         var user=accounts.findById(userId);var file=files.findById(fileId);

@@ -1,30 +1,49 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import WorkPagination from '@/components/WorkPagination.vue'
 import { getMyReports } from '@/api/report'
 import type { ContentReportVO } from '@/types/report'
+import { reportReasons, reportTypes } from '@/utils/report'
+import { formatTime } from '@/utils/creator'
+import { useAuthStore } from '@/stores/auth'
+import '@/assets/styles/craftflow-reports.css'
 
+const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
 const rows = ref<ContentReportVO[]>([])
-const page = ref(1)
+const page = computed(() => Math.min(1_000_000, Math.max(1, Math.floor(Number(route.query.page)) || 1)))
+const size = ref(20)
 const total = ref(0)
 const loading = ref(false)
 const error = ref('')
 
-const typeLabel: Record<string, string> = { WORK: '作品', COMMENT: '评论', CREATOR_PROFILE: '创作者主页', REVIEW: '评价' }
+let revision = 0
 
-async function load(next = page.value) {
+function changePage(next: number) {
+  void router.push({ query: { page: next > 1 ? String(next) : undefined } })
+}
+
+async function load() {
+  const current = ++revision
   loading.value = true; error.value = ''
   try {
-    const result = await getMyReports(next)
-    rows.value = result.items; page.value = next; total.value = result.total
-  } catch (failure) { error.value = failure instanceof Error ? failure.message : '举报列表读取失败' } finally { loading.value = false }
+    const result = await getMyReports(page.value)
+    if (current !== revision) return
+    rows.value = result.items; total.value = result.total; size.value = result.size
+    const last = Math.max(1, Math.ceil(result.total / result.size))
+    if (page.value > last) void router.replace({ query: { page: last > 1 ? String(last) : undefined } })
+  } catch (failure) { if (current === revision) error.value = failure instanceof Error ? failure.message : '举报列表读取失败' }
+  finally { if (current === revision) loading.value = false }
 }
-onMounted(() => void load())
+watch([page, () => auth.session?.userId, () => auth.session?.roles.includes('ADMIN')], () => { rows.value = []; total.value = 0; void load() }, { immediate: true })
+onBeforeUnmount(() => { revision++ })
 </script>
 <template>
-  <div class="page-container">
+  <div class="report-public-page">
     <header class="work-section-heading">
-      <h1>我的举报</h1><span class="muted">处理中举报可在详情补充证据；被处理人可对结论提出异议</span>
+      <h1>我的举报</h1>
     </header>
     <p
       v-if="error"
@@ -39,7 +58,7 @@ onMounted(() => void load())
       </button>
     </p>
     <p
-      v-if="!rows.length && !loading"
+      v-if="!rows.length && !loading && !error"
       class="muted"
     >
       还没有提交过举报。
@@ -50,7 +69,7 @@ onMounted(() => void load())
       class="report-list-item"
     >
       <div class="report-item-heading">
-        <strong>#{{ row.id }} · 举报{{ typeLabel[row.targetType] ?? row.targetType }}</strong>
+        <strong>#{{ row.id }} · 举报{{ reportTypes[row.targetType] }}</strong>
         <span
           class="report-status"
           :class="row.status === 'PENDING' ? 'pending' : 'processed'"
@@ -58,9 +77,9 @@ onMounted(() => void load())
       </div>
       <p>{{ row.targetSummary }}</p>
       <p class="muted">
-        理由：{{ row.reasonCode }}<template v-if="row.description">
+        理由：{{ reportReasons[row.reasonCode] ?? row.reasonCode }}<template v-if="row.description">
           · {{ row.description }}
-        </template><time> · 提交于 {{ new Date(row.createdAt).toLocaleString('zh-CN') }}</time>
+        </template><time> · 提交于 {{ formatTime(row.createdAt) }}</time>
       </p>
       <p
         v-if="row.status === 'PROCESSED' && row.decisionReason"
@@ -69,29 +88,25 @@ onMounted(() => void load())
         处理依据：{{ row.decisionReason }}
       </p>
       <RouterLink
-        v-if="row.targetType !== 'REVIEW'"
         class="inline-button"
-        :to="`/reports/${row.id}`"
+        :to="{ path: `${row.targetType === 'REVIEW' ? '/review-reports' : '/reports'}/${row.id}`, query: page > 1 ? { page: String(page) } : {} }"
       >
-        查看详情 / 补充材料
+        查看详情
       </RouterLink>
-      <span
-        v-else
-        class="muted"
-      >评价举报详情可在对应评价的“查询关联举报”中查看</span>
     </article>
     <WorkPagination
       :page="page"
       :total="total"
+      :size="size"
       :loading="loading"
-      @change="load"
+      label="我的举报分页"
+      @change="changePage"
     />
   </div>
 </template>
 <style scoped>
-.page-container { max-width: 860px; margin: 0 auto; padding: 24px; }
-.report-list-item { padding: 18px 0; border-bottom: 1px solid #e5dfd3; display: grid; gap: 6px; }
+.report-list-item { display: grid; gap: 6px; }
+.report-list-item p { margin: 0; overflow-wrap: anywhere; }
+.report-list-item a { justify-self: start; }
 .report-item-heading { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.report-status.pending { color: #a35a2a; }
-.report-status.processed { color: #68765d; }
 </style>

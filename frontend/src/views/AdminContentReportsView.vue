@@ -1,203 +1,312 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import AdminLayout from '@/layouts/AdminLayout.vue'
-import { decideContentReport, getAdminReports, getReport, getReportImage } from '@/api/report'
-import type { ContentReportVO, ContentReportDetailVO, ContentReportTargetType, ContentReportDecision, ReportEvidenceVO, ReviewReportHistoryEntry } from '@/types/report'
-import type { ImageVO } from '@/types/creator'
+import PrivateImage from '@/components/PrivateImage.vue'
+import ReportDecisionForm from '@/components/ReportDecisionForm.vue'
+import ReportMaterials from '@/components/ReportMaterials.vue'
+import WorkPagination from '@/components/WorkPagination.vue'
+import { decideContentReport, getAdminReports, getReport } from '@/api/report'
+import { useAuthStore } from '@/stores/auth'
+import { formatTime } from '@/utils/creator'
+import { ApiError } from '@/utils/request'
+import { reportReasons, reportTypes } from '@/utils/report'
+import type { ContentReportDecision, ContentReportDetailVO, ContentReportStatus, ContentReportTargetType, ContentReportVO } from '@/types/report'
+import '@/assets/styles/craftflow-reports.css'
 
+const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
+const statuses = ['PENDING', 'PROCESSED', 'ALL'] as const
+const types = ['ALL', ...Object.keys(reportTypes)]
+const status = computed(() => statuses.includes(route.query.status as typeof statuses[number]) ? route.query.status as ContentReportStatus | 'ALL' : 'PENDING')
+const type = computed(() => types.includes(String(route.query.type)) ? route.query.type as ContentReportTargetType | 'ALL' : 'ALL')
+const page = computed(() => Math.min(1_000_000, Math.max(1, Math.floor(Number(route.query.page)) || 1)))
+const selected = computed(() => typeof route.query.reportId === 'string' && /^\d+$/.test(route.query.reportId) ? route.query.reportId : '')
 const rows = ref<ContentReportVO[]>([])
 const detail = ref<ContentReportDetailVO>()
-const status = ref<'PENDING' | 'PROCESSED' | 'ALL'>('PENDING')
-const type = ref<ContentReportTargetType | 'ALL'>('ALL')
-const reason = ref('')
-const busy = ref(false)
-const error = ref('')
-const images = ref<Record<string, ImageVO>>({})
+const total = ref(0)
+const size = ref(20)
+const loading = ref(false)
+const loadingDetail = ref(false)
+const queueError = ref('')
+const detailError = ref('')
+const notice = ref('')
+let queueRevision = 0
+let detailRevision = 0
+const labels = computed<Record<ContentReportDecision, string>>(() => ({
+  NOT_UPHELD: '举报不成立', OFFLINE: '下架作品', HIDE: '隐藏评论', PAUSE: '暂停新业务',
+  RESTORE: detail.value?.report.targetType === 'WORK' ? '恢复作品' : '恢复评论', RESUME: '恢复新业务',
+}))
 
-const typeLabel: Record<string, string> = { WORK: '作品', COMMENT: '评论', CREATOR_PROFILE: '创作者主页', REVIEW: '评价' }
+function filter(nextStatus: string, nextType: string, nextPage = 1) {
+  void router.push({ query: { status: nextStatus, type: nextType, page: nextPage > 1 ? String(nextPage) : undefined } })
+}
 
-/** 举报队列按状态与类型筛选；详情证据图片统一签名。 */
-async function load(id?: string) {
-  busy.value = true; error.value = ''
+function choose(row: ContentReportVO) {
+  const queue = { status: status.value, type: type.value, page: String(page.value), reportId: row.id }
+  if (row.targetType === 'REVIEW') {
+    void router.push({ name: 'admin-review-reports', query: { reportId: row.id, status: status.value, fromStatus: status.value, fromType: type.value, fromPage: queue.page } })
+  } else void router.push({ query: queue })
+}
+
+async function loadQueue() {
+  const current = ++queueRevision
+  loading.value = true
+  queueError.value = ''
   try {
-    const page = await getAdminReports(status.value, type.value)
-    rows.value = page.items
-    const target = id || detail.value?.report.id || rows.value[0]?.id
-    detail.value = target ? await getReport(target) : undefined
-    if (detail.value) {
-      const ids = [...detail.value.report.imageIds, ...detail.value.evidence.flatMap(e => e.imageIds)]
-      for (const fileId of ids) if (!images.value[fileId]) images.value[fileId] = await getReportImage(fileId)
-    }
-  } catch (e) { error.value = e instanceof Error ? e.message : '举报队列读取失败' } finally { busy.value = false }
+    const result = await getAdminReports(status.value, type.value, page.value)
+    if (current !== queueRevision) return
+    rows.value = result.items
+    total.value = result.total
+    size.value = result.size
+    const last = Math.max(1, Math.ceil(result.total / result.size))
+    if (page.value > last) void router.replace({ query: { ...route.query, page: last > 1 ? String(last) : undefined } })
+  } catch (failure) { if (current === queueRevision) queueError.value = failure instanceof Error ? failure.message : '举报队列读取失败' }
+  finally { if (current === queueRevision) loading.value = false }
 }
-async function choose(row: ContentReportVO) {
-  error.value = ''
-  try { detail.value = await getReport(row.id); const ids = [...detail.value.report.imageIds, ...detail.value.evidence.flatMap(e => e.imageIds)]; for (const fileId of ids) if (!images.value[fileId]) images.value[fileId] = await getReportImage(fileId) }
-  catch (e) { error.value = e instanceof Error ? e.message : '举报详情读取失败' }
+
+async function loadDetail() {
+  const id = selected.value
+  const current = ++detailRevision
+  detailError.value = ''
+  const listingRow = rows.value.find(row => row.id === id)
+  if (!id || listingRow?.targetType === 'REVIEW') return
+  loadingDetail.value = true
+  try {
+    const result = await getReport(id)
+    if (current === detailRevision) detail.value = result
+  } catch (failure) { if (current === detailRevision) detailError.value = failure instanceof Error ? failure.message : '举报详情读取失败' }
+  finally { if (current === detailRevision) loadingDetail.value = false }
 }
-/** 按目标类型可用的处置动作：作品下架、评论隐藏、主页暂停，已处理后可更正恢复。 */
-function decisions(): { key: ContentReportDecision; label: string }[] {
-  const t = detail.value?.report.targetType
-  if (!t || t === 'REVIEW') return []
-  const pending = detail.value?.report.status === 'PENDING'
-  const actions: Record<string, { key: ContentReportDecision; label: string }> = { WORK: { key: 'OFFLINE', label: '下架作品' }, COMMENT: { key: 'HIDE', label: '隐藏评论' }, CREATOR_PROFILE: { key: 'PAUSE', label: '暂停新业务' } }
-  const restores: Record<string, { key: ContentReportDecision; label: string }> = { WORK: { key: 'RESTORE', label: '恢复作品' }, COMMENT: { key: 'RESTORE', label: '恢复评论' }, CREATOR_PROFILE: { key: 'RESUME', label: '恢复新业务' } }
-  const result: { key: ContentReportDecision; label: string }[] = [{ key: 'NOT_UPHELD', label: '举报不成立' }]
-  if (pending) result.push(actions[t])
-  else result.push(actions[t], restores[t])
-  return result
+
+function updateAfterDecision(id: string, result: ContentReportDetailVO) {
+  if (id !== selected.value) return
+  detail.value = result
+  void loadQueue()
 }
-async function decide(decision: ContentReportDecision) {
-  if (!detail.value || reason.value.trim().length < 5) return
-  busy.value = true
-  try { await decideContentReport(detail.value.report.id, decision, reason.value.trim()); reason.value = ''; await load(detail.value.report.id) }
-  catch (e) { error.value = e instanceof Error ? e.message : '举报处理失败' } finally { busy.value = false }
+
+async function decide(decision: ContentReportDecision, reason: string, expectedHistoryId: string, recovery?: string) {
+  const id = selected.value
+  const scope = detailRevision
+  try { await decideContentReport(id, decision, reason, expectedHistoryId, recovery) }
+  catch (failure) {
+    if (scope === detailRevision && failure instanceof ApiError && failure.status === 409) await Promise.all([loadDetail(), loadQueue()])
+    throw failure
+  }
+  if (scope !== detailRevision) return
+  notice.value = '处置已保存。'
+  await Promise.all([loadDetail(), loadQueue()])
 }
-function evidenceTitle(item: ReportEvidenceVO) { return item.evidenceType === 'OBJECTION' ? '处置异议' : '补充证据' }
-function historyTitle(entry: ReviewReportHistoryEntry) { return entry.action === 'CORRECT' ? '更正' : '处置' }
-onMounted(() => void load())
+
+/** 核验历史时同时比对操作者与暂停条件，避免把其他管理员的处置认作本次提交。 */
+async function verify(decision: ContentReportDecision, reason: string, previousId?: string, recovery?: string) {
+  const id = selected.value
+  const scope = detailRevision
+  const operatorId = auth.session?.userId
+  if (!operatorId) return false
+  const result = await getReport(id)
+  if (scope !== detailRevision || auth.session?.userId !== operatorId) return false
+  updateAfterDecision(id, result)
+  const found = result.history.some(entry =>
+    (!previousId || BigInt(entry.id) > BigInt(previousId))
+    && entry.operatorId === operatorId
+    && entry.reason === reason
+    && entry.detail?.decision === decision
+    && (decision !== 'PAUSE' || entry.detail.recoveryCondition === recovery),
+  )
+  if (found) notice.value = '已核对到本次处置。'
+  return found
+}
+
+watch([status, type, page, () => auth.session?.userId, () => auth.session?.roles.includes('ADMIN')], () => { rows.value = []; total.value = 0; void loadQueue() }, { immediate: true })
+watch([selected, () => auth.session?.userId, () => auth.session?.roles.includes('ADMIN')], () => {
+  detail.value = undefined; notice.value = ''; loadingDetail.value = false
+  void loadDetail()
+}, { immediate: true })
+onBeforeUnmount(() => { queueRevision++; detailRevision++ })
 </script>
+
 <template>
-  <AdminLayout
-    title="内容举报"
-    subtitle="作品、评论与创作者主页举报的统一核查与处置队列"
-  >
-    <p
-      v-if="error"
-      class="form-alert"
-      role="alert"
-    >
-      {{ error }} <button
-        class="inline-button"
-        @click="load()"
+  <AdminLayout title="内容举报">
+    <div class="report-admin-grid">
+      <aside
+        class="review-queue report-queue"
+        aria-label="举报队列"
       >
-        重新读取
-      </button>
-    </p>
-    <div class="admin-review-grid">
-      <aside class="admin-queue">
-        <h2>筛选</h2>
-        <div class="admin-filter-row">
+        <div class="report-filters">
           <label>状态<select
-            v-model="status"
+            :value="status"
             aria-label="举报状态筛选"
-            @change="load()"
-          ><option value="PENDING">待处理</option><option value="PROCESSED">已处理</option><option value="ALL">全部</option></select></label>
+            @change="filter(($event.target as HTMLSelectElement).value, type)"
+          >
+            <option value="PENDING">待处理</option><option value="PROCESSED">已处理</option><option value="ALL">全部</option>
+          </select></label>
           <label>类型<select
-            v-model="type"
+            :value="type"
             aria-label="举报类型筛选"
-            @change="load()"
-          ><option value="ALL">全部</option><option value="WORK">作品</option><option value="COMMENT">评论</option><option value="CREATOR_PROFILE">主页</option><option value="REVIEW">评价</option></select></label>
+            @change="filter(status, ($event.target as HTMLSelectElement).value)"
+          >
+            <option value="ALL">全部</option><option
+              v-for="(label, key) in reportTypes"
+              :key="key"
+              :value="key"
+            >{{ label }}</option>
+          </select></label>
         </div>
-        <h2>举报队列</h2>
-        <button
-          v-for="row in rows"
-          :key="row.id"
-          class="admin-queue-item"
-          :class="{ active: detail?.report.id === row.id }"
-          @click="choose(row)"
-        >
-          <strong>#{{ row.id }} · 举报{{ typeLabel[row.targetType] ?? row.targetType }} · {{ row.reasonCode }}</strong>
-          <span>{{ row.status === 'PENDING' ? '待处理' : row.latestResult === 'ACTION_TAKEN' ? '已处置' : '未成立' }} · {{ row.createdAt }}</span>
-          <span>{{ row.targetSummary }}</span>
-        </button>
         <p
-          v-if="!rows.length"
+          v-if="queueError"
+          class="form-alert"
+          role="alert"
+        >
+          {{ queueError }} <button
+            class="inline-button"
+            @click="loadQueue"
+          >
+            重新读取
+          </button>
+        </p>
+        <p
+          v-else-if="loading && !rows.length"
           class="muted"
+          role="status"
+        >
+          正在读取举报…
+        </p>
+        <p
+          v-else-if="!rows.length"
+          class="work-empty"
         >
           当前筛选下暂无举报。
         </p>
+        <button
+          v-for="row in rows"
+          :key="row.id"
+          type="button"
+          class="report-queue-row"
+          :aria-pressed="selected === row.id"
+          @click="choose(row)"
+        >
+          <strong>举报{{ reportTypes[row.targetType] }} · {{ reportReasons[row.reasonCode] ?? row.reasonCode }}</strong>
+          <span>{{ row.targetSummary }}</span>
+          <small>{{ row.status === 'PENDING' ? '待处理' : row.latestResult === 'ACTION_TAKEN' ? '已处置' : '未成立' }} · {{ formatTime(row.createdAt) }}</small>
+        </button>
+        <WorkPagination
+          :page="page"
+          :total="total"
+          :size="size"
+          :loading="loading"
+          label="举报分页"
+          @change="next => filter(status, type, next)"
+        />
       </aside>
-      <section
-        v-if="detail"
-        class="admin-review-detail"
-      >
-        <template v-if="detail.report.targetType === 'REVIEW'">
-          <h2>评价举报</h2>
-          <p>评价举报在评价举报页核查与处置。<RouterLink to="/admin/review-reports">前往评价举报 ↗</RouterLink></p>
-          <p>{{ detail.targetSummary }}</p>
-        </template>
-        <template v-else>
-          <h2>内容核查</h2>
-          <dl>
-            <div><dt>类型</dt><dd>{{ typeLabel[detail.report.targetType] }}</dd></div>
+      <section class="review-detail report-detail">
+        <p
+          v-if="detailError"
+          class="form-alert"
+          role="alert"
+        >
+          {{ detailError }} <button
+            class="inline-button"
+            @click="loadDetail"
+          >
+            重新读取
+          </button>
+        </p>
+        <p
+          v-else-if="loadingDetail && !detail"
+          class="muted"
+          role="status"
+        >
+          正在读取举报详情…
+        </p>
+        <template v-if="detail">
+          <header class="report-heading">
+            <h2>举报{{ reportTypes[detail.report.targetType] }} #{{ detail.report.id }}</h2>
+            <span
+              class="status-pill"
+              :data-status="detail.report.status"
+            >{{ detail.report.status === 'PENDING' ? '待处理' : '已处理' }}</span>
+          </header>
+          <p class="report-target">
+            {{ detail.targetSummary }}
+          </p>
+          <RouterLink
+            v-if="detail.report.targetType === 'WORK' && detail.targetState !== 'DRAFT' && detail.targetState !== '不可用'"
+            class="text-link"
+            :to="{ path: `/admin/works/${detail.report.targetId}`, query: { status: 'ALL' } }"
+          >查看作品审核材料</RouterLink>
+          <RouterLink
+            v-else-if="detail.report.targetType === 'CREATOR_PROFILE' && detail.ownerId"
+            class="text-link"
+            :to="`/creators/${detail.report.targetId}`"
+          >查看创作者主页</RouterLink>
+          <dl class="report-facts">
             <div><dt>目标状态</dt><dd>{{ detail.targetState }}</dd></div>
-            <div><dt>被处理人</dt><dd>{{ detail.ownerId }}</dd></div>
-            <div v-if="detail.workId">
-              <dt>关联作品</dt><dd>{{ detail.workId }}</dd>
+            <div><dt>提交时间</dt><dd>{{ formatTime(detail.report.createdAt) }}</dd></div>
+            <div v-if="detail.report.lastProcessedAt">
+              <dt>最近处置</dt><dd>{{ formatTime(detail.report.lastProcessedAt) }}</dd>
+            </div>
+            <div v-if="detail.ownerId">
+              <dt>被处理人</dt><dd>{{ detail.ownerId }}</dd>
             </div>
           </dl>
-          <blockquote>{{ detail.targetSummary }}</blockquote>
-          <h3>举报说明与证据</h3>
-          <p>{{ detail.report.description || '举报人仅附图片证据' }}</p>
-          <div class="review-image-row">
-            <img
-              v-for="id in detail.report.imageIds"
-              :key="id"
-              :src="images[id]?.url"
-              alt="举报证据"
-            >
-          </div>
-          <article
-            v-for="item in detail.evidence"
-            :key="item.id"
-          >
-            <h4>{{ evidenceTitle(item) }} · {{ item.submitterId }}</h4>
-            <p>{{ item.content }}</p>
-            <div class="review-image-row">
-              <img
-                v-for="id in item.imageIds"
-                :key="id"
-                :src="images[id]?.url"
-                alt="补充材料"
-              >
-            </div>
-          </article>
           <section
-            v-if="detail.history.length"
+            v-if="detail.originalComment || detail.originalCommentImageIds?.length"
+            aria-labelledby="original-comment"
           >
-            <h3>处置历史</h3>
-            <ol>
-              <li
-                v-for="entry in detail.history"
-                :key="entry.id"
-              >
-                <strong>{{ historyTitle(entry) }} · {{ entry.afterStatus }}</strong>
-                <p>{{ entry.reason }}</p>
-                <small>{{ entry.createdAt }} · 管理员 {{ entry.operatorId }}</small>
-              </li>
-            </ol>
-          </section>
-          <label>处理依据<textarea
-            v-model="reason"
-            maxlength="500"
-            minlength="5"
-          /></label>
-          <div class="admin-decision-actions">
-            <button
-              v-for="option in decisions()"
-              :key="option.key"
-              :disabled="busy || reason.trim().length < 5"
-              @click="decide(option.key)"
+            <h2 id="original-comment">
+              原评论
+            </h2>
+            <p
+              v-if="detail.originalComment"
+              class="report-target"
             >
-              {{ option.label }}
-            </button>
-          </div>
-          <p class="field-help">
-            处置理由至少5个字；已处理举报可通过更正按钮恢复内容或新业务。
+              {{ detail.originalComment }}
+            </p>
+            <div
+              v-if="detail.originalCommentImageIds?.length"
+              class="report-review-images"
+            >
+              <PrivateImage
+                v-for="(imageId, index) in detail.originalCommentImageIds"
+                :key="imageId"
+                :image-id="imageId"
+                :admin-report-id="detail.report.id"
+                :label="`原评论图片 ${index + 1}`"
+                scope="report"
+              />
+            </div>
+          </section>
+          <ReportMaterials
+            :report="detail.report"
+            :evidence="detail.evidence"
+            :history="detail.history"
+            scope="report"
+            admin
+          />
+          <p
+            v-if="notice"
+            role="status"
+          >
+            {{ notice }}
           </p>
+          <ReportDecisionForm
+            :key="detail.report.id"
+            :actions="detail.allowedDecisions"
+            :labels="labels"
+            :submit-decision="decide"
+            :verify-decision="verify"
+            :last-history-id="detail.history.at(-1)?.id"
+          />
         </template>
+        <p
+          v-else-if="!detailError && !loadingDetail"
+          class="work-empty"
+        >
+          请选择举报查看详情。
+        </p>
       </section>
-      <p
-        v-else
-        class="admin-review-placeholder"
-      >
-        暂无内容举报。
-      </p>
     </div>
   </AdminLayout>
 </template>
-<style scoped>
-.admin-filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
-.admin-filter-row select { padding: 4px 8px; }
-</style>

@@ -104,15 +104,21 @@ public class NotificationServiceImpl implements NotificationService {
         afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(n.getId()))));publishUnread(recipientId);});return null;
     });}
     @Transactional(propagation=Propagation.MANDATORY)
-    public void workChanged(Long recipientId,Long workId,Long submittedVersion,String eventType,String decision,String reason){BusinessLog.run(LoggerFactory.getLogger(getClass()),"作品状态通知保存",recipientId,()->{
-        var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType(eventType);n.setEventKey(eventType+":"+workId+":"+submittedVersion);
+    public void workChanged(Long recipientId,Long workId,Long submittedVersion,String eventType,String decision,String reason){
+        workChanged(recipientId,workId,submittedVersion,eventType,decision,reason,null,null);
+    }
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void workChanged(Long recipientId,Long workId,Long submittedVersion,String eventType,String decision,String reason,Long stateVersion,Long reportId){BusinessLog.run(LoggerFactory.getLogger(getClass()),"作品状态通知保存",recipientId,()->{
+        var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType(eventType);n.setEventKey(eventType+":"+workId+(stateVersion==null?":"+submittedVersion:":STATE:"+stateVersion));
         boolean offline="WORK_OFFLINED".equals(eventType);boolean approved="APPROVED".equals(decision);
         n.setTitle(offline?"作品已下架":approved?"作品审核已通过":"作品审核未通过");
         String content=offline?"管理员已下架作品，请查看原因。":approved?"作品已上架，可在作品管理中查看。":"作品需补正，请查看审核原因。";
         // 下架和驳回均携带具体原因，独立拼接避免嵌套条件表达式遗漏分支。
         if((offline||!approved)&&reason!=null&&!reason.isBlank())content+="原因："+reason;
         n.setContent(content);
-        n.setBusinessReference(json.writeValueAsString(Map.of("type","WORK","id",workId.toString(),"version",submittedVersion.toString())));notices.insert(n);
+        n.setBusinessReference(json.writeValueAsString(reportId==null
+                ? Map.of("type","WORK","id",workId.toString(),"version",submittedVersion.toString())
+                : Map.of("type","REPORT","id",reportId.toString())));notices.insert(n);
         afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(n.getId()))));publishUnread(recipientId);});return null;
     });}
     @Transactional(propagation=Propagation.MANDATORY)
@@ -122,22 +128,27 @@ public class NotificationServiceImpl implements NotificationService {
         afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(n.getId()))));publishUnread(recipientId);});return null;
     });}
     @Transactional(propagation=Propagation.MANDATORY)
-    public void contentReportDecided(Long recipientId,Long reportId,String decision,String title,String content){BusinessLog.run(LoggerFactory.getLogger(getClass()),"举报处置通知保存",recipientId,()->{
-        // 处置结论参与去重键：更正产生不同结论时仍能再次通知相关用户。
-        String key="REPORT_PROCESSED:"+reportId+":"+decision;if(notices.event(recipientId,key)!=null)return null;
-        var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType("REPORT_PROCESSED");n.setEventKey(key);n.setTitle(title);n.setContent(content);
-        n.setBusinessReference(json.writeValueAsString(Map.of("type","REPORT","id",reportId.toString())));notices.insert(n);
+    public void reportDecided(Long recipientId,Long reportId,Long eventId,boolean review,String title,String content){BusinessLog.run(LoggerFactory.getLogger(getClass()),"举报处置通知保存",recipientId,()->{
+        String type=review?"REVIEW_REPORT":"REPORT";
+        String eventType=type+"_PROCESSED";
+        String key=eventType+":LOG:"+eventId;if(notices.event(recipientId,key)!=null)return null;
+        var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType(eventType);n.setEventKey(key);n.setTitle(title);n.setContent(content);
+        n.setBusinessReference(json.writeValueAsString(Map.of("type",type,"id",reportId.toString())));notices.insert(n);
         afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(n.getId()))));publishUnread(recipientId);});return null;
     });}
     @Transactional(propagation=Propagation.MANDATORY)
-    public void accountBusinessChanged(Long recipientId,boolean paused,String reason){BusinessLog.run(LoggerFactory.getLogger(getClass()),"账号处置通知保存",recipientId,()->{
+    public void accountBusinessChanged(Long recipientId,boolean paused,String reason){
+        accountBusinessChanged(recipientId,paused,reason,null);
+    }
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void accountBusinessChanged(Long recipientId,boolean paused,String reason,Long reportId){BusinessLog.run(LoggerFactory.getLogger(getClass()),"账号处置通知保存",recipientId,()->{
         // 仅在状态真实变化时调用；键携带当前时间戳避免后续暂停-恢复周期被历史事件去重。
         String eventType=paused?"ACCOUNT_BUSINESS_PAUSE":"ACCOUNT_BUSINESS_RESUME";
         String key=eventType+":"+recipientId+":"+System.currentTimeMillis();
         var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType(eventType);n.setEventKey(key);
         n.setTitle(paused?"账号新业务已被暂停":"账号新业务已恢复");
         n.setContent(paused?"管理员已暂停你的新业务资格，已有订单的履约、售后与结算不受影响。":"管理员已恢复你的新业务资格，可以继续发布、报价和接单。"+(reason==null||reason.isBlank()?"":"依据："+reason));
-        n.setBusinessReference(json.writeValueAsString(Map.of("type","USER","id",recipientId.toString())));notices.insert(n);
+        n.setBusinessReference(json.writeValueAsString(reportId==null?Map.of("type","USER","id",recipientId.toString()):Map.of("type","REPORT","id",reportId.toString())));notices.insert(n);
         afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(n.getId()))));publishUnread(recipientId);});return null;
     });}
     public PageVO<NotificationVO> list(Long userId,int page,int size){return BusinessLog.run(LoggerFactory.getLogger(getClass()),"本人通知查询",userId,()->{

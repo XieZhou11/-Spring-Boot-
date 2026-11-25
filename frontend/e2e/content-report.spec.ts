@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures'
 import { api, origin } from './environment'
-import { mutate, publishWork, register } from './interaction-helpers'
+import { image, mutate, publishWork, register } from './interaction-helpers'
 
 test.use({ storageMode: 'receiver', databaseGroup: 'content-reports', actionTimeout: 15_000 })
 
@@ -30,10 +30,13 @@ test('举报入口提交、我的举报列表与后台隐藏评论处置', async
     await expect(page.getByText('举报已提交，管理员将核查处理', { exact: false })).toBeVisible()
 
     // 创作者发表评论后，访客举报该评论。
+    const comment = '感谢关注，后续会分享更多制作过程的细节。关于选材、切割和打磨的完整记录会在完成后统一整理，并附上本轮工序照片，供大家对照讨论。照片中的半成品仍处于打磨阶段，请以最终成品为准。'
     await creator.goto(`/works/${workId}`)
-    await creator.getByLabel('评论内容', { exact: true }).fill('感谢关注，后续会分享更多制作过程的细节。')
+    await creator.getByLabel('评论内容', { exact: true }).fill(comment)
+    await creator.getByLabel('评论图片', { exact: true }).setInputFiles({ name: 'report-target.png', mimeType: 'image/png', buffer: image })
+    await expect(creator.getByRole('img', { name: '待发布评论图片 1', exact: true })).toBeVisible()
     await creator.getByRole('button', { name: '发表评论', exact: true }).click()
-    await expect(creator.getByText('感谢关注，后续会分享更多制作过程的细节。', { exact: true })).toBeVisible()
+    await expect(creator.getByText(comment, { exact: true })).toBeVisible()
     await page.reload()
     await page.getByRole('button', { name: '举报评论', exact: true }).click()
     await page.getByLabel('说明', { exact: true }).fill('这条评论包含引导站外交易的内容。')
@@ -57,9 +60,20 @@ test('举报入口提交、我的举报列表与后台隐藏评论处置', async
     await expect(page.getByRole('heading', { name: /举报 #\d+/ })).toBeVisible()
     await expect(page.getByText('处理中', { exact: true })).toBeVisible()
 
-    // 管理员在内容举报队列隐藏违规评论。
+    // 管理员可以从队列打开目标作品，核对原评论全文和通过举报范围签名的图片。
     await admin.goto('/admin/content-reports')
+    await admin.getByRole('button', { name: /举报作品/ }).click()
+    await expect(admin.getByRole('link', { name: '查看作品审核材料' })).toHaveAttribute('href', `/admin/works/${workId}?status=ALL`)
+    const originalImageRead = admin.waitForResponse(response => /\/api\/admin\/reports\/\d+\/comment-images\/\d+$/.test(response.url()))
     await admin.getByRole('button', { name: /举报评论/ }).click()
+    const original = admin.getByRole('region', { name: '原评论' })
+    await expect(original.getByText(comment, { exact: true })).toBeVisible()
+    const originalImage = original.getByRole('img', { name: '原评论图片 1' })
+    await expect(originalImage).toBeVisible()
+    await expect.poll(() => originalImage.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBeGreaterThan(0)
+    const signed = await originalImageRead
+    expect(signed.status()).toBe(200)
+    expect((await page.request.get(signed.url())).status()).toBe(404)
     await admin.getByLabel('处理依据', { exact: true }).fill('评论内容与站外交易引导相关，予以隐藏。')
     await admin.getByRole('button', { name: '隐藏评论', exact: true }).click()
     await expect(admin.getByText('HIDDEN', { exact: true })).toBeVisible()
@@ -71,16 +85,23 @@ test('举报入口提交、我的举报列表与后台隐藏评论处置', async
     // 评论隐藏后公开列表不再展示，作品评论区计数归零。
     await page.goto(`/works/${workId}`)
     await expect(page.getByText('0 评论', { exact: false })).toBeVisible()
-    await expect(page.getByText('感谢关注，后续会分享更多制作过程的细节。', { exact: true })).toHaveCount(0)
+    await expect(page.getByText(comment, { exact: true })).toHaveCount(0)
 
     // 管理员暂停被举报主页的新业务，创作者收到持久化系统通知。
     await admin.goto('/admin/content-reports')
     await admin.getByRole('button', { name: /创作者主页/ }).click()
+    await expect(admin.getByRole('link', { name: '查看创作者主页' })).toHaveAttribute('href', `/creators/${creatorId}`)
     await admin.getByLabel('处理依据', { exact: true }).fill('主页宣传与交付记录不符，暂停新业务。')
+    await expect(admin.getByRole('button', { name: '暂停新业务', exact: true })).toBeDisabled()
+    await admin.getByLabel('恢复条件', { exact: true }).fill('提交更新后的真实履约证明。')
     await admin.getByRole('button', { name: '暂停新业务', exact: true }).click()
     await expect(admin.getByText('PAUSED', { exact: true })).toBeVisible()
     await creator.goto('/messages/notifications')
-    await expect(creator.getByText('账号新业务已被暂停', { exact: false })).toBeVisible()
+    const pauseNotification = creator.locator('.notification-card').filter({ hasText: '账号新业务已被暂停' })
+    await expect(pauseNotification).toBeVisible()
+    await pauseNotification.getByRole('button', { name: '查看举报', exact: true }).click()
+    await expect(creator).toHaveURL(/\/reports\/\d+$/)
+    await expect(creator.getByRole('button', { name: '对处置结论提出异议' })).toBeVisible()
     await page.goto(`/creators/${creatorId}`)
     await expect(page.getByText('创作者暂时停止承接新业务', { exact: true })).toBeVisible()
   } finally {

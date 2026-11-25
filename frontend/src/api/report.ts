@@ -30,10 +30,12 @@ export const getMyReports = (page = 1) => get<PageVO<ContentReportVO>>('/me/repo
 export const getAdminReports = (status: ContentReportStatus | 'ALL' = 'PENDING', type: ContentReportTargetType | 'ALL' = 'ALL', page = 1) =>
   get<PageVO<ContentReportVO>>('/admin/reports', { status, type, page })
 /** 管理员处置或更正。 */
-export async function decideContentReport(id: string, decision: ContentReportDecision, reason: string) {
-  return (await request.put<ApiResult<ContentReportVO>>(`/admin/reports/${id}/decision`, { decision, reason })).data.data
+export async function decideContentReport(id: string, decision: ContentReportDecision, reason: string, expectedHistoryId: string, recoveryCondition?: string) {
+  return (await request.put<ApiResult<ContentReportVO>>(`/admin/reports/${id}/decision`, { decision, reason, expectedHistoryId, recoveryCondition })).data.data
 }
 /** 举报证据图片签名。 */
 export const getReportImage = (id: string) => get<ImageVO>(`/report-images/${id}`)
+/** 管理员读取举报所关联的原评论图片。 */
+export const getReportedCommentImage = (reportId: string, id: string) => get<ImageVO>(`/admin/reports/${reportId}/comment-images/${id}`)
 
 export type { ReviewReportVO }

@@ -16,6 +16,7 @@ const router = createRouter({
     { path: '/account/following', component: () => import('@/views/SavedInteractionsView.vue'), meta: { requiresAuth: true, title: '关注创作者' } },
     { path: '/me/reports', component: () => import('@/views/MyReportsView.vue'), meta: { requiresAuth: true, title: '我的举报' } },
     { path: '/reports/:id', component: () => import('@/views/ContentReportDetailView.vue'), meta: { requiresAuth: true, title: '举报详情' } },
+    { path: '/review-reports/:id', component: () => import('@/views/ReviewReportDetailView.vue'), meta: { requiresAuth: true, title: '评价举报详情' } },
     { path: '/works/:id', component: () => import('@/views/WorkDetailView.vue'), meta: { requiresAuth: true, title: '作品详情' } },
     { path: '/creators/:id', component: () => import('@/views/CreatorPublicView.vue'), meta: { requiresAuth: true, title: '创作者主页' } },
     { path: '/requests', component: () => import('@/views/CustomRequestsView.vue'), props: { scope: 'hall' }, meta: { requiresAuth: true, requiresCreator: true, title: '需求大厅' } },

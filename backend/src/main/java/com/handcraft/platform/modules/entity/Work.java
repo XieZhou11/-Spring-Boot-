@@ -58,4 +58,8 @@ public class Work {
     private LocalDateTime createdAt;
     /** 最后修改时间。 */
     private LocalDateTime updatedAt;
+    /** 后台查询专用的已提交或已公开材料快照。 */
+    private String adminSnapshot;
+    /** 后台最近可见材料或处置的修改时间。 */
+    private LocalDateTime adminUpdatedAt;
 }

@@ -1,4 +1,5 @@
 import type { ImageVO, PageVO } from './creator'
+import type { ReportEvidenceVO, ReviewReportDecision, ReviewReportHistoryEntry } from './report'
 
 export interface OrderReviewVO {
   id: string | null
@@ -43,8 +44,12 @@ export interface ReviewReportDetailVO {
   conversationId: string | null
   buyerId: string
   creatorId: string
-  evidence: { id: string; submitterId: string; evidenceType: string; content: string | null; imageIds: string[]; createdAt: string }[]
+  evidence: ReportEvidenceVO[]
   messages: { id: string; conversationId: string; seqNo: string; senderId: string; content: string | null; imageIds: string[]; createdAt: string; referencedNodeCode: string | null }[]
-  history: { id: string; operatorId: string | null; action: string; beforeStatus: string | null; afterStatus: string | null; reason: string | null; detail: Record<string, unknown>; createdAt: string }[]
+  history: ReviewReportHistoryEntry[]
+  targetState: string
+  allowedDecisions: ReviewReportDecision[]
+  canSupplement: boolean
+  canObjection: boolean
 }
 export type ReviewPage<T> = PageVO<T>

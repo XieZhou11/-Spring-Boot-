@@ -34,10 +34,27 @@ public interface OrderReviewMapper {
     @Select("SELECT * FROM report_evidence WHERE report_id=#{reportId} ORDER BY id") List<ReviewReportEvidence> evidence(Long reportId);
     @Select("SELECT reason FROM operation_log WHERE target_type='REVIEW_REPORT' AND target_id=#{id} AND action IN ('DECIDE','CORRECT') ORDER BY id DESC LIMIT 1") String decisionReason(Long id);
     @Select("SELECT id,operator_id,operator_type,action,before_status,after_status,reason,detail,created_at FROM operation_log WHERE target_type='REVIEW_REPORT' AND target_id=#{id} AND action IN ('DECIDE','CORRECT') ORDER BY id") List<com.handcraft.platform.modules.entity.WorkOperation> reportHistory(Long id);
-    @Select("SELECT COALESCE(JSON_UNQUOTE(JSON_EXTRACT(detail,'$.originalModerationStatus')),JSON_UNQUOTE(JSON_EXTRACT(detail,'$.beforeModerationStatus'))) FROM operation_log WHERE target_type='REVIEW_REPORT' AND target_id=#{id} AND action IN ('DECIDE','CORRECT') ORDER BY id LIMIT 1") String originalModerationStatus(Long id);
-    @Select("SELECT COUNT(*) FROM operation_log WHERE target_type='REVIEW_REPORT' AND target_id=#{id} AND action IN ('DECIDE','CORRECT') AND JSON_UNQUOTE(JSON_EXTRACT(detail,'$.decision')) IN ('HIDE','DELETE')") long hasModerationAction(Long id);
+    /** 从同一评价的实际治理记录识别当前生效的举报及其恢复范围。 */
+    @Select("""
+        SELECT l.target_id AS reportId,
+               JSON_UNQUOTE(JSON_EXTRACT(l.detail,'$.decision')) AS decision,
+               JSON_UNQUOTE(JSON_EXTRACT(l.detail,'$.beforeModerationStatus')) AS beforeStatus,
+               JSON_UNQUOTE(JSON_EXTRACT(l.detail,'$.moderationStatus')) AS afterStatus
+        FROM report r JOIN operation_log l ON l.target_id=r.id AND l.target_type='REVIEW_REPORT'
+        WHERE r.target_type='REVIEW' AND r.target_id=#{reviewId} AND l.action IN ('DECIDE','CORRECT')
+          AND JSON_UNQUOTE(JSON_EXTRACT(l.detail,'$.decision')) IN ('HIDE','DELETE','RESTORE')
+        ORDER BY l.id
+        """)
+    List<ModerationChange> moderationChanges(Long reviewId);
+
+    record ModerationChange(
+            /** 处置所属举报。 */ Long reportId,
+            /** 隐藏、删除或恢复。 */ String decision,
+            /** 操作前的评价状态。 */ String beforeStatus,
+            /** 操作后的评价状态。 */ String afterStatus) {}
+    @Select("SELECT id FROM operation_log WHERE target_type='REVIEW_REPORT' AND target_id=#{id} AND action IN ('DECIDE','CORRECT') ORDER BY id DESC LIMIT 1") Long decisionEventId(Long id);
     @Select("SELECT o.*,c.id AS conversation_id FROM order_review r JOIN trade_order o ON o.id=r.order_id LEFT JOIN conversation c ON c.order_id=o.id WHERE r.id=#{reviewId}") java.util.Map<String,Object> orderAndConversation(Long reviewId);
-    @Select("SELECT (SELECT COUNT(*) FROM report WHERE target_type='REVIEW' AND JSON_CONTAINS(image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))) AND (#{admin}=1 OR reporter_id=#{userId})) + (SELECT COUNT(*) FROM report_evidence e JOIN report r ON r.id=e.report_id WHERE r.target_type='REVIEW' AND JSON_CONTAINS(e.image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))) AND (#{admin}=1 OR r.reporter_id=#{userId} OR EXISTS (SELECT 1 FROM order_review rv WHERE rv.id=r.target_id AND (rv.buyer_id=#{userId} OR rv.creator_id=#{userId}))))") int canReadReportImage(@Param("userId")Long userId,@Param("fileId")Long fileId,@Param("admin")boolean admin);
+    @Select("SELECT COUNT(*) FROM report r JOIN order_review rv ON rv.id=r.target_id WHERE r.target_type='REVIEW' AND (JSON_CONTAINS(r.image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))) OR EXISTS(SELECT 1 FROM report_evidence e WHERE e.report_id=r.id AND JSON_CONTAINS(e.image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))))) AND (#{admin}=1 OR r.reporter_id=#{userId} OR rv.buyer_id=#{userId} OR rv.creator_id=#{userId})") int canReadReportImage(@Param("userId")Long userId,@Param("fileId")Long fileId,@Param("admin")boolean admin);
     @Select("SELECT COUNT(*) FROM order_review WHERE JSON_CONTAINS(image_ids,JSON_QUOTE(CAST(#{id} AS CHAR)))") int imageReferences(Long id);
     @Select("SELECT COUNT(*) FROM order_review r JOIN trade_order o ON o.id=r.order_id WHERE r.moderation_status='VISIBLE' AND o.status<>'REFUNDED' AND JSON_CONTAINS(r.image_ids,JSON_QUOTE(CAST(#{id} AS CHAR)))") int publicImageReferences(Long id);
     @Select("SELECT COUNT(*) FROM order_review r JOIN trade_order o ON o.id=r.order_id WHERE JSON_CONTAINS(r.image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))) AND ((r.moderation_status='VISIBLE' AND o.status<>'REFUNDED') OR #{admin}=1 OR r.buyer_id=#{userId} OR r.creator_id=#{userId})") int canReadReviewImage(@Param("userId")Long userId,@Param("fileId")Long fileId,@Param("admin")boolean admin);

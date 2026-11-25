@@ -84,7 +84,10 @@ public class OrderReviewServiceImpl implements OrderReviewService {
         var evidence=reviews.evidence(reportId).stream().map(e->new ReportEvidenceVO(e.getId().toString(),e.getSubmitterId().toString(),e.getEvidenceType(),e.getContent(),ids(e.getImageIds()),time(e.getCreatedAt()))).toList();
         boolean isAdmin=actor.isAdmin();var messages=new ArrayList<ChatMessageVO>();if(isAdmin&&convo!=null){Long conversationId=((Number)convo).longValue();for(var m:conversations.messages(conversationId,null,0L,100))messages.add(new ChatMessageVO(m.getId().toString(),conversationId.toString(),m.getSeqNo().toString(),m.getSenderId().toString(),m.getClientMessageKey(),m.getContent(),ids(m.getImageIds()),time(m.getCreatedAt()),m.getReferencedNodeId()==null?null:m.getReferencedNodeId().toString(),m.getReferencedNodeCode()));}
         var history=reviews.reportHistory(reportId).stream().map(h->new ReviewReportHistoryVO(h.getId().toString(),text(h.getOperatorId()),h.getAction(),h.getBeforeStatus(),h.getAfterStatus(),h.getReason(),map(h.getDetail()),time(h.getCreatedAt()))).toList();
-        return new ReviewReportDetailVO(reportView(report),view(review,order,userId),order.getId().toString(),order.getOrderNo(),convo==null?null:convo.toString(),order.getBuyerId().toString(),order.getCreatorId().toString(),evidence,messages,history);
+        boolean canSupplement=userId.equals(report.getReporterId())&&"PENDING".equals(report.getStatus());
+        boolean canObjection="PROCESSED".equals(report.getStatus())&&(userId.equals(review.getBuyerId())||userId.equals(review.getCreatorId()));
+        var decisions=isAdmin?allowedDecisions(review.getModerationStatus(),restorationStatus(report,review)):List.<String>of();
+        return new ReviewReportDetailVO(reportView(report),view(review,order,userId),order.getId().toString(),order.getOrderNo(),convo==null?null:convo.toString(),order.getBuyerId().toString(),order.getCreatorId().toString(),evidence,messages,history,review.getModerationStatus(),decisions,canSupplement,canObjection);
     });}
 
     @Override @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
@@ -101,25 +104,81 @@ public class OrderReviewServiceImpl implements OrderReviewService {
     });}
 
     @Override public PageVO<ReviewReportVO> myReports(Long userId,int page,int size){return BusinessLog.run(LOG,"本人评价举报查询",userId,()->{account(userId);page(page,size);var list=reviews.reporterReports(userId,(page-1)*size,size).stream().map(this::reportView).toList();return new PageVO<>(list,reviews.reporterReportCount(userId),page,size);});}
-    @Override public List<ReviewReportVO> reviewReports(Long userId,Long reviewId){return BusinessLog.run(LOG,"评价关联举报查询",userId,()->{var actor=account(userId);var review=reviews.find(reviewId);if(review==null||!actor.isAdmin()&&!userId.equals(review.getBuyerId())&&!userId.equals(review.getCreatorId())&&reviews.hasReported(userId,reviewId)==0)throw missing();return reviews.reviewReports(reviewId).stream().map(this::reportView).toList();});}
+    @Override public List<ReviewReportVO> reviewReports(Long userId,Long reviewId){return BusinessLog.run(LOG,"评价关联举报查询",userId,()->{
+        var actor=account(userId);
+        var review=reviews.find(reviewId);
+        if(review==null)throw missing();
+        boolean related=actor.isAdmin()||userId.equals(review.getBuyerId())||userId.equals(review.getCreatorId());
+        if(!related&&reviews.hasReported(userId,reviewId)==0)throw missing();
+        return reviews.reviewReports(reviewId).stream().filter(r->related||userId.equals(r.getReporterId())).map(this::reportView).toList();
+    });}
     @Override public PageVO<ReviewReportVO> adminReports(Long adminId,String status,int page,int size){return BusinessLog.run(LOG,"管理员评价举报队列查询",adminId,()->{admin(adminId);page(page,size);if(!Set.of("PENDING","PROCESSED","ALL").contains(status))throw invalid("举报状态无效");var list=reviews.adminReports(status,(page-1)*size,size).stream().map(this::reportView).toList();return new PageVO<>(list,reviews.adminReportCount(status),page,size);});}
 
     @Override @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
     public ReviewReportVO decide(Long adminId,Long reportId,AdminReviewReportDecisionDTO input){return BusinessLog.run(LOG,"管理员评价举报处置",adminId,()->{
         admin(adminId);var report=reviews.report(reportId);if(report==null||!"REVIEW".equals(report.getTargetType()))throw missing();var initial=reviews.find(report.getTargetId());if(initial==null)throw missing();lockUsers(adminId,initial.getBuyerId(),initial.getCreatorId());
         var review=reviews.lock(report.getTargetId());var locked=reviews.lockReport(reportId);boolean correction=locked!=null&&"PROCESSED".equals(locked.getStatus());
-        if(locked==null||correction&&!Set.of("RESTORE","HIDE","DELETE","NOT_UPHELD").contains(input.getDecision())||!correction&&(!"PENDING".equals(locked.getStatus())||"RESTORE".equals(input.getDecision())))throw conflict("举报已处理或结论不适用于当前状态");
-        if("RESTORE".equals(input.getDecision())&&reviews.hasModerationAction(reportId)==0)throw conflict("本举报未产生隐藏或删除，不能通过更正恢复评价");
-        String original=reviews.originalModerationStatus(reportId);if(original==null)original=review.getModerationStatus();String status=switch(input.getDecision()){case "HIDE"->"HIDDEN";case "DELETE"->"DELETED";case "RESTORE"->original;default->review.getModerationStatus();};
-        if(Set.of("HIDE","DELETE","RESTORE").contains(input.getDecision()))reviews.moderate(review.getId(),status);
-        String result="NOT_UPHELD".equals(input.getDecision())?"NOT_UPHELD":"ACTION_TAKEN";LocalDateTime now=now();
+        if(input.getExpectedHistoryId()!=null&&!input.getExpectedHistoryId().equals(Objects.requireNonNullElse(reviews.decisionEventId(reportId),0L))){
+            throw conflict("评价举报处置历史已更新，请刷新后复核");
+        }
+        String decision=input.getDecision();
+        String restoreTo=locked==null?null:restorationStatus(locked,review);
+        String currentStatus=review.getModerationStatus();
+        if(locked==null||!allowedDecisions(currentStatus,restoreTo).contains(decision))throw conflict("当前状态不支持该处置，请刷新后重试");
+        String reason=input.getReason().strip();
+        if(reason.isBlank())throw invalid("请填写处理依据");
+        String status=switch(decision){case "HIDE"->"HIDDEN";case "DELETE"->"DELETED";case "RESTORE"->restoreTo;default->currentStatus;};
+        if(!status.equals(currentStatus))reviews.moderate(review.getId(),status);
+        String result="NOT_UPHELD".equals(decision)?"NOT_UPHELD":"ACTION_TAKEN";LocalDateTime now=now();
         if(correction)reviews.correctReport(reportId,result,adminId,now);else reviews.decideReport(reportId,result,adminId,now);
-        logs.record(adminId,true,"REVIEW_REPORT",reportId,correction?"CORRECT":"DECIDE",locked.getLatestResult(),result,input.getReason(),Map.of("reviewId",review.getId().toString(),"decision",input.getDecision(),"beforeModerationStatus",review.getModerationStatus(),"originalModerationStatus",original,"moderationStatus",status));
-        notifications.tradeChanged(locked.getReporterId(),"REVIEW_REPORT_PROCESSED","REVIEW_REPORT",reportId,null);
-        notifications.tradeChanged(review.getBuyerId(),"REVIEW_REPORT_PROCESSED","REVIEW_REPORT",reportId,null);
-        if(!review.getCreatorId().equals(review.getBuyerId()))notifications.tradeChanged(review.getCreatorId(),"REVIEW_REPORT_PROCESSED","REVIEW_REPORT",reportId,null);
-        LOG.info("评价举报处置已提交：reportId={}, reviewId={}, decision={}",reportId,review.getId(),input.getDecision());return reportView(reviews.report(reportId));
+        logs.record(adminId,true,"REVIEW_REPORT",reportId,correction?"CORRECT":"DECIDE",locked.getLatestResult(),result,reason,Map.of("reviewId",review.getId().toString(),"decision",decision,"beforeModerationStatus",currentStatus,"originalModerationStatus",Objects.requireNonNullElse(restoreTo,currentStatus),"moderationStatus",status));
+        Long eventId=reviews.decisionEventId(reportId);
+        String content=switch(decision){
+            case "HIDE"->"管理员已隐藏相关评价，可查看举报详情。";
+            case "DELETE"->"管理员已删除相关评价，可查看举报详情。";
+            case "RESTORE"->"VISIBLE".equals(status)?"管理员已更正处置并恢复评价，可查看举报详情。":"管理员已撤销本次处置，评价仍有其他生效的处置。";
+            default->"管理员核查后判定举报不成立，可查看举报详情。";
+        };
+        for(Long recipient:new LinkedHashSet<>(List.of(locked.getReporterId(),review.getBuyerId(),review.getCreatorId()))){
+            notifications.reportDecided(recipient,reportId,eventId,true,"评价举报已处理",content);
+        }
+        return reportView(reviews.report(reportId));
     });}
+
+    private List<String> allowedDecisions(String current,String restoreTo){
+        var allowed=new ArrayList<String>();
+        allowed.add("NOT_UPHELD");
+        if("VISIBLE".equals(current))allowed.add("HIDE");
+        if(!"DELETED".equals(current))allowed.add("DELETE");
+        if(restoreTo!=null)allowed.add("RESTORE");
+        return allowed;
+    }
+
+    /** 同一举报连续改变状态时归为一次处置，恢复后保留更早的其他举报处置。 */
+    private String restorationStatus(ReviewReport report,OrderReview review){
+        if(!"PROCESSED".equals(report.getStatus()))return null;
+        var active=new ArrayDeque<OrderReviewMapper.ModerationChange>();
+        for(var change:reviews.moderationChanges(review.getId())){
+            if(change.beforeStatus()==null||change.afterStatus()==null||change.beforeStatus().equals(change.afterStatus()))continue;
+            var previous=active.peekLast();
+            if(previous!=null&&!previous.afterStatus().equals(change.beforeStatus())){
+                active.clear();
+                previous=null;
+            }
+            if("RESTORE".equals(change.decision())){
+                // 以历史上实际恢复到的状态为准，兼容已有处置记录。
+                while(!active.isEmpty()&&!active.peekLast().afterStatus().equals(change.afterStatus()))active.removeLast();
+            }else if(previous!=null&&previous.reportId().equals(change.reportId())){
+                active.removeLast();
+                active.addLast(new OrderReviewMapper.ModerationChange(change.reportId(),change.decision(),previous.beforeStatus(),change.afterStatus()));
+            }else{
+                active.addLast(change);
+            }
+        }
+        var latest=active.peekLast();
+        if(latest==null||!latest.reportId().equals(report.getId())||!latest.afterStatus().equals(review.getModerationStatus()))return null;
+        return latest.beforeStatus();
+    }
 
     @Override public ImageVO image(Long userId,Long fileId){return images.viewReview(userId,fileId);}
     private OrderReviewVO view(OrderReview r,TradeOrder o,Long user){var viewer=users.findById(user);boolean admin=viewer!=null&&viewer.isAdmin();boolean buyer=user.equals(o.getBuyerId());LocalDateTime deadline=o.getOriginalCompletedAt()==null?null:o.getOriginalCompletedAt().plusDays(7);boolean canCreate=buyer&&r==null&&deadline!=null&&"COMPLETED".equals(o.getStatus())&&now().isBefore(deadline);

@@ -116,7 +116,6 @@ onBeforeUnmount(() => {
 <template>
   <AdminLayout
     title="资金记录"
-    presentation="craftflow"
   >
     <section
       class="cf-settlement cf-settlement-card"

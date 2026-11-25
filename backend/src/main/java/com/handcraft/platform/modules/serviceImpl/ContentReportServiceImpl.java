@@ -76,7 +76,10 @@ public class ContentReportServiceImpl implements ContentReportService {
         var history=reports.reportHistory(reportId).stream().map(h->new ReviewReportHistoryVO(h.getId().toString(),text(h.getOperatorId()),h.getAction(),h.getBeforeStatus(),h.getAfterStatus(),h.getReason(),map(h.getDetail()),time(h.getCreatedAt()))).toList();
         boolean canSupplement=!admin&&userId.equals(report.getReporterId())&&"PENDING".equals(report.getStatus());
         boolean canObjection="PROCESSED".equals(report.getStatus())&&(Objects.equals(userId,target.ownerId())||Objects.equals(userId,target.extraOwner()));
-        return new ContentReportDetailVO(reportView(report,target.summary()),target.ownerId()==null?null:target.ownerId().toString(),target.summary(),target.workId()==null?null:target.workId().toString(),target.state(),evidence,history,canSupplement,canObjection);
+        var originalComment=admin&&"COMMENT".equals(report.getTargetType())?reports.comment(report.getTargetId()):null;
+        return new ContentReportDetailVO(reportView(report,target.summary()),target.ownerId()==null?null:target.ownerId().toString(),target.summary(),target.workId()==null?null:target.workId().toString(),target.state(),
+                originalComment==null?null:originalComment.getContent(),originalComment==null?List.of():ids(originalComment.getImageIds()),
+                evidence,history,admin?allowedDecisions(report,target):List.of(),canSupplement,canObjection);
     });}
 
     @Override @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
@@ -114,69 +117,138 @@ public class ContentReportServiceImpl implements ContentReportService {
         if(report==null)throw missing("举报不存在");
         if("REVIEW".equals(report.getTargetType()))throw invalid("评价举报请使用评价举报处理流程");
         if(!TYPES.contains(report.getTargetType()))throw missing("举报不存在");
-        var target=target(report);lockUsers(adminId,target.ownerId(),target.extraOwner());
-        var locked=reports.lockReport(reportId);boolean correction=locked!=null&&"PROCESSED".equals(locked.getStatus());
-        String decision=input.getDecision().strip();boolean restore="RESTORE".equals(decision)||"RESUME".equals(decision);
+        var initialTarget=target(report);
+        lockUsers(adminId,initialTarget.ownerId(),initialTarget.extraOwner());
+        var locked=reports.lockReport(reportId);
+        if(locked==null)throw missing("举报不存在");
+        if(input.getExpectedHistoryId()!=null&&!input.getExpectedHistoryId().equals(Objects.requireNonNullElse(reports.decisionEventId(reportId,"CONTENT_REPORT"),0L))){
+            throw conflict("举报处置历史已更新，请刷新后复核");
+        }
+        var target=target(locked);
+        boolean correction="PROCESSED".equals(locked.getStatus());
+        String decision=input.getDecision().strip();
         // 处置动作按目标类型限定，避免评论举报触发作品下架等错误状态变更。
         Set<String> allowed=switch(report.getTargetType()){case "WORK"->Set.of("NOT_UPHELD","OFFLINE","RESTORE");case "COMMENT"->Set.of("NOT_UPHELD","HIDE","RESTORE");default->Set.of("NOT_UPHELD","PAUSE","RESUME");};
         if(!allowed.contains(decision))throw invalid("处置结论不适用于该举报类型");
-        if(locked==null||!correction&&restore)throw conflict("举报已处理或结论不适用于当前状态");
-        if(correction&&restore&&reports.hasModerationAction(reportId)==0)throw conflict("本举报未产生处置，不能通过更正恢复");
-        String result=apply(adminId,report,decision,input.getReason().strip());
+        if(!allowedDecisions(locked,target).contains(decision))throw conflict("当前状态不支持该处置，请刷新后重试");
+        String reason=input.getReason().strip();
+        if(reason.isBlank())throw invalid("请填写处理依据");
+        String recovery=input.getRecoveryCondition()==null?null:input.getRecoveryCondition().strip();
+        if("PAUSE".equals(decision)&&(recovery==null||recovery.isBlank()))throw invalid("暂停新业务时必须填写恢复条件");
+        Map<String,Object> facts=new LinkedHashMap<>();
+        facts.put("targetType",report.getTargetType());
+        facts.put("targetId",report.getTargetId().toString());
+        facts.put("decision",decision);
+        facts.put("originalState",target.state());
+        apply(adminId,locked,decision,reason,recovery,facts);
+        String result="NOT_UPHELD".equals(decision)?"NOT_UPHELD":"ACTION_TAKEN";
         LocalDateTime now=now();
         if(correction)reports.correctReport(reportId,result,adminId,now);else reports.decideReport(reportId,result,adminId,now);
-        Map<String,Object> facts=new LinkedHashMap<>();facts.put("targetType",report.getTargetType());facts.put("targetId",report.getTargetId().toString());facts.put("decision",decision);facts.put("originalState",target.state());
-        logs.record(adminId,true,"CONTENT_REPORT",reportId,correction?"CORRECT":"DECIDE",locked.getLatestResult(),result,input.getReason().strip(),facts);
-        notifyParties(report,target,decision,result);
-        LOG.info("内容举报处置已提交：reportId={}, type={}, targetId={}, decision={}, result={}",reportId,report.getTargetType(),report.getTargetId(),decision,result);
+        logs.record(adminId,true,"CONTENT_REPORT",reportId,correction?"CORRECT":"DECIDE",locked.getLatestResult(),result,reason,facts);
+        notifyParties(locked,target,decision,reports.decisionEventId(reportId,"CONTENT_REPORT"));
         return reportView(reports.report(reportId),summaryOf(report));
     });}
 
     @Override public ImageVO image(Long userId,Long fileId){return images.viewReport(userId,fileId);}
 
-    /** 按类型执行处置动作并返回报告结论；作品下架复用作品服务，暂停复用后台用户服务。 */
-    private String apply(Long adminId,ReviewReport report,String decision,String reason){
-        switch(decision){
-            case "OFFLINE"->{var w=reports.lockWork(report.getTargetId());if(w==null||!"ONLINE".equals(w.getReviewStatus()))throw conflict("作品已下架或不可用");works.offline(adminId,w.getId(),versionDTO(w.getVersion()),reason,true);}
-            case "RESTORE"->{boolean commentTarget="COMMENT".equals(report.getTargetType());int updated=commentTarget?reports.restoreComment(report.getTargetId()):reports.restoreWork(report.getTargetId());if(updated!=1)throw conflict(commentTarget?"评论当前状态不能恢复":"作品当前状态不能恢复");}
-            case "HIDE"->{if(reports.hideComment(report.getTargetId())!=1)throw conflict("评论当前状态不能隐藏");}
-            case "PAUSE"->{var dto=pauseDTO(true,reason);admins.setBusinessPause(adminId,report.getTargetId(),dto);}
-            case "RESUME"->{var dto=pauseDTO(false,reason);admins.setBusinessPause(adminId,report.getTargetId(),dto);}
+    /** 详情和写请求共享状态判断。恢复只允许撤销本举报仍然生效的处置。 */
+    private List<String> allowedDecisions(ReviewReport report,Target target){
+        var actions=new ArrayList<String>();
+        actions.add("NOT_UPHELD");
+        var moderation=map(reports.lastModeration(report.getTargetType(),report.getTargetId()));
+        boolean owns="PROCESSED".equals(report.getStatus())&&report.getId().toString().equals(moderation.get("reportId"));
+        switch(report.getTargetType()){
+            case "WORK"->{
+                if("ONLINE".equals(target.state()))actions.add("OFFLINE");
+                if(owns&&"OFFLINE".equals(moderation.get("decision"))
+                        &&works.canRestoreReportedWork(report.getTargetId(),longField(moderation,"offlineVersion"),longField(moderation,"operationId")))actions.add("RESTORE");
+            }
+            case "COMMENT"->{
+                if("VISIBLE".equals(target.state()))actions.add("HIDE");
+                if(owns&&"HIDDEN".equals(target.state())&&"HIDE".equals(moderation.get("decision")))actions.add("RESTORE");
+            }
+            case "CREATOR_PROFILE"->{
+                if("ACTIVE".equals(target.state()))actions.add("PAUSE");
+                if(owns&&"PAUSED".equals(target.state())&&"PAUSE".equals(moderation.get("decision"))){
+                    Long lastAccount=reports.latestAccountDecision(report.getTargetId());
+                    Long pausedAt=longField(moderation,"accountEventId");
+                    Long reportEvent=longField(moderation,"operationId");
+                    if(lastAccount!=null&&(Objects.equals(pausedAt,lastAccount)||(pausedAt==null&&lastAccount<reportEvent)))actions.add("RESUME");
+                }
+            }
             default->{}
         }
-        return "NOT_UPHELD".equals(decision)?"NOT_UPHELD":"ACTION_TAKEN";
+        return actions;
+    }
+
+    /** 复用作品和账号处置服务，评论恢复由条件更新防止覆盖作者自删。 */
+    private void apply(Long adminId,ReviewReport report,String decision,String reason,String recovery,Map<String,Object> facts){
+        switch(decision){
+            case "OFFLINE"->{
+                var w=reports.lockWork(report.getTargetId());
+                if(w==null||!"ONLINE".equals(w.getReviewStatus()))throw conflict("作品已下架或不可用");
+                facts.put("offlineVersion",works.offline(adminId,w.getId(),versionDTO(w.getVersion()),reason,true,report.getId()).version());
+            }
+            case "RESTORE"->{
+                if("COMMENT".equals(report.getTargetType())){
+                    if(reports.restoreComment(report.getTargetId())!=1)throw conflict("评论当前状态不能恢复");
+                }else{
+                    var prior=map(reports.lastModeration("WORK",report.getTargetId()));
+                    works.restoreReportedWork(adminId,report.getTargetId(),longField(prior,"offlineVersion"),longField(prior,"operationId"),reason);
+                }
+            }
+            case "HIDE"->{if(reports.hideComment(report.getTargetId())!=1)throw conflict("评论当前状态不能隐藏");}
+            case "PAUSE","RESUME"->{
+                boolean paused="PAUSE".equals(decision);
+                var dto=new AdminBusinessPauseDTO();
+                dto.setPaused(paused);
+                dto.setReason(reason);
+                dto.setRecoveryCondition(paused?recovery:null);
+                admins.setBusinessPause(adminId,report.getTargetId(),dto,report.getId());
+                facts.put("accountEventId",reports.latestAccountDecision(report.getTargetId()));
+                if(paused)facts.put("recoveryCondition",recovery);
+            }
+            default->{}
+        }
     }
 
     /** 处置通知：举报人始终收到结果；作品下架由作品服务通知作者，暂停恢复由账号服务通知被处置用户。 */
-    private void notifyParties(ReviewReport report,Target target,String decision,String result){
-        Long reporter=report.getReporterId();Long owner=target.ownerId();boolean action="ACTION_TAKEN".equals(result);
+    private void notifyParties(ReviewReport report,Target target,String decision,Long eventId){
+        Long reporter=report.getReporterId();Long owner=target.ownerId();
         // 暂停与恢复动作本身会向被处置用户发送账号处置通知，此处不再重复。
         boolean ownerNotifiedByAction="CREATOR_PROFILE".equals(report.getTargetType())&&("PAUSE".equals(decision)||"RESUME".equals(decision))||"WORK".equals(report.getTargetType())&&"OFFLINE".equals(decision);
-        notifications.contentReportDecided(reporter,report.getId(),decision,"举报已处理",action?"你提交的举报已核实处理，相关违规内容已处置。":"你提交的举报经核查未成立，被举报内容保持原状。");
+        String result=switch(decision){
+            case "NOT_UPHELD"->"举报经本次核查未成立。";
+            case "RESTORE"->"管理员复核后已恢复相关内容。";
+            case "RESUME"->"管理员复核后已恢复账号的新业务资格。";
+            default->"管理员已核实并处置相关内容。";
+        };
+        notifications.reportDecided(reporter,report.getId(),eventId,false,"举报已处理",result);
         if(owner!=null&&!owner.equals(reporter)&&!ownerNotifiedByAction){
-            String content=action?"管理员已完成与你相关内容的举报核查，相关内容已处置，如有异议可在举报详情提交。":"管理员已完成与你相关内容的举报核查，举报未成立。"+("RESTORE".equals(decision)?"相关内容已恢复。":"");
-            notifications.contentReportDecided(owner,report.getId(),decision,"与你相关的举报已完成核查",content);
+            notifications.reportDecided(owner,report.getId(),eventId,false,"与你相关的举报已完成核查",result+"可在举报详情提交异议。");
         }
     }
 
     /** 目标快照：摘要、被处理人、评论关联作品及当前状态；评论举报的作品作者可参与异议。 */
     private Target target(ReviewReport report){return switch(report.getTargetType()){
-        case "WORK"->{var w=reports.work(report.getTargetId());if(w==null)yield new Target(null,null,"作品已删除","不可用",null);yield new Target(w.getCreatorId(),null,"作品："+w.getTitle(),w.getReviewStatus(),null);}
-        case "COMMENT"->{var c=reports.comment(report.getTargetId());if(c==null)yield new Target(null,null,"评论已删除","不可用",null);var w=reports.work(c.getWorkId());yield new Target(c.getAuthorId(),w==null?null:w.getCreatorId(),"评论："+excerpt(c.getContent())+"（作品："+(w==null?"已删除":w.getTitle())+"）",c.getModerationStatus(),c.getWorkId());}
+        case "WORK"->{var w=reports.work(report.getTargetId());if(w==null)yield new Target(null,null,"作品已删除","不可用",null);yield new Target(w.getCreatorId(),null,"作品："+workTitle(w.getId()),w.getDeletedAt()!=null?"不可用":w.getReviewStatus(),null);}
+        case "COMMENT"->{var c=reports.comment(report.getTargetId());if(c==null)yield new Target(null,null,"评论已删除","不可用",null);var w=reports.work(c.getWorkId());yield new Target(c.getAuthorId(),w==null?null:w.getCreatorId(),"评论："+excerpt(c.getContent())+"（作品："+workTitle(c.getWorkId())+"）",c.getUserDeletedAt()!=null?"DELETED":c.getModerationStatus(),c.getWorkId());}
         case "CREATOR_PROFILE"->{var u=users.findById(report.getTargetId());if(u==null)yield new Target(null,null,"用户已注销","不可用",null);yield new Target(u.getId(),null,"创作者主页："+u.getNickname(),u.isAdminBusinessPaused()?"PAUSED":"ACTIVE",null);}
         default->new Target(null,null,"未知目标","不可用",null);
     };}
 
     private String summaryOf(ReviewReport r){return switch(r.getTargetType()){
-        case "WORK"->{var t=reports.workTitle(r.getTargetId());yield t==null?"作品已删除":t;}
+        case "WORK"->workTitle(r.getTargetId());
         case "COMMENT"->{var c=reports.commentContent(r.getTargetId());yield c==null?"评论已删除":excerpt(c);}
         case "CREATOR_PROFILE"->{var u=users.findById(r.getTargetId());yield u==null?"用户已注销":"创作者主页："+u.getNickname();}
         case "REVIEW"->{var c=reports.reviewContent(r.getTargetId());yield c==null?"评价已删除":"评价："+excerpt(c);}
         default->"未知目标";
     };}
 
-    private ContentReportVO reportView(ReviewReport r,String summary){return new ContentReportVO(r.getId().toString(),r.getTargetType(),r.getTargetId().toString(),summary,r.getReasonCode(),r.getDescription(),ids(r.getImageIds()),r.getStatus(),r.getLatestResult(),reports.decisionReason(r.getId()),time(r.getCreatedAt()),time(r.getLastProcessedAt()));}
-    private AdminBusinessPauseDTO pauseDTO(boolean paused,String reason){var dto=new AdminBusinessPauseDTO();dto.setPaused(paused);dto.setReason(reason);if(paused)dto.setRecoveryCondition(reason);return dto;}
+    private ContentReportVO reportView(ReviewReport r,String summary){return new ContentReportVO(r.getId().toString(),r.getTargetType(),r.getTargetId().toString(),summary,r.getReasonCode(),r.getDescription(),ids(r.getImageIds()),r.getStatus(),r.getLatestResult(),reports.decisionReason(r.getId(),"REVIEW".equals(r.getTargetType())?"REVIEW_REPORT":"CONTENT_REPORT"),time(r.getCreatedAt()),time(r.getLastProcessedAt()));}
+    private String workTitle(Long id){return Objects.requireNonNullElse(works.reportedWorkTitle(id),"不可用");}
+    /** 兼容早期未保存版本的处置历史。 */
+    private Long longField(Map<String,Object> details,String field){var value=details.get(field);return value==null?null:Long.valueOf(value.toString());}
     private String excerpt(String content){if(content==null)return "";return content.length()>60?content.substring(0,60)+"…":content;}
     private WorkVersionDTO versionDTO(Long version){var dto=new WorkVersionDTO();dto.setVersion(version);return dto;}
     private void validateImages(Long user,List<String> ids){for(Long id:ids.stream().map(Long::valueOf).sorted().toList()){var f=files.lockById(id);if(f==null||!user.equals(f.getUploaderId())||!"AVAILABLE".equals(f.getUploadStatus())||!f.getObjectKey().startsWith("work-comments/"))throw invalid("图片须为本人已上传且可用的证据图片");}}

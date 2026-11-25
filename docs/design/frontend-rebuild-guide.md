@@ -1,6 +1,6 @@
 # PC Web 前端重做开发指南
 
-更新于 2026-11-25。新版前端按业务链路实施，第 1 至 5 批已完成真实后端联调及浏览器验收。 [T-021](../development/tasks/T-021-craftflow-auth-discovery.md) · [T-022](../development/tasks/T-022-craftflow-account-works.md) · [T-023](../development/tasks/T-023-craftflow-requests-quotes-messages.md) · [T-024](../development/tasks/T-024-craftflow-orders-payment-fulfillment.md) · [T-025](../development/tasks/T-025-craftflow-after-sale-reviews-consent.md)
+更新于 2026-11-25。新版前端按业务链路实施，第 1 至 6 批已完成真实后端联调及浏览器验收。 [T-021](../development/tasks/T-021-craftflow-auth-discovery.md) · [T-022](../development/tasks/T-022-craftflow-account-works.md) · [T-023](../development/tasks/T-023-craftflow-requests-quotes-messages.md) · [T-024](../development/tasks/T-024-craftflow-orders-payment-fulfillment.md) · [T-025](../development/tasks/T-025-craftflow-after-sale-reviews-consent.md) · [T-026](../development/tasks/T-026-craftflow-admin-governance.md)
 
 ## 1. 实现依据
 
@@ -70,9 +70,9 @@
 
 ### 第 6 批 · 后台管理与内容治理
 
-- 统一看板、审核中心、售后、用户和品类管理的布局。看板读取真实聚合指标和更新时间。已有审核与退款队列保留详情深链接、筛选条件和返回队列的路径。
-- 补齐综合订单查询、资金筛选、评价举报、内容举报及「我的举报」。将作品、评论和创作者主页的举报接到真实处置与通知。统一队列中的评价举报走专用裁定入口，按对象类型和可操作状态显示处置或恢复。
-- 验收管理员访问保护、列表查询和详情、处置反馈及通知。核查后台暂停与创作者主动暂停互不覆盖，暂停新业务的账号仍可处理旧单。复测 `admin-notifications.spec.ts`、`content-report.spec.ts`，并补齐看板、综合订单和账号处置的关键 E2E。 [后台原型](../prototypes/craftflow/AdminViews.tsx) · [后台接口](../../frontend/src/api/admin.ts) · [举报接口](../../frontend/src/api/report.ts) · [后台验收](../testing/T-019-admin-management.md)
+- 管理台统一使用 CraftFlow 布局。审核中心通过页签切换作品和入驻队列，保留已有详情深链接。看板显示真实汇总和北京时间更新时刻，用户管理分别展示后台暂停与本人暂停，综合订单优先显示售后及超期异常。订单与资金之间的跳转保留筛选。
+- 内容举报队列支持四类举报。评价进入专用裁定，评论材料含原文及受保护图片。处置历史记录实际操作及恢复依据。通知和「我的举报」可进入相应详情，按资格补证或异议。
+- 后台作品材料、关联用户摘要、历史和图片签名按已提交快照限制访问。举报恢复由服务端校验处置来源及作品版本。 [T-026](../development/tasks/T-026-craftflow-admin-governance.md) · [专项测试记录](../testing/T-026-craftflow-admin-governance.md) · [后台原型](../prototypes/craftflow/AdminViews.tsx)
 
 ### 第 7 批 · 全站联验与新版切换
 
@@ -92,7 +92,4 @@
 
 截至 2026-11-25，静态核对发现 V1.5 §4.2.1 和 UC-19 要求现货全额退款后，创作者确认成品仍可出售时可手动恢复直购。当前普通退款接口只受理定制订单，现货释放逻辑覆盖未付款取消。T-016 也将现货退款和重新销售留待补齐。第 4、5 批依据接口展示现货的实际操作资格。现货退款和手动恢复销售单独补齐后再验收 UC-19 中的对应路径。 [V1.5 MVP 正文](../requirements/requirements.md) · [T-016 现货建单](../development/tasks/T-016-stock-order.md) · [退款资格源码](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/RefundApplicationServiceImpl.java) · [库存更新源码](../../backend/src/main/java/com/handcraft/platform/modules/mapper/WorkMapper.java)
 
-第 2 批核对了两项后台审核接口差异。
-
-- V1.5 §4.2.2 规定未提交草稿仅作者可见。当前管理员作品查询的「全部作品」与作品详情接口仍可读取草稿，需由后端落实相同的访问限制。 [V1.5 §4.2.2](../requirements/requirements.md#422-上架审核) · [作品查询](../../backend/src/main/java/com/handcraft/platform/modules/mapper/WorkMapper.java) · [作品详情](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/WorkServiceImpl.java)
-- V1.5 §4.9.1 要求处置更正记录依据并保留原结论。当前入驻和作品的审核接口对已有结论仅支持幂等重试，尚无更正操作。 [V1.5 §4.9.1](../requirements/requirements.md#491-审核中心) · [入驻审核](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/CreatorApplicationServiceImpl.java) · [作品审核](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/WorkServiceImpl.java)
+V1.5 §4.9.1 要求处置更正记录依据并保留原结论。当前入驻和作品的审核接口对已有结论仅支持幂等重试，审核结论更正由独立业务任务补齐。 [V1.5 §4.9.1](../requirements/requirements.md#491-审核中心) · [入驻审核](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/CreatorApplicationServiceImpl.java) · [作品审核](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/WorkServiceImpl.java)

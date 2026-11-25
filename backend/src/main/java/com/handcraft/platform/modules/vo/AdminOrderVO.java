@@ -13,4 +13,5 @@ public record AdminOrderVO(
         /** 买家昵称。 */ String buyerNickname,
         /** 创作者编号。 */ String creatorId,
         /** 创作者昵称。 */ String creatorNickname,
-        /** 订单创建时间。 */ OffsetDateTime createdAt) {}
+        /** 订单创建时间。 */ OffsetDateTime createdAt,
+        /** 待处理类型：售后、开工超期、发货超期或空。 */ String attention) {}

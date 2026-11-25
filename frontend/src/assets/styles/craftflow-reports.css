@@ -1,0 +1,34 @@
+.report-admin-grid { display: grid; grid-template-columns: minmax(250px, 330px) minmax(0, 1fr); align-items: start; gap: 20px; }
+.report-queue, .report-detail { min-width: 0; padding: 18px; }
+.report-filters { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 14px; }
+.report-filters label { display: grid; flex: 1; gap: 5px; font-size: 12px; font-weight: 600; }
+.report-filters select { min-height: 36px; padding: 6px; font: inherit; }
+.report-queue-row {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  padding: 12px 8px;
+  text-align: left;
+  overflow-wrap: anywhere;
+  border: 0;
+  border-bottom: 1px solid var(--craft-border);
+  background: transparent;
+  color: var(--craft-ink);
+}
+.report-queue-row:hover, .report-queue-row[aria-pressed='true'] { background: #fffbeb; }
+.report-queue-row span, .report-queue-row small { color: var(--craft-muted); }
+.report-detail h2, .report-heading h1 { margin: 0; font-size: 18px; }
+.report-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
+.report-target { white-space: pre-wrap; overflow-wrap: anywhere; }
+.report-facts { display: flex; flex-wrap: wrap; gap: 16px 24px; margin: 14px 0; }
+.report-facts dt { color: var(--craft-muted); font-size: 12px; }
+.report-facts dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.report-public-page { max-width: 900px; padding: 24px; margin: 0 auto; }
+.report-public-page > article { margin-top: 15px; padding: 20px; background: var(--craft-surface); border: 1px solid var(--craft-border); border-radius: 14px; }
+.report-public-page > .work-breadcrumb { margin: 0; }
+.report-status { padding: 3px 8px; border-radius: 999px; background: #f4f4f5; color: var(--craft-muted); font-size: 12px; font-weight: 600; }
+.report-status.pending { background: #fef3c7; color: #92400e; }
+.report-history-link { margin-bottom: 14px; }
+.report-review-images { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.report-review-images .work-image { width: min(120px, 100%); aspect-ratio: 1; overflow: hidden; border-radius: 8px; }
+@media (max-width: 930px) { .report-admin-grid { grid-template-columns: 1fr; } }

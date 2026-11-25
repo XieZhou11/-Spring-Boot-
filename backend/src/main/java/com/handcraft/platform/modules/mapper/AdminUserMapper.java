@@ -15,11 +15,17 @@ public interface AdminUserMapper {
     List<Map<String,Object>> list(@Param("q")com.handcraft.platform.modules.dto.AdminUserQueryDTO query,@Param("offset")int offset);
     @Select("<script>SELECT COUNT(*) FROM user_account u "+FILTER+"</script>") long count(@Param("q")com.handcraft.platform.modules.dto.AdminUserQueryDTO query);
     @Select("SELECT "+USER_COLUMNS+" FROM user_account u WHERE u.id=#{id} AND u.is_admin=0") Map<String,Object> user(Long id);
-    @Select("SELECT id AS id,title AS title,review_status AS status,created_at AS createdAt FROM work WHERE creator_id=#{id} AND deleted_at IS NULL ORDER BY created_at DESC,id DESC LIMIT 10") List<Map<String,Object>> works(Long id);
-    @Select("SELECT id AS id,title AS title,status AS status,created_at AS createdAt FROM custom_request WHERE buyer_id=#{id} AND deleted_at IS NULL ORDER BY created_at DESC,id DESC LIMIT 10") List<Map<String,Object>> requests(Long id);
+    /** 关联摘要沿用作品审核的可见材料规则。 */
+    @Select("SELECT w.id AS id,"+WorkMapper.ADMIN_TITLE+" AS title,w.review_status AS status,w.created_at AS createdAt"
+        +WorkMapper.ADMIN_WORKS+" AND w.creator_id=#{id} ORDER BY w.created_at DESC,w.id DESC LIMIT 10")
+    List<Map<String,Object>> works(Long id);
+    /** 关联列表与计数只包含已发布的公开需求。 */
+    String PUBLIC_REQUESTS=" FROM custom_request WHERE buyer_id=#{id} AND deleted_at IS NULL AND visibility='PUBLIC' AND status!='DRAFT'";
+    @Select("SELECT id AS id,title AS title,status AS status,created_at AS createdAt"+PUBLIC_REQUESTS+" ORDER BY created_at DESC,id DESC LIMIT 10")
+    List<Map<String,Object>> requests(Long id);
     @Select("SELECT id AS id,order_no AS orderNo,order_type AS orderType,status AS status,total_amount AS amount,created_at AS createdAt FROM trade_order WHERE buyer_id=#{id} OR creator_id=#{id} ORDER BY created_at DESC,id DESC LIMIT 10") List<Map<String,Object>> orders(Long id);
-    @Select("SELECT COUNT(*) FROM work WHERE creator_id=#{id} AND deleted_at IS NULL") long workCount(Long id);
-    @Select("SELECT COUNT(*) FROM custom_request WHERE buyer_id=#{id} AND deleted_at IS NULL") long requestCount(Long id);
+    @Select("SELECT COUNT(*) FROM work WHERE creator_id=#{id} AND deleted_at IS NULL AND review_status!='DRAFT'") long workCount(Long id);
+    @Select("SELECT COUNT(*)"+PUBLIC_REQUESTS) long requestCount(Long id);
     @Select("SELECT COUNT(*) FROM trade_order WHERE buyer_id=#{id} OR creator_id=#{id}") long orderCount(Long id);
     /** 暂停与人工恢复均只追加，管理员详情可追溯处理原因。 */
     @Select("SELECT operator_id AS operatorId,action AS action,before_status AS beforeStatus,after_status AS afterStatus,reason AS reason,JSON_UNQUOTE(JSON_EXTRACT(detail,'$.recoveryCondition')) AS recoveryCondition,created_at AS createdAt FROM operation_log WHERE target_type='USER' AND target_id=#{id} AND action IN ('ADMIN_BUSINESS_PAUSE','ADMIN_BUSINESS_RESUME','CREATOR_PAUSE','CREATOR_RESUME') ORDER BY created_at DESC,id DESC LIMIT 20")

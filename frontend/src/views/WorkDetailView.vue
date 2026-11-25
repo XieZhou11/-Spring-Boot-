@@ -87,6 +87,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('focus', load) })
         </WorkMaterials>
         <WorkInteractions
           :work-id="work.id"
+          :creator-id="work.creatorId"
           :actions-target="interactionActions"
         />
       </div>

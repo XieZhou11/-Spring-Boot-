@@ -157,3 +157,77 @@ test('定制与现货图文评价、未知结果只读核验和退款后的公�
     await adminContext.close()
   }
 })
+
+test('混合举报队列分流评价裁定、恢复口碑并通知关联用户', async ({ page, browser, mailbox }) => {
+  test.setTimeout(150_000)
+  const creatorContext = await browser.newContext({ baseURL: origin })
+  const adminContext = await browser.newContext({ baseURL: origin })
+  const visitorContext = await browser.newContext({ baseURL: origin })
+  try {
+    const creator = await creatorContext.newPage()
+    const admin = await adminContext.newPage()
+    const visitor = await visitorContext.newPage()
+    const { categoryId } = await prepareCreator(creator, admin, mailbox.codes, mailbox.promoteAdmin)
+    await register(page, mailbox.codes, '评价处置买家')
+    await register(visitor, mailbox.codes, '评价处置访客')
+    const order = await completedStock(page, creator, admin, categoryId)
+    const content = '杯垫整体符合约定，期待创作者继续推出更多花样。'
+    const review = await mutate(page, `/orders/${order.id}/reviews`, { rating: 3, content, imageIds: [] })
+    expect(review.status()).toBe(201)
+    const reviewId = (await review.json()).data.id
+    const profile = `/creators/${order.creatorId}`
+    await visitor.goto(profile)
+    const region = visitor.getByRole('region', { name: '交易评价' })
+    await region.getByRole('button', { name: '举报评价', exact: true }).click()
+    const description = '请结合实际交易和公开记录核查这条评价。'
+    await region.getByLabel('说明', { exact: true }).fill(description)
+    await visitor.route(url => url.pathname === `/api/reviews/${reviewId}/reports`, async route => {
+      const response = await route.fetch()
+      expect(response.ok()).toBe(true)
+      await route.abort('failed')
+    }, { times: 1 })
+    await region.getByRole('button', { name: '提交举报', exact: true }).click()
+    await expect(region.getByLabel('说明', { exact: true })).toHaveValue(description)
+    await region.getByRole('button', { name: '核对材料' }).click()
+    await expect(region.getByText('已核对到提交的举报。')).toBeVisible()
+    await visitor.goto('/me/reports')
+    await visitor.getByRole('article').filter({ hasText: description }).getByRole('link', { name: '查看详情', exact: true }).click()
+    await expect(visitor).toHaveURL(/\/review-reports\/\d+$/)
+    const reportId = visitor.url().split('/').at(-1)!
+    await visitor.getByRole('button', { name: '补充证据', exact: true }).click()
+    await visitor.getByLabel('材料说明', { exact: true }).fill('补充订单评价截图相关说明。')
+    await visitor.getByRole('button', { name: '提交补充证据', exact: true }).click()
+    await expect(visitor.getByText('补充订单评价截图相关说明。')).toBeVisible()
+
+    await admin.goto('/admin/content-reports?status=PENDING&type=REVIEW')
+    await admin.getByRole('button', { name: /举报评价/ }).filter({ hasText: content }).click()
+    await expect(admin).toHaveURL(new RegExp(`/admin/review-reports\\?.*reportId=${reportId}`))
+    await expect(admin.getByRole('link', { name: order.orderNo })).toHaveAttribute('href', `/admin/orders?orderId=${order.id}`)
+    await expect(admin.getByRole('button', { name: '更正并恢复评价' })).toHaveCount(0)
+    await admin.getByLabel('处理依据', { exact: true }).fill('核查发现评价与交易记录不符，暂予隐藏。')
+    await admin.getByRole('button', { name: '隐藏评价', exact: true }).click()
+    await expect(admin.getByText('HIDDEN', { exact: true })).toBeVisible()
+    await visitor.goto(profile)
+    await expect(region.getByText(content, { exact: true })).toHaveCount(0)
+    await expect(region.getByText('0 条有效评价')).toBeVisible()
+    await creator.goto('/messages/notifications')
+    const reviewNotice = creator.getByRole('article').filter({ hasText: '评价举报已处理' })
+    await reviewNotice.getByRole('button', { name: '查看举报', exact: true }).click()
+    await expect(creator).toHaveURL(new RegExp(`/review-reports/${reportId}$`))
+    await expect(creator.getByRole('button', { name: '对处置结论提出异议' })).toBeVisible()
+
+    await admin.getByLabel('处理依据', { exact: true }).fill('补充证据证明属于有效交易评价，予以恢复。')
+    await admin.getByRole('button', { name: '更正并恢复评价' }).click()
+    await expect(admin.getByText('VISIBLE', { exact: true })).toBeVisible()
+    await admin.getByRole('link', { name: '返回内容举报' }).click()
+    await expect(admin.getByRole('combobox', { name: '举报类型筛选' })).toHaveValue('REVIEW')
+    await expect(admin.getByRole('combobox', { name: '举报状态筛选' })).toHaveValue('PENDING')
+    await visitor.reload()
+    await expect(region.getByText(content, { exact: true })).toBeVisible()
+    await expect(region.getByText('1 条有效评价')).toBeVisible()
+  } finally {
+    await visitorContext.close()
+    await creatorContext.close()
+    await adminContext.close()
+  }
+})

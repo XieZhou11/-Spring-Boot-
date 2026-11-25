@@ -67,8 +67,9 @@ function notificationAction({ businessReference: reference, eventType }: Notific
     case 'ORDER':
       return { label: '查看订单', to: { path: `/orders/${reference.id}`, hash: eventType.startsWith('PUBLICATION_') ? '#publication-consent' : undefined } }
     case 'REPORT':
+      return { label: '查看举报', to: `/reports/${reference.id}` }
     case 'REVIEW_REPORT':
-      return { label: '查看举报', to: '/me/reports' }
+      return { label: '查看举报', to: `/review-reports/${reference.id}` }
     case 'USER':
       return { label: '查看资料', to: '/account/profile' }
   }

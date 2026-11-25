@@ -30,16 +30,40 @@ export interface AdminUserVO {
   createdAt: string
 }
 
+interface AdminUserRelatedWorkVO {
+  id: string | number
+  title?: string | null
+  status: string
+}
+
+interface AdminUserRelatedOrderVO {
+  id: string | number
+  orderNo: string
+  orderType: string
+  status: string
+  amount: string | number
+}
+
+interface AdminUserPauseHistoryVO {
+  operatorId: string | number
+  action: string
+  beforeStatus: string
+  afterStatus: string
+  reason?: string | null
+  recoveryCondition?: string | null
+  createdAt: string
+}
+
 /** 用户详情的近期业务摘要。 */
 export interface AdminUserDetailVO {
   user: AdminUserVO
   workCount: number
   requestCount: number
   orderCount: number
-  works: Array<Record<string, unknown>>
-  requests: Array<Record<string, unknown>>
-  orders: Array<Record<string, unknown>>
-  pauseHistory: Array<Record<string, unknown>>
+  works: AdminUserRelatedWorkVO[]
+  requests: AdminUserRelatedWorkVO[]
+  orders: AdminUserRelatedOrderVO[]
+  pauseHistory: AdminUserPauseHistoryVO[]
 }
 
 /** 管理员全局订单列表。 */
@@ -55,6 +79,7 @@ export interface AdminOrderVO {
   creatorId: string
   creatorNickname: string
   createdAt: string
+  attention?: 'AFTER_SALE' | 'START_OVERDUE' | 'SHIPPING_OVERDUE' | null
 }
 
 export type AdminUserPage = PageVO<AdminUserVO>
@@ -79,6 +104,8 @@ export interface AdminOrderProgressNodeVO {
   status: string
   handledAt?: string | null
   records: AdminOrderProgressRecordVO[]
+  deviationDays?: number
+  overdue?: boolean
 }
 
 /** 管理员只读订单视图，与后端 AdminRefundOrderVO 对应，不返回收款账户。 */
@@ -111,6 +138,7 @@ export interface AdminRefundOrderVO {
 
 /** 订单成功资金流水摘要。 */
 export interface AdminOrderFundFlowVO {
+  flowNo?: string
   type: string
   amount: string
   occurredAt: string
@@ -130,6 +158,7 @@ export interface AdminOrderDetailVO {
   order: AdminRefundOrderVO
   fundFlows: AdminOrderFundFlowVO[]
   messages: AdminOrderChatMessageVO[]
+  orderType: 'CUSTOM' | 'STOCK'
 }
 
 /** 账号两种暂停标记分别返回，操作其中一个不改变另一个。 */

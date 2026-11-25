@@ -1,4 +1,4 @@
-/* 后台审核与品类使用新版色板，沿用固定导航和队列、材料的双栏结构。 */
+/* 统一后台页面的色板、导航和操作控件，审核队列与材料并排呈现。 */
 .admin-page.craft-admin {
   color: var(--craft-ink);
   background: var(--craft-bg);
@@ -31,6 +31,25 @@
 .craft-admin .admin-user > span { font: 600 12px var(--craft-font); background: #f4f4f5; }
 .craft-admin .admin-heading { gap: 12px; flex-wrap: wrap; }
 .craft-admin .admin-heading h1 { font: 650 25px var(--craft-font); }
+.craft-admin .admin-review-tabs {
+  display: flex;
+  gap: 8px;
+  margin: -8px 0 16px;
+  border-bottom: 1px solid var(--craft-border);
+}
+.craft-admin .admin-review-tabs a {
+  padding: 8px 12px 10px;
+  border-bottom: 2px solid transparent;
+  color: var(--craft-muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+.craft-admin .admin-review-tabs a:hover { color: var(--craft-ink); }
+.craft-admin .admin-review-tabs a[aria-current='page'] {
+  border-color: var(--craft-primary);
+  color: var(--craft-ink);
+}
 
 .craft-admin :where(a, button, input, textarea, select, [tabindex]):focus-visible {
   outline: 2px solid #b45309;
@@ -151,4 +170,10 @@
 
 @media (max-width: 1150px) {
   .craft-admin .category-tree { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* 增加审核导航后仍给裁定操作保留可见空间。 */
+@media (min-width: 901px) {
+  .craft-admin .review-material-scroll { max-height: clamp(180px, calc(100svh - 600px), 400px); }
+  .craft-admin .review-queue :is(.managed-work-list, .review-table-wrap) { max-height: calc(100svh - 400px); }
 }

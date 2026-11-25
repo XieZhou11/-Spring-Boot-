@@ -7,4 +7,5 @@ import java.util.Map;
 public record AdminOrderDetailVO(
         /** 订单基础及履约状态快照。 */ AdminRefundOrderVO order,
         /** 本单成功模拟资金流水。 */ List<Map<String,Object>> fundFlows,
-        /** 最近的会话消息，不推进参与方已读游标。 */ List<ChatMessageVO> messages) {}
+        /** 最近的会话消息，不推进参与方已读游标。 */ List<ChatMessageVO> messages,
+        /** 订单类型 STOCK 或 CUSTOM。 */ String orderType) {}

@@ -123,7 +123,6 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
 <template>
   <AdminLayout
     title="售后与退款"
-    presentation="craftflow"
   >
     <template #actions>
       <button

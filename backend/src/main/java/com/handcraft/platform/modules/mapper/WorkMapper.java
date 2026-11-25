@@ -11,6 +11,21 @@ public interface WorkMapper {
     String ELIGIBLE="(u.certification_status='APPROVED' AND u.is_admin=0 AND u.creator_paused=0 AND u.admin_business_paused=0)";
     String PURCHASABLE="("+ELIGIBLE+" AND w.sale_enabled=1 AND w.stock_status='AVAILABLE' AND w.source_order_id IS NULL AND w.stock_price IS NOT NULL)";
     String CUSTOMIZABLE="("+ELIGIBLE+" AND w.custom_enabled=1)";
+    /** 草稿仅作者可见，驳回或下架后的私下修改不能覆盖管理员看到的材料。 */
+    String ADMIN_WORKS=" FROM work w LEFT JOIN operation_log audit ON audit.id=(SELECT a.id FROM operation_log a"
+        +" WHERE a.target_type='WORK' AND a.target_id=w.id AND ((w.review_status='REJECTED' AND a.action='SUBMIT')"
+        +" OR (w.review_status='OFFLINE' AND a.action IN ('OFFLINE','ADMIN_OFFLINE'))) ORDER BY a.id DESC LIMIT 1)"
+        +" WHERE w.deleted_at IS NULL AND w.review_status!='DRAFT'";
+    String LIVE_MATERIAL="w.review_status IN ('PENDING','ONLINE')";
+    String AUDIT_SNAPSHOT="JSON_EXTRACT(audit.detail,'$.snapshot')";
+    String ADMIN_TITLE="CASE WHEN "+LIVE_MATERIAL+" THEN w.title ELSE JSON_UNQUOTE(JSON_EXTRACT("+AUDIT_SNAPSHOT+",'$.title')) END";
+    String ADMIN_DESCRIPTION="CASE WHEN "+LIVE_MATERIAL+" THEN w.description ELSE JSON_UNQUOTE(JSON_EXTRACT("+AUDIT_SNAPSHOT+",'$.description')) END";
+    String AUDIT_UPDATED_AT="CASE WHEN "+LIVE_MATERIAL+" THEN w.updated_at ELSE COALESCE(audit.created_at,w.submitted_at,w.created_at) END";
+    String ADMIN_FILTER=ADMIN_WORKS
+        +"<if test='q.status != null and q.status != &quot;ALL&quot;'> AND w.review_status=#{q.status}</if>"
+        +"<if test='q.keyword != null and q.keyword != &quot;&quot;'> AND (LOCATE(#{q.keyword},"+ADMIN_TITLE+")&gt;0 OR LOCATE(#{q.keyword},"+ADMIN_DESCRIPTION+")&gt;0)</if>";
+    String ADMIN_COLUMNS=COLUMNS+","+AUDIT_SNAPSHOT+" AS admin_snapshot,"+AUDIT_UPDATED_AT+" AS admin_updated_at";
+    String ADMIN_HISTORY_ACTIONS=" AND action IN ('SUBMIT','WITHDRAW','REVIEW','OFFLINE','ADMIN_OFFLINE','TRADING_SETTINGS','REPORT_RESTORE')";
     String FILTER=" FROM work w JOIN user_account u ON u.id=w.creator_id WHERE w.deleted_at IS NULL "
        +"<if test='mode == &quot;PUBLIC&quot;'> AND w.review_status='ONLINE'"
        +"<if test='q.creatorId != null'> AND w.creator_id=#{q.creatorId}</if>"
@@ -40,12 +55,26 @@ public interface WorkMapper {
     int update(Work value);
     @Select("SELECT COUNT(*) FROM work WHERE creator_id=#{id} AND first_submitted_at >= #{start} AND first_submitted_at < #{end}")
     long countSubmitted(@Param("id")Long id,@Param("start")LocalDateTime start,@Param("end")LocalDateTime end);
-    @Select("<script>SELECT "+COLUMNS+FILTER+"<choose><when test='mode == &quot;PUBLIC&quot; and q.sort == &quot;PRICE_ASC&quot;'> ORDER BY "+PURCHASABLE+" DESC,CASE WHEN "+PURCHASABLE+" THEN w.stock_price END ASC,w.online_at DESC,w.id DESC</when><when test='mode == &quot;PUBLIC&quot; and q.sort == &quot;PRICE_DESC&quot;'> ORDER BY "+PURCHASABLE+" DESC,CASE WHEN "+PURCHASABLE+" THEN w.stock_price END DESC,w.online_at DESC,w.id DESC</when><when test='mode == &quot;PUBLIC&quot;'> ORDER BY w.online_at DESC,w.id DESC</when><when test='mode == &quot;ADMIN&quot; and q.status == &quot;PENDING&quot;'> ORDER BY w.submitted_at,w.id</when><otherwise> ORDER BY w.updated_at DESC,w.id DESC</otherwise></choose> LIMIT #{size} OFFSET #{offset}</script>")
+    @Select("<script>SELECT "+COLUMNS+FILTER+"<choose><when test='mode == &quot;PUBLIC&quot; and q.sort == &quot;PRICE_ASC&quot;'> ORDER BY "+PURCHASABLE+" DESC,CASE WHEN "+PURCHASABLE+" THEN w.stock_price END ASC,w.online_at DESC,w.id DESC</when><when test='mode == &quot;PUBLIC&quot; and q.sort == &quot;PRICE_DESC&quot;'> ORDER BY "+PURCHASABLE+" DESC,CASE WHEN "+PURCHASABLE+" THEN w.stock_price END DESC,w.online_at DESC,w.id DESC</when><when test='mode == &quot;PUBLIC&quot;'> ORDER BY w.online_at DESC,w.id DESC</when><otherwise> ORDER BY w.updated_at DESC,w.id DESC</otherwise></choose> LIMIT #{size} OFFSET #{offset}</script>")
     List<Work> list(@Param("actor")Long actor,@Param("mode")String mode,@Param("q")WorkQueryDTO q,@Param("offset")int offset,@Param("size")int size);
     @Select("<script>SELECT COUNT(*) "+FILTER+"</script>") long count(@Param("actor")Long actor,@Param("mode")String mode,@Param("q")WorkQueryDTO q);
-    @Select("SELECT id,operator_id,operator_type,action,before_status,after_status,reason,detail,created_at FROM operation_log WHERE target_type='WORK' AND target_id=#{id} ORDER BY created_at DESC,id DESC LIMIT #{size} OFFSET #{offset}")
-    List<WorkOperation> history(@Param("id")Long id,@Param("offset")int offset,@Param("size")int size);
-    @Select("SELECT COUNT(*) FROM operation_log WHERE target_type='WORK' AND target_id=#{id}") long historyCount(Long id);
+    @Select("SELECT "+ADMIN_COLUMNS+ADMIN_WORKS+" AND w.id=#{id}") Work adminWork(Long id);
+    @Select("<script>SELECT "+ADMIN_COLUMNS+ADMIN_FILTER+"<choose><when test='q.status == &quot;PENDING&quot;'> ORDER BY w.submitted_at,w.id</when>"
+        +"<otherwise> ORDER BY admin_updated_at DESC,w.id DESC</otherwise></choose> LIMIT #{size} OFFSET #{offset}</script>")
+    List<Work> adminList(@Param("q")WorkQueryDTO query,@Param("offset")int offset,@Param("size")int size);
+    @Select("<script>SELECT COUNT(*) "+ADMIN_FILTER+"</script>") long adminCount(@Param("q")WorkQueryDTO query);
+    @Select("<script>SELECT id,operator_id,operator_type,action,before_status,after_status,reason,detail,created_at FROM operation_log WHERE target_type='WORK' AND target_id=#{id}"
+        +"<if test='admin'>"+ADMIN_HISTORY_ACTIONS+"</if> ORDER BY created_at DESC,id DESC LIMIT #{size} OFFSET #{offset}</script>")
+    List<WorkOperation> history(@Param("id")Long id,@Param("admin")boolean admin,@Param("offset")int offset,@Param("size")int size);
+    @Select("<script>SELECT COUNT(*) FROM operation_log WHERE target_type='WORK' AND target_id=#{id}<if test='admin'>"+ADMIN_HISTORY_ACTIONS+"</if></script>")
+    long historyCount(@Param("id")Long id,@Param("admin")boolean admin);
+    @Select("SELECT JSON_EXTRACT(detail,'$.snapshot') FROM operation_log WHERE target_type='WORK' AND target_id=#{id} AND action='SUBMIT' AND id < #{logId} ORDER BY id DESC LIMIT 1")
+    String precedingSubmittedSnapshot(@Param("id")Long id,@Param("logId")Long logId);
+    @Select("SELECT id,action,detail FROM operation_log WHERE target_type='WORK' AND target_id=#{id} ORDER BY id DESC LIMIT 1")
+    WorkOperation latestOperation(Long id);
+    @Select("SELECT JSON_UNQUOTE(JSON_EXTRACT(detail,'$.snapshot.title')) FROM operation_log WHERE target_type='WORK' AND target_id=#{id}"
+        +" AND after_status IN ('ONLINE','OFFLINE') AND action IN ('REVIEW','OFFLINE','ADMIN_OFFLINE','REPORT_RESTORE') ORDER BY id DESC LIMIT 1")
+    String lastPublishedTitle(Long id);
     @Select("SELECT detail FROM operation_log WHERE target_type='WORK' AND target_id=#{id} AND action='CREATE' ORDER BY id LIMIT 1") String creationDetail(Long id);
     @Select("SELECT detail FROM operation_log WHERE target_type='WORK' AND target_id=#{id} AND action='SUBMIT' ORDER BY id DESC LIMIT 1") String submissionDetail(Long id);
     @Select("SELECT reason FROM operation_log WHERE target_type='WORK' AND target_id=#{id} AND action IN ('REVIEW','ADMIN_OFFLINE') ORDER BY id DESC LIMIT 1") String reviewReason(Long id);
@@ -54,4 +83,12 @@ public interface WorkMapper {
     int countImageReferences(@Param("userId")Long userId,@Param("fileId")Long fileId);
     @Select("SELECT COUNT(*) FROM work WHERE deleted_at IS NULL AND review_status='ONLINE' AND (JSON_CONTAINS(main_image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))) OR JSON_CONTAINS(specification_image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))))") int countPublicImageReferences(Long fileId);
     @Select("SELECT COUNT(*) FROM work WHERE creator_id=#{id} AND deleted_at IS NULL AND review_status='ONLINE'") long publicCount(Long id);
+    /** 后台审核私图只从当前审核材料及已提交、已公开的操作快照查找。 */
+    @Select("SELECT (SELECT COUNT(*) FROM work w WHERE w.creator_id=#{userId} AND w.deleted_at IS NULL AND w.review_status='PENDING'"
+        +" AND (JSON_CONTAINS(w.main_image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))) OR JSON_CONTAINS(w.specification_image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR)))))"
+        +" + (SELECT COUNT(*) FROM operation_log l JOIN work w ON l.target_type='WORK' AND l.target_id=w.id"
+        +" WHERE w.creator_id=#{userId} AND (l.action IN ('REVIEW','OFFLINE','ADMIN_OFFLINE','REPORT_RESTORE')"
+        +" OR (w.deleted_at IS NULL AND w.review_status!='DRAFT' AND l.action IN ('SUBMIT','WITHDRAW')))"
+        +" AND JSON_SEARCH(l.detail,'one',CAST(#{fileId} AS CHAR),NULL,'$.snapshot.mainImageIds[*]','$.snapshot.specificationImageIds[*]') IS NOT NULL)")
+    int countAdminImageReferences(@Param("userId")Long userId,@Param("fileId")Long fileId);
 }

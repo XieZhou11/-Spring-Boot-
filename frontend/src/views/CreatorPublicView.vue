@@ -16,6 +16,7 @@ import type { PageVO } from '@/types/creator'
 import type { CreatorPublicVO, WorkVO } from '@/types/work'
 import type { CreatorReviewVO, ReviewReportVO } from '@/types/review'
 import { formatTime } from '@/utils/creator'
+import { prepareOwnReportVerification } from '@/utils/report'
 import '@/assets/styles/craftflow-works.css'
 const route = useRoute()
 const auth = useAuthStore()
@@ -33,9 +34,6 @@ const reviewsError = ref('')
 const requestedReviewPage = ref(1)
 const reviewError = ref('')
 const reportingId = ref('')
-const reportReason = ref('OTHER')
-const reportDescription = ref('')
-const reportImages = ref<{id:string;url:string}[]>([])
 const relatedReports = ref<Record<string, ReviewReportVO[]>>({})
 const evidenceText = ref<Record<string,string>>({})
 const evidenceImages = ref<Record<string,{id:string;url:string}[]>>({})
@@ -85,41 +83,25 @@ async function loadReviews(next = requestedReviewPage.value) {
     if (current === reviewsRevision) reviewsLoading.value = false
   }
 }
-const reviewFormRevision = ref(0)
 function openReviewReport(id: string) {
-  reviewFormRevision.value++
   reportingId.value = reportingId.value === id ? '' : id
-  reportReason.value = 'OTHER'
-  reportDescription.value = ''
-  reportImages.value = []
 }
-async function flagReview(review: CreatorReviewVO) {
-  if (!window.confirm('确认提交评价举报？')) return
+async function flagReview(id: string, input: ReportInput) {
   const current = reportRevision
-  const formRevision = reviewFormRevision.value
-  try {
-    await reportReview(review.id, { reasonCode: reportReason.value, description: reportDescription.value.trim(), imageIds: reportImages.value.map(x => x.id) })
-    if (current !== reportRevision) return
+  await reportReview(id, input)
+  if (current === reportRevision && id === reportingId.value) {
     reviewError.value = '举报已提交；若已有待处理举报，会追加到原记录。'
-    if (formRevision === reviewFormRevision.value) openReviewReport('')
-  } catch (failure) {
-    if (current === reportRevision) reviewError.value = failure instanceof Error ? failure.message : '举报提交失败'
+    reportingId.value = ''
   }
 }
-async function uploadReportImage(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file || reportImages.value.length >= 6) return
+function prepareReviewVerification(id: string, input: ReportInput) {
   const current = reportRevision
-  const formRevision = reviewFormRevision.value
-  try {
-    const image = await uploadReviewImage(file)
-    if (current === reportRevision && formRevision === reviewFormRevision.value) reportImages.value.push(image)
-  } catch (failure) {
-    if (current === reportRevision) reviewError.value = failure instanceof Error ? failure.message : '证据图片上传失败'
-  } finally {
-    input.value = ''
-  }
+  return prepareOwnReportVerification('REVIEW', id, input, () => {
+    if (current === reportRevision && id === reportingId.value) {
+      reviewError.value = '已核对到提交的举报。'
+      reportingId.value = ''
+    }
+  })
 }
 async function loadRelatedReports(reviewId: string) {
   const current = reportRevision
@@ -162,34 +144,32 @@ async function submitEvidence(reviewId: string, reportId: string) {
 // 主页举报入口：管理员不显示，提交后收起表单并提示。
 const profileReportOpen = ref(false)
 const profileReportMessage = ref('')
-const profileReportError = ref('')
 async function submitProfileReport(input: ReportInput) {
   const current = reportRevision
-  profileReportError.value = ''
-  try {
-    await reportCreatorProfile(String(route.params.id), input)
-    if (current !== reportRevision) return
-    profileReportMessage.value = '举报已提交，管理员将核查处理；可在“我的举报”中查看进度。'
-    profileReportOpen.value = false
-  } catch (failure) {
-    if (current === reportRevision) profileReportError.value = failure instanceof Error ? failure.message : '举报提交失败'
-  }
+  await reportCreatorProfile(String(route.params.id), input)
+  if (current === reportRevision) finishProfileReport()
+}
+function finishProfileReport() {
+  profileReportMessage.value = '举报已提交，管理员将核查处理。'
+  profileReportOpen.value = false
+}
+function prepareProfileVerification(input: ReportInput) {
+  const current = reportRevision
+  return prepareOwnReportVerification('CREATOR_PROFILE', String(route.params.id), input, () => {
+    if (current === reportRevision) finishProfileReport()
+  })
 }
 // 公开分页与头像续签保留举报输入。账号资格、会话身份或主页变更时清除私有材料并拒收旧响应。
 watch([() => route.params.id, () => auth.session?.userId, () => auth.session?.activeRole, () => auth.session?.roles.join(',')], () => {
   reportRevision++
   reviewError.value = ''
   reportingId.value = ''
-  reportReason.value = 'OTHER'
-  reportDescription.value = ''
-  reportImages.value = []
   relatedReports.value = {}
   evidenceText.value = {}
   evidenceImages.value = {}
   reportStatus.value = {}
   profileReportOpen.value = false
   profileReportMessage.value = ''
-  profileReportError.value = ''
   creator.value = undefined
   works.value = []
   reviews.value = undefined
@@ -272,16 +252,11 @@ onBeforeUnmount(() => { revision++; reviewsRevision++; reportRevision++; clearTi
         role="status"
       >
         {{ profileReportMessage }}
-      </p><p
-        v-if="profileReportError"
-        class="field-error"
-        role="alert"
-      >
-        {{ profileReportError }}
       </p><ReportDialog
         v-if="profileReportOpen"
         submit-label="提交主页举报"
-        @submit="submitProfileReport"
+        :submit-report="submitProfileReport"
+        :prepare-verification="prepareProfileVerification"
       /><header class="work-section-heading">
         <h2>手作作品</h2><span class="muted">{{ total }} 件已上架作品</span>
       </header><div
@@ -364,32 +339,16 @@ onBeforeUnmount(() => { revision++; reviewsRevision++; reportRevision++; clearTi
               :label="`订单评价图片 ${index + 1}`"
             />
           </div><button
-            v-if="review.canReport"
+            v-if="review.canReport && !auth.session?.roles.includes('ADMIN')"
             class="inline-button"
             @click="openReviewReport(review.id)"
           >
             举报评价
-          </button><form
+          </button><ReportDialog
             v-if="reportingId === review.id"
-            class="review-report-form"
-            @submit.prevent="flagReview(review)"
-          >
-            <label>举报理由<select v-model="reportReason"><option value="COPYRIGHT">盗图</option><option value="FALSE_ADVERTISING">虚假宣传</option><option value="OFFSITE">站外引流</option><option value="ABUSE">辱骂</option><option value="OTHER">其他</option></select></label><label>说明<textarea
-              v-model="reportDescription"
-              maxlength="1000"
-              placeholder="描述需要核实的问题；也可仅附图片证据"
-            /></label><label>证据图片（最多6张）<input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              :disabled="reportImages.length >= 6"
-              @change="uploadReportImage"
-            ></label><button
-              class="button-primary"
-              :disabled="!reportDescription.trim() && !reportImages.length"
-            >
-              提交举报
-            </button>
-          </form>
+            :submit-report="input => flagReview(review.id, input)"
+            :prepare-verification="input => prepareReviewVerification(review.id, input)"
+          />
           <button
             v-if="auth.session"
             class="inline-button"
@@ -403,6 +362,7 @@ onBeforeUnmount(() => { revision++; reviewsRevision++; reportRevision++; clearTi
             class="review-report-followup"
           >
             <p>举报 #{{ item.id }} · {{ item.status === 'PENDING' ? '处理中' : '已处理' }} · {{ item.decisionReason || item.reasonCode }}</p>
+            <RouterLink :to="`/review-reports/${item.id}`">查看举报详情</RouterLink>
             <template v-if="(item.status === 'PENDING' && item.reporterId === auth.session?.userId) || (item.status === 'PROCESSED' && item.reporterId !== auth.session?.userId)">
               <label>{{ item.status === 'PENDING' ? '补充证据' : '处置异议' }}<textarea
                 v-model="evidenceText[review.id]"

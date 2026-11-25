@@ -51,7 +51,6 @@ onBeforeUnmount(() => revision++)
 <template>
   <AdminLayout
     title="创作者入驻审核"
-    presentation="craftflow"
   >
     <div
       class="admin-review-grid"

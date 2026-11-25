@@ -13,7 +13,12 @@ const page = ref(1)
 const error = ref('')
 const loading = ref(false)
 let requestRevision = 0
-const labels: Record<string, string> = { CREATE: '创建草稿', SAVE: '保存内容', SUBMIT: '提交审核', WITHDRAW: '撤回审核', REVIEW: '审核结论', APPROVE: '审核通过', REJECT: '审核驳回', OFFLINE: '下架作品', TRADING_SETTINGS: '更新交易设置', UPDATE: '修改作品' }
+const labels: Record<string, string> = {
+  CREATE: '创建草稿', SAVE: '保存内容', SUBMIT: '提交审核', WITHDRAW: '撤回审核',
+  REVIEW: '审核结论', APPROVE: '审核通过', REJECT: '审核驳回',
+  OFFLINE: '下架作品', ADMIN_OFFLINE: '管理员下架', REPORT_RESTORE: '举报处置恢复上架',
+  TRADING_SETTINGS: '更新交易设置', UPDATE: '修改作品',
+}
 const fields: Record<string, string> = { title: '标题', categoryId: '品类编号', material: '材质', specification: '尺寸规格', description: '作品描述', processDescription: '制作说明', saleEnabled: '出售现货', customEnabled: '接受定制', stockPrice: '现货价格', customReferenceDays: '定制周期', mainImageIds: '主图', specificationImageIds: '尺寸图' }
 /** 仅通过受保护的历史接口读取快照，不从页面当前值反推审核材料。 */
 async function load(next = page.value) {

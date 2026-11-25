@@ -10,7 +10,8 @@ import CommentImage from './CommentImage.vue'
 import ReportDialog from './ReportDialog.vue'
 import { reportWork, reportComment } from '@/api/report'
 import type { ReportInput } from '@/types/report'
-const props = defineProps<{ workId: string; actionsTarget: HTMLElement | null }>()
+import { prepareOwnReportVerification } from '@/utils/report'
+const props = defineProps<{ workId: string; creatorId: string; actionsTarget: HTMLElement | null }>()
 const auth = useAuthStore()
 const allowed = computed(() => !!auth.session && !auth.session.roles.includes('ADMIN'))
 const stats = ref<InteractionStats>()
@@ -95,33 +96,36 @@ async function remove(id: string) {
 const reportTarget = ref('')
 const reportScope = ref<'work' | 'comment'>('work')
 const reportMessage = ref('')
-const reportError = ref('')
 function toggleReport(target: string) {
   reportTarget.value = reportTarget.value === target ? '' : target
   reportScope.value = target === 'work' ? 'work' : 'comment'
-  reportMessage.value = ''; reportError.value = ''
+  reportMessage.value = ''
 }
 async function submitReport(input: ReportInput) {
   const target = reportTarget.value
   const current = revision
-  reportError.value = ''
-  try {
-    if (target === 'work') await reportWork(props.workId, input)
-    else if (target.startsWith('comment:')) await reportComment(target.slice('comment:'.length), input)
-    else return
-    if (current !== revision || target !== reportTarget.value) return
-    reportMessage.value = '举报已提交，管理员将核查处理；可在“我的举报”中查看进度。'
-    reportTarget.value = ''
-  } catch (failure) {
-    if (current === revision && target === reportTarget.value) reportError.value = failure instanceof Error ? failure.message : '举报提交失败'
-  }
+  if (target === 'work') await reportWork(props.workId, input)
+  else if (target.startsWith('comment:')) await reportComment(target.slice('comment:'.length), input)
+  else return
+  if (current === revision && target === reportTarget.value) finishReport()
+}
+function finishReport() {
+  reportMessage.value = '举报已提交，管理员将核查处理。'
+  reportTarget.value = ''
+}
+function prepareVerification(input: ReportInput) {
+  const target = reportTarget.value
+  const current = revision
+  return prepareOwnReportVerification(target === 'work' ? 'WORK' : 'COMMENT', target === 'work' ? props.workId : target.slice('comment:'.length), input, () => {
+    if (current === revision && target === reportTarget.value) finishReport()
+  })
 }
 // 会话对象同账号刷新时保留草稿及未知提交保护，仅实际身份或作品变化才清理。
-watch([() => props.workId, () => auth.session?.userId, () => auth.session?.activeRole], () => {
+watch([() => props.workId, () => auth.session?.userId, () => auth.session?.activeRole, () => auth.session?.roles.includes('ADMIN')], () => {
   revision++; readRevision++; clearTimeout(timer)
   stats.value = undefined; comments.value = []; content.value = ''; images.value = []; unknown.value = false; checked.value = false; busy.value = false; uploading.value = false
   reactionError.value = ''
-  reportTarget.value = ''; reportMessage.value = ''; reportError.value = ''
+  reportTarget.value = ''; reportMessage.value = ''
   void load(1)
 }, { immediate: true })
 onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
@@ -165,6 +169,7 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
           {{ stats.favorited ? '取消收藏' : '收藏' }} <span>{{ stats.favoriteCount }}</span>
         </button>
         <button
+          v-if="creatorId !== auth.session?.userId"
           class="inline-button work-report-toggle"
           :aria-expanded="reportTarget === 'work'"
           @click="toggleReport('work')"
@@ -185,20 +190,14 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
       </p>
       <ReportDialog
         v-if="reportTarget === 'work'"
-        @submit="submitReport"
+        :submit-report="submitReport"
+        :prepare-verification="prepareVerification"
       />
       <p
         v-if="reportScope === 'work' && reportMessage"
         role="status"
       >
         {{ reportMessage }}
-      </p>
-      <p
-        v-if="reportScope === 'work' && reportError"
-        class="field-error"
-        role="alert"
-      >
-        {{ reportError }}
       </p>
     </div>
   </Teleport>
@@ -222,13 +221,6 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
       role="status"
     >
       {{ reportMessage }}
-    </p>
-    <p
-      v-if="reportScope === 'comment' && reportError"
-      class="field-error"
-      role="alert"
-    >
-      {{ reportError }}
     </p>
     <p
       v-if="error"
@@ -381,7 +373,8 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
       <ReportDialog
         v-if="reportTarget === `comment:${comment.id}`"
         submit-label="提交评论举报"
-        @submit="submitReport"
+        :submit-report="submitReport"
+        :prepare-verification="prepareVerification"
       />
     </article>
     <WorkPagination

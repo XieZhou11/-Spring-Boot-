@@ -3,6 +3,8 @@ export type ContentReportTargetType = 'WORK' | 'COMMENT' | 'CREATOR_PROFILE' | '
 export type ContentReportStatus = 'PENDING' | 'PROCESSED'
 export type ContentReportResult = 'NOT_UPHELD' | 'ACTION_TAKEN'
 export type ContentReportDecision = 'NOT_UPHELD' | 'OFFLINE' | 'HIDE' | 'PAUSE' | 'RESTORE' | 'RESUME'
+/** 评价举报使用专用裁定范围。 */
+export type ReviewReportDecision = 'NOT_UPHELD' | 'HIDE' | 'DELETE' | 'RESTORE'
 
 /** 举报当前记录，targetSummary 为被举报对象摘要。 */
 export interface ContentReportVO {
@@ -27,8 +29,11 @@ export interface ContentReportDetailVO {
   targetSummary: string
   workId: string | null
   targetState: string
+  originalComment: string | null
+  originalCommentImageIds: string[]
   evidence: ReportEvidenceVO[]
   history: ReviewReportHistoryEntry[]
+  allowedDecisions: ContentReportDecision[]
   canSupplement: boolean
   canObjection: boolean
 }

@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import PrivateImage from '@/components/PrivateImage.vue'
+import ReportDialog from '@/components/ReportDialog.vue'
 import { createOrderReview, getOrderReview, reportReview, uploadReviewImage } from '@/api/review'
 import { useAuthStore } from '@/stores/auth'
 import type { ImageVO } from '@/types/creator'
 import type { OrderVO } from '@/types/quote'
 import type { OrderReviewVO } from '@/types/review'
+import type { ReportInput } from '@/types/report'
 import { formatTime } from '@/utils/creator'
 import { ApiError } from '@/utils/request'
+import { prepareOwnReportVerification } from '@/utils/report'
 
 const props = defineProps<{ orderId: string; orderStatus?: OrderVO['status'] }>()
 const auth = useAuthStore()
@@ -23,7 +26,7 @@ const unknown = ref(false)
 const error = ref('')
 const notice = ref('')
 const reporting = ref(false)
-const reportReason = ref('ABUSE')
+const canReport = computed(() => !!review.value?.canReport && !auth.session?.roles.includes('ADMIN'))
 const orderAllowsReview = computed(() => !props.orderStatus || props.orderStatus === 'COMPLETED')
 const showForm = computed(() => orderAllowsReview.value && review.value?.canCreate)
 const locked = computed(() => loading.value || loadFailed.value || uploading.value || submitting.value || unknown.value)
@@ -126,21 +129,21 @@ async function submit() {
 }
 
 /** 举报仍使用评价的独立处置入口，由服务端核验当前用户资格。 */
-async function report() {
-  if (locked.value || !review.value?.id || !review.value.canReport || !window.confirm('确认提交评价举报？')) return
+async function report(input: ReportInput) {
+  if (locked.value || !review.value?.id || !canReport.value) return
   const scope = scopeRevision
-  submitting.value = true
-  error.value = ''
-  try {
-    await reportReview(review.value.id, { reasonCode: reportReason.value, description: '请管理员结合订单与沟通记录核查。', imageIds: [] })
-    if (scope !== scopeRevision) return
-    reporting.value = false
-    notice.value = '举报已提交。'
-  } catch (failure) {
-    if (scope === scopeRevision) error.value = failure instanceof Error ? failure.message : '举报提交失败'
-  } finally {
-    if (scope === scopeRevision) submitting.value = false
-  }
+  await reportReview(review.value.id, input)
+  if (scope === scopeRevision) finishReport()
+}
+function finishReport() {
+  reporting.value = false
+  notice.value = '举报已提交。'
+}
+function prepareVerification(input: ReportInput) {
+  const scope = scopeRevision
+  return prepareOwnReportVerification('REVIEW', review.value!.id!, input, () => {
+    if (scope === scopeRevision) finishReport()
+  })
 }
 
 watch([() => props.orderId, () => auth.session?.userId, () => auth.session?.activeRole, () => auth.session?.roles.join(',')], () => {
@@ -153,7 +156,6 @@ watch([() => props.orderId, () => auth.session?.userId, () => auth.session?.acti
   submitting.value = false
   unknown.value = false
   reporting.value = false
-  reportReason.value = 'ABUSE'
   error.value = ''
   notice.value = ''
   clearDraft()
@@ -330,7 +332,7 @@ onBeforeUnmount(() => {
         />
       </div>
       <button
-        v-if="review.canReport"
+        v-if="canReport"
         class="inline-button"
         type="button"
         @click="reporting = !reporting"
@@ -352,28 +354,11 @@ onBeforeUnmount(() => {
       {{ unavailable }}
     </p>
 
-    <form
-      v-if="reporting && review?.canReport"
-      class="order-review-form"
-      @submit.prevent="report"
-    >
-      <label>
-        举报理由
-        <select v-model="reportReason">
-          <option value="COPYRIGHT">盗图</option>
-          <option value="FALSE_ADVERTISING">虚假宣传</option>
-          <option value="OFFSITE">站外引流</option>
-          <option value="ABUSE">辱骂</option>
-          <option value="OTHER">其他</option>
-        </select>
-      </label>
-      <button
-        class="button-primary"
-        :disabled="locked"
-      >
-        提交举报
-      </button>
-    </form>
+    <ReportDialog
+      v-if="reporting && canReport"
+      :submit-report="report"
+      :prepare-verification="prepareVerification"
+    />
   </section>
 </template>
 

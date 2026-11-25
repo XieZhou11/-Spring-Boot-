@@ -2,6 +2,7 @@ import request from '@/utils/request'
 import type { ApiResult } from '@/types/api'
 import type { PageVO } from '@/types/creator'
 import type { CreatorReviewVO, OrderReviewVO, ReviewReportDetailVO, ReviewReportVO } from '@/types/review'
+import type { ReviewReportDecision } from '@/types/report'
 
 const get = async <T>(path: string, params?: object) => (await request.get<ApiResult<T>>(path, { params })).data.data
 export const getOrderReview = (id: string) => get<OrderReviewVO>(`/orders/${id}/review`)
@@ -23,6 +24,6 @@ export async function addReviewReportEvidence(id: string, input: { content: stri
 export const getReviewReports = (status = 'PENDING', page = 1) => get<PageVO<ReviewReportVO>>('/admin/review-reports', { status, page })
 export const getReviewReport = (id: string) => get<ReviewReportDetailVO>(`/review-reports/${id}`)
 export const getReviewImage = (id: string) => get<{ id: string; url: string; expiresAt: string }>(`/review-images/${id}`)
-export async function decideReviewReport(id: string, decision: 'NOT_UPHELD' | 'HIDE' | 'DELETE' | 'RESTORE', reason: string) {
-  return (await request.put<ApiResult<ReviewReportVO>>(`/admin/review-reports/${id}/decision`, { decision, reason })).data.data
+export async function decideReviewReport(id: string, decision: ReviewReportDecision, reason: string, expectedHistoryId: string) {
+  return (await request.put<ApiResult<ReviewReportVO>>(`/admin/review-reports/${id}/decision`, { decision, reason, expectedHistoryId })).data.data
 }

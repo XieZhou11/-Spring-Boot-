@@ -10,6 +10,8 @@ public interface WorkCommentImageService {
 
     /** 核验上传归属或公开评论引用后签发访问地址。 */
     ImageVO view(Long userId, Long fileId);
+    /** 仅管理员签发举报所指原评论的图片，允许核查已隐藏评论。 */
+    ImageVO viewReportedComment(Long userId, Long reportId, Long fileId);
 
     /** 举报人、交易参与方和管理员按举报关系读取私有评价举报证据。 */
     ImageVO viewReview(Long userId, Long fileId);

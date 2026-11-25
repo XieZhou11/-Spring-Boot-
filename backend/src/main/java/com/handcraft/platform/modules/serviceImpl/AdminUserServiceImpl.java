@@ -24,10 +24,14 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override public AdminUserDetailVO detail(Long admin,Long id){return BusinessLog.run(LOG,"管理员用户详情查询",admin,()->{requireAdmin(admin);var user=data.user(id);if(user==null)throw missing();return new AdminUserDetailVO(user,data.workCount(id),data.requestCount(id),data.orderCount(id),data.works(id),data.requests(id),data.orders(id),data.pauseHistory(id));});}
 
     @Override @Transactional(rollbackFor=Exception.class)
-    public AdminUserBusinessVO setBusinessPause(Long admin,Long id,AdminBusinessPauseDTO input){return BusinessLog.run(LOG,"管理员账号新业务暂停处置",admin,()->{
+    public AdminUserBusinessVO setBusinessPause(Long admin,Long id,AdminBusinessPauseDTO input){
+        return setBusinessPause(admin,id,input,null);
+    }
+    @Override @Transactional(rollbackFor=Exception.class)
+    public AdminUserBusinessVO setBusinessPause(Long admin,Long id,AdminBusinessPauseDTO input,Long reportId){return BusinessLog.run(LOG,"管理员账号新业务暂停处置",admin,()->{
         requireAdmin(admin);var user=users.lockById(id);if(user==null||user.isAdmin())throw missing();boolean before=user.isAdminBusinessPaused();
         if(input.isPaused()&&(input.getRecoveryCondition()==null||input.getRecoveryCondition().isBlank()))throw new BusinessException(com.handcraft.platform.common.exception.CommonErrorCode.INVALID_REQUEST,"暂停新业务时必须填写恢复条件");
-        if(before!=input.isPaused()){if(users.updateAdminBusinessPause(id,input.isPaused())!=1)throw conflict();String from=before?"PAUSED":"ACTIVE",to=input.isPaused()?"PAUSED":"ACTIVE";var facts=new LinkedHashMap<String,Object>();facts.put("creatorPaused",user.isCreatorPaused());facts.put("recoveryCondition",input.getRecoveryCondition());logs.record(admin,true,"USER",id,input.isPaused()?"ADMIN_BUSINESS_PAUSE":"ADMIN_BUSINESS_RESUME",from,to,input.getReason(),facts);notifications.accountBusinessChanged(id,input.isPaused(),input.getReason());LOG.info("管理员账号新业务状态变更已准备：adminId={}, userId={}, from={}, to={}",admin,id,from,to);}
+        if(before!=input.isPaused()){if(users.updateAdminBusinessPause(id,input.isPaused())!=1)throw conflict();String from=before?"PAUSED":"ACTIVE",to=input.isPaused()?"PAUSED":"ACTIVE";var facts=new LinkedHashMap<String,Object>();facts.put("creatorPaused",user.isCreatorPaused());facts.put("recoveryCondition",input.getRecoveryCondition());if(reportId!=null)facts.put("reportId",reportId.toString());logs.record(admin,true,"USER",id,input.isPaused()?"ADMIN_BUSINESS_PAUSE":"ADMIN_BUSINESS_RESUME",from,to,input.getReason(),facts);notifications.accountBusinessChanged(id,input.isPaused(),input.getReason(),reportId);LOG.info("管理员账号新业务状态变更已准备：adminId={}, userId={}, from={}, to={}",admin,id,from,to);}
         return new AdminUserBusinessVO(id.toString(),input.isPaused(),user.isCreatorPaused());
     });}
 
