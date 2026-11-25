@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
+import AppIcon from '@/components/AppIcon.vue'
 import PrivateImage from '@/components/PrivateImage.vue'
 import PrivateImagePicker from '@/components/PrivateImagePicker.vue'
 import { getConversation, getMessages, readConversation, sendMessage } from '@/api/customRequest'
@@ -8,12 +9,12 @@ import { getOrder } from '@/api/quote'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/creator'
+import { requestStatus } from '@/utils/customRequest'
 import { orderStatus, progressNodeName } from '@/utils/quote'
 import { readConversationDraft, saveConversationDraft } from '@/utils/conversationDraft'
 import { ApiError } from '@/utils/request'
 import type { ChatMessageVO, ConversationVO } from '@/types/customRequest'
 import '@/assets/styles/custom-request.css'
-import '@/assets/styles/quote.css'
 const route = useRoute(); const notifications = useNotificationsStore(); const auth = useAuthStore()
 const conversation = ref<ConversationVO>(); const messages = ref<ChatMessageVO[]>([]); const hasOlder = ref(false)
 const loading = ref(false); const olderLoading = ref(false); const sending = ref(false); const uploading = ref(false); const uncertain = ref(false)
@@ -26,6 +27,7 @@ let syncCursor: string | undefined
 let readTimer: ReturnType<typeof setTimeout> | undefined; let desiredRead = '0'; let acknowledgedRead = '0'; let readingGeneration: number | undefined
 let attempt: { clientMessageKey: string; content: string; imageIds: string[]; referencedNodeId?: string } | undefined
 const id = () => String(route.params.id)
+const orderEnded = computed(() => ['COMPLETED', 'CANCELLED', 'REFUNDED'].includes(conversation.value?.orderStatus || ''))
 /** 引用只附加到原草稿，不替换正文，也不在跳转后自动发送消息。 */
 async function resolveReference() {
   const current = ++referenceRevision
@@ -156,17 +158,47 @@ onBeforeUnmount(() => { keepDraft(); disposed = true; generation++; referenceRev
       to="/messages/conversations"
       class="conversation-back"
     >← 返回会话列表</RouterLink>
-    <header class="work-section-heading">
+    <header class="conversation-header">
       <div>
-        <h1>{{ conversation?.otherNickname || '需求沟通' }}</h1><RouterLink
-          v-if="conversation"
-          :to="`/requests/${conversation.requestId}`"
-        >{{ conversation.requestTitle }} ↗</RouterLink><p
+        <h2>{{ conversation?.otherNickname || '交易会话' }}</h2>
+        <p
           v-if="conversation?.orderId"
-          class="field-help"
+          class="conversation-reference"
         >
-          <RouterLink :to="`/orders/${conversation.orderId}`">关联订单：{{ conversation.orderTitle }} · {{ orderStatus[conversation.orderStatus || ''] || conversation.orderStatus }} ↗</RouterLink>
+          <RouterLink :to="`/orders/${conversation.orderId}`">关联订单 · {{ conversation.orderTitle || '查看订单' }} <span aria-hidden="true">↗</span></RouterLink>
+          <span
+            v-if="conversation.orderStatus"
+            class="conversation-status"
+          >{{ orderStatus[conversation.orderStatus] || conversation.orderStatus }}</span>
         </p>
+        <p
+          v-if="conversation?.requestId"
+          class="conversation-reference"
+        >
+          <RouterLink :to="`/requests/${conversation.requestId}`">关联需求 · {{ conversation.requestTitle || '查看需求' }} <span aria-hidden="true">↗</span></RouterLink>
+          <span
+            v-if="conversation.requestStatus && !conversation.orderId"
+            class="conversation-status"
+          >{{ requestStatus[conversation.requestStatus] || conversation.requestStatus }}</span>
+        </p>
+      </div>
+      <div class="conversation-tools">
+        <button
+          type="button"
+          class="button-secondary"
+          :disabled="loading"
+          @click="refresh()"
+        >
+          刷新消息
+        </button>
+        <button
+          v-if="!notifications.connected"
+          type="button"
+          class="inline-button conversation-reconnect"
+          @click="notifications.reconnect"
+        >
+          重新连接
+        </button>
       </div>
     </header>
     <p
@@ -175,37 +207,44 @@ onBeforeUnmount(() => { keepDraft(); disposed = true; generation++; referenceRev
       role="alert"
     >
       {{ error || loadError }}
-    </p><div class="queue-toolbar">
+    </p>
+    <p
+      v-if="readError"
+      class="chat-state"
+      role="status"
+    >
       <button
-        class="button-secondary"
-        :disabled="loading"
-        @click="refresh()"
-      >
-        刷新消息
-      </button><button
-        v-if="!notifications.connected"
-        class="inline-button"
-        @click="notifications.reconnect"
-      >
-        重新连接
-      </button><button
-        v-if="readError"
+        type="button"
         class="inline-button"
         @click="markRead"
       >
         {{ readError }}
       </button>
-    </div>
+    </p>
+    <p
+      v-if="!conversation && loading"
+      class="account-loading"
+      role="status"
+    >
+      正在读取会话…
+    </p>
     <div
       v-if="conversation"
       class="chat-panel"
     >
       <p
         v-if="!conversation.canSend"
-        class="review-reason"
+        class="chat-state"
         role="status"
       >
+        <AppIcon name="lock" />
         {{ conversation.sendDisabledReason || conversation.archiveReason || '会话已归档，只能查阅历史记录。' }}
+      </p>
+      <p
+        v-else-if="orderEnded"
+        class="chat-state"
+      >
+        订单已结束，双方仍可沟通与补充证据。
       </p>
       <div
         ref="transcript"
@@ -217,16 +256,17 @@ onBeforeUnmount(() => { keepDraft(); disposed = true; generation++; referenceRev
       >
         <button
           v-if="hasOlder"
-          class="inline-button"
+          type="button"
+          class="inline-button chat-older"
           :disabled="olderLoading"
           @click="older"
         >
           {{ olderLoading ? '读取中…' : '加载更早消息' }}
         </button><p
           v-if="!messages.length"
-          class="muted"
+          class="chat-empty"
         >
-          {{ loading ? '正在读取消息…' : '还没有消息，聊聊制作细节吧。' }}
+          {{ loading ? '正在读取消息…' : '暂无消息' }}
         </p><article
           v-for="message in messages"
           :key="message.id"
@@ -234,24 +274,32 @@ onBeforeUnmount(() => { keepDraft(); disposed = true; generation++; referenceRev
           class="chat-message"
           :class="{ mine: message.senderId === auth.session?.userId }"
         >
-          <header>{{ message.senderId === auth.session?.userId ? '我' : conversation.otherNickname }}</header><p v-if="message.content">
-            {{ message.content }}
-          </p><RouterLink
-            v-if="message.referencedNodeId && conversation.orderId"
-            class="progress-reference"
-            :to="`/orders/${conversation.orderId}#progress-${message.referencedNodeId}`"
-          >引用进度：{{ progressNodeName[message.referencedNodeCode || ''] || '制作节点' }} ↗</RouterLink><div
-            v-if="message.imageIds.length"
-            class="request-images"
-          >
-            <PrivateImage
-              v-for="(imageId, index) in message.imageIds"
-              :key="imageId"
-              :image-id="imageId"
-              scope="chat"
-              :label="`消息图片 ${index + 1}`"
-            />
-          </div><time>{{ formatTime(message.createdAt) }}</time>
+          <header>
+            <strong>{{ message.senderId === auth.session?.userId ? '我' : conversation.otherNickname }}</strong>
+            <time :datetime="message.createdAt">{{ formatTime(message.createdAt) }}</time>
+          </header>
+          <div class="chat-bubble">
+            <RouterLink
+              v-if="message.referencedNodeId && conversation.orderId"
+              class="progress-reference"
+              :to="`/orders/${conversation.orderId}#progress-${message.referencedNodeId}`"
+            >引用进度：{{ progressNodeName[message.referencedNodeCode || ''] || '制作节点' }} ↗</RouterLink>
+            <p v-if="message.content">
+              {{ message.content }}
+            </p>
+            <div
+              v-if="message.imageIds.length"
+              class="request-images"
+            >
+              <PrivateImage
+                v-for="(imageId, index) in message.imageIds"
+                :key="imageId"
+                :image-id="imageId"
+                scope="chat"
+                :label="`消息图片 ${index + 1}`"
+              />
+            </div>
+          </div>
         </article>
       </div>
       <form
@@ -296,27 +344,36 @@ onBeforeUnmount(() => { keepDraft(); disposed = true; generation++; referenceRev
             移除引用
           </button>
         </div>
-        <label class="work-field">沟通内容<textarea
-          v-model="content"
-          aria-label="沟通内容"
-          rows="3"
-          maxlength="500"
-          :disabled="sending || uncertain"
-          placeholder="说说你对制作的想法…"
-        /></label><PrivateImagePicker
-          v-model="imageIds"
-          label="消息图片"
-          :max="3"
-          :conversation-id="conversation.id"
-          :disabled="sending || uncertain || !conversation.canSend"
-          @uploading="uploading = $event"
-        /><div class="request-actions">
-          <span class="field-help">{{ content.length }} / 500</span><button
-            class="button-primary"
-            :disabled="sending || uploading || referenceLoading || !!referenceError"
-          >
-            {{ sending ? '正在发送…' : uncertain ? '重试确认发送' : '发送消息' }}
-          </button>
+        <label class="work-field">
+          沟通内容
+          <textarea
+            v-model="content"
+            rows="2"
+            maxlength="500"
+            :disabled="sending || uncertain"
+            placeholder="输入消息…"
+          />
+        </label>
+        <div class="chat-compose-actions">
+          <PrivateImagePicker
+            v-model="imageIds"
+            label="消息图片"
+            :max="3"
+            :conversation-id="conversation.id"
+            :disabled="sending || uncertain || !conversation.canSend"
+            @uploading="uploading = $event"
+          />
+          <div class="chat-send">
+            <span class="field-help">{{ content.length }} / 500</span>
+            <button
+              type="submit"
+              class="button-primary"
+              :disabled="sending || uploading || referenceLoading || !!referenceError"
+            >
+              {{ sending ? '正在发送…' : uncertain ? '重试确认发送' : '发送消息' }}
+              <AppIcon name="arrow" />
+            </button>
+          </div>
         </div>
       </form>
     </div>

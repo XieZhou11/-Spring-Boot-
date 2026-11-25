@@ -1,6 +1,6 @@
 # 前端工程
 
-**PC Web 前端重做待开发。** 新版按真实后端业务分批接入，界面参照 CraftFlow 原型。原型缺少的页面沿用同一风格补齐。开发顺序、接口入口和验收见 [前端重做开发指南](../docs/design/frontend-rebuild-guide.md)。
+**PC Web 前端按业务链路分批重做。** 新版接入真实后端，界面参照 CraftFlow 原型。原型缺少的页面沿用同一风格补齐。开发顺序、接口入口和验收见 [前端重做开发指南](../docs/design/frontend-rebuild-guide.md)。
 
 以下为当前 Vue 前端的运行说明和已实现功能记录。
 
@@ -153,6 +153,8 @@ npm run test:e2e -- e2e/work-interactions.spec.ts
 接口与集成交接见[T-006](../docs/development/tasks/T-006-work-interactions.md)，实际验证及本轮云端测试边界见[测试记录](../docs/testing/T-006-work-interactions.md)。
 
 ## 定制需求与需求沟通（T-007）
+
+CraftFlow 第 3 批重做买家需求双栏、定向邀约、大厅、报价工作区和消息中心。需求列表的筛选与页码保存在 URL 中，详情和对比页可返回来源列表。报价按创作者分列，定标后通过订单进入原中标会话。消息中心按需求、订单的实际关联提供跳转，已读状态和历史由服务端保存。 [T-023](../docs/development/tasks/T-023-craftflow-requests-quotes-messages.md)
 
 接口约定见 [T-007](../docs/development/tasks/T-007-custom-requests.md)，页面入口在 T-008 中调整。买家与双身份创作者在 `/my-requests` 管理本人需求，`/my-requests/new` 新建，`/my-requests/:id/edit` 编辑草稿。支持不完整草稿、版本冲突保留输入、真实参考图上传、公开或单人定向发布；发布后正文锁定，关闭或过期后复制新建。从作品详情“发起同类定制”带入作品、作者和品类，从创作者主页“邀请定制”带入作者后选择品类，表单也支持按品类和昵称选择创作者。
 

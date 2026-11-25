@@ -5,3 +5,22 @@ export function requestContent(value?: Partial<RequestContent>): RequestContent 
 }
 export const requestStatus: Record<string, string> = { DRAFT: '草稿', OPEN: '待响应', QUOTING: '报价中', AWARDED: '已定标', IN_TRADE: '交易进行中', COMPLETED: '已完成', CLOSED: '已关闭', EXPIRED: '已过期' }
 export const countLabel = (value: number) => value > 99 ? '99+' : String(value)
+
+export const requestListPaths = { mine: '/my-requests', hall: '/requests', invitations: '/creator/invitations' } as const
+const requestReturnPaths = [...Object.values(requestListPaths), '/creator/quotes'] as readonly string[]
+
+/** 回跳只接受现有需求列表路径，保留来源页的筛选与页码。 */
+export function requestListReturn(value: unknown): string {
+  if (typeof value !== 'string' || /[\r\n]/.test(value)) return requestListPaths.mine
+  const [path = ''] = value.split(/[?#]/, 1)
+  if (requestReturnPaths.includes(path)) return value
+  return requestListPaths.mine
+}
+
+/** 草稿可只有一侧预算，按已保存的金额展示。 */
+export function requestBudget({ budgetMin, budgetMax }: Pick<RequestContent, 'budgetMin' | 'budgetMax'>) {
+  if (budgetMin && budgetMax) return `¥ ${budgetMin} – ${budgetMax}`
+  if (budgetMin) return `¥ ${budgetMin} 起`
+  if (budgetMax) return `最高 ¥ ${budgetMax}`
+  return '预算待填写'
+}

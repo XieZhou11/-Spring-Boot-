@@ -5,9 +5,18 @@ import { withdrawQuote } from '@/api/quote'
 import type { QuoteVO } from '@/types/quote'
 import { quoteStatus, invalidQuoteReason } from '@/utils/quote'
 import { formatTime } from '@/utils/creator'
-const props = defineProps<{ quote: QuoteVO; showRequest?: boolean }>()
+const props = defineProps<{ quote: QuoteVO; showRequest?: boolean; requestReturnTo?: string }>()
 const emit = defineEmits<{ changed: [] }>()
 const busy = ref(false); const error = ref('')
+/** 从我的报价进入需求时保留来路，底部操作可定位到对应的报价区域。 */
+function requestDetail(hash = '') {
+  return {
+    name: 'custom-request-detail',
+    params: { id: props.quote.requestId },
+    query: props.requestReturnTo ? { returnTo: props.requestReturnTo } : {},
+    hash,
+  }
+}
 /** 撤回是明确的业务动作；未知响应可按同一报价重试，服务端保证幂等。 */
 async function withdraw() {
   if (busy.value || !window.confirm('撤回后原报价失效并保留历史；重报将计入当天报价次数。确认撤回？')) return
@@ -26,7 +35,7 @@ async function withdraw() {
       <div>
         <RouterLink
           v-if="showRequest"
-          :to="`/requests/${quote.requestId}`"
+          :to="requestDetail()"
         >{{ quote.requestTitle }} ↗</RouterLink><RouterLink
           v-else
           :to="`/creators/${quote.creatorId}`"
@@ -34,7 +43,10 @@ async function withdraw() {
           提交于 {{ formatTime(quote.createdAt) }}
         </p>
       </div>
-      <span class="work-status">{{ quoteStatus[quote.status] || quote.status }}</span>
+      <span
+        class="work-status"
+        :class="quote.status"
+      >{{ quoteStatus[quote.status] || quote.status }}</span>
     </header>
     <div class="quote-record-terms">
       <strong class="quote-amount">¥ {{ quote.goodsAmount }}</strong><span>{{ quote.durationDays }} 个自然日</span><span>预计发货 {{ quote.estimatedShipDate }}</span>
@@ -76,8 +88,8 @@ async function withdraw() {
         {{ busy ? '正在撤回…' : '撤回报价' }}
       </button><RouterLink
         v-if="showRequest"
-        :to="`/requests/${quote.requestId}#quotes`"
-      >{{ quote.canWithdraw ? '查看需求' : '查看需求与重报资格' }} ↗</RouterLink>
+        :to="requestDetail('#quotes')"
+      >查看需求 ↗</RouterLink>
     </footer>
   </article>
 </template>

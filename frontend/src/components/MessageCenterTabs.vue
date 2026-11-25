@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { useNotificationsStore } from '@/stores/notifications'
-import { useAuthStore } from '@/stores/auth'
+import AppIcon from '@/components/AppIcon.vue'
 import { countLabel } from '@/utils/customRequest'
-import '@/assets/styles/custom-request.css'
 const notifications = useNotificationsStore()
-const auth = useAuthStore()
 </script>
 <template>
   <nav
@@ -12,19 +10,25 @@ const auth = useAuthStore()
     aria-label="消息中心"
   >
     <RouterLink
-      v-if="!auth.session?.roles.includes('ADMIN')"
       to="/messages/conversations"
-    >需求沟通 <span
-      v-if="notifications.chatUnreadCount"
-      class="unread-badge"
-    >{{ countLabel(notifications.chatUnreadCount) }}</span></RouterLink>
-    <RouterLink to="/messages/notifications">系统通知 <span
-      v-if="notifications.unreadCount"
-      class="unread-badge"
-    >{{ countLabel(notifications.unreadCount) }}</span></RouterLink>
+    >
+      <AppIcon name="message" />交易会话
+      <span
+        v-if="notifications.chatUnreadCount"
+        class="unread-badge"
+      >{{ countLabel(notifications.chatUnreadCount) }}</span>
+    </RouterLink>
     <RouterLink
-      v-if="!auth.session?.roles.includes('ADMIN')"
-      to="/me/reports"
-    >我的举报</RouterLink>
+      to="/messages/notifications"
+      aria-label="系统通知"
+      :aria-description="notifications.unreadCount ? `${countLabel(notifications.unreadCount)} 条未读` : undefined"
+    >
+      <AppIcon name="bell" />系统通知
+      <span
+        v-if="notifications.unreadCount"
+        class="unread-badge"
+      >{{ countLabel(notifications.unreadCount) }}</span>
+    </RouterLink>
+    <RouterLink to="/me/reports"><AppIcon name="shield" />我的举报</RouterLink>
   </nav>
 </template>

@@ -1,4 +1,4 @@
-/* 报价沿用纸色与墨绿；比较表保持同一行内的信息可读，定标确认独立成区。 */
+/* 报价记录与图片预览也用于订单详情，CraftFlow 样式限定在报价入口。 */
 .request-quote-panel { margin-top: 38px; padding-top: 30px; border-top: 1px solid var(--border); }
 .request-quote-panel h2 { font: 500 27px var(--serif); }
 .quote-form { max-width: 860px; margin: 24px 0; }
@@ -18,15 +18,6 @@
 .quote-image-dialog::backdrop { background: #182920bb; }
 .quote-image-dialog .work-image { margin-top: 15px; max-height: 75vh; }
 .quote-image-dialog img { width: 100%; max-height: 72vh; object-fit: contain; }
-.quote-table-scroll { overflow-x: auto; border: 1px solid var(--border); }
-.quote-comparison { width: 100%; min-width: 1000px; border-collapse: collapse; font-size: 13px; }
-.quote-comparison th { text-align: left; padding: 18px 16px; background: #edf0e8; font-weight: 600; }
-.quote-comparison td { padding: 22px 16px; vertical-align: top; border-top: 1px solid var(--border); }
-.quote-comparison .proposal-cell { min-width: 240px; max-width: 340px; }
-.quote-comparison .request-description { max-height: 350px; overflow-y: auto; }
-.quote-comparison .field-help { display: block; margin: 7px 0; }
-.quote-comparison .quote-amount { font-size: 23px; }
-.quote-badge { display: inline-block; color: #355744; background: #e4ebdf; padding: 3px 6px; font-size: 11px; margin: 7px 4px 0 0; }
 .award-panel { margin-top: 28px; border: 1px solid #58735d; background: #f7f8f0; padding: 30px; }
 .award-panel h2 { font: 500 26px var(--serif); }
 .award-confirmation { display: flex; gap: 10px; align-items: flex-start; line-height: 1.8; margin: 20px 0; }
@@ -34,6 +25,89 @@
 .award-address { font-style: normal; line-height: 1.9; padding: 18px; background: #fffdf8; border-left: 3px solid #58735d; }
 .shipping-warning { color: #895b2e; line-height: 1.8; }
 .quote-history { margin-top: 30px; }
+
+/* 比较的每一列对应一位创作者，窄屏在表内滚动并固定对比维度。 */
+.cf-quotes {
+  min-width: 0;
+  color: var(--craft-ink);
+  font-family: var(--craft-font);
+}
+.cf-quotes .work-section-heading { flex-wrap: wrap; gap: 12px 20px; margin-bottom: 20px; }
+.cf-quotes .work-section-heading :is(h1, h2) { color: var(--craft-ink); font: 650 26px/1.35 var(--craft-font); letter-spacing: 0; margin: 0; }
+.cf-quotes .work-section-heading h2 { font-size: 19px; }
+.cf-quotes :is(h2, h3) { color: var(--craft-ink); }
+.cf-quotes .work-section-heading p { margin: 6px 0 0; overflow-wrap: anywhere; }
+.cf-quotes :is(.muted, .field-help) { color: var(--craft-muted); }
+.cf-quotes .inline-button { color: var(--craft-ink); }
+.cf-quotes .button-primary { color: var(--craft-surface); background: var(--craft-primary); border: 1px solid var(--craft-primary); border-radius: 8px; }
+.cf-quotes .button-primary:hover:not(:disabled) { background: #3f3f46; }
+.cf-quotes .button-secondary { color: var(--craft-ink); background: var(--craft-surface); border: 1px solid var(--craft-border); border-radius: 8px; }
+.cf-quotes :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid #b45309; outline-offset: 3px; }
+.cf-quotes .request-filters { align-items: flex-end; background: var(--craft-surface); border-color: var(--craft-border); border-radius: 12px; padding: 16px; }
+.cf-quotes .request-filters select { color: var(--craft-ink); background: var(--craft-surface); border-color: var(--craft-border); border-radius: 8px; }
+.cf-quotes .request-filters > h2 { margin: 0 auto 0 0; font-size: 18px; }
+.cf-quotes .work-field :is(input, select, textarea) { color: var(--craft-ink); background: var(--craft-surface); border-color: var(--craft-border); border-radius: 8px; }
+.cf-quotes .work-field { color: var(--craft-ink); }
+.cf-quotes .work-field [aria-invalid=true] { border-color: #b45309; }
+.cf-quotes :is(.quote-form, .quote-record, .award-panel, .creator-empty) { background: var(--craft-surface); border: 1px solid var(--craft-border); border-radius: 14px; }
+.cf-quotes :is(.quote-record summary, .quote-comparison summary) { color: var(--craft-ink); }
+.cf-quotes .quote-record header a { color: var(--craft-ink); font-weight: 650; overflow-wrap: anywhere; }
+.cf-quotes .quote-record .work-status { background: #f4f4f5; color: #52525b; border-color: #e4e4e7; border-radius: 999px; font-size: 12px; }
+.cf-quotes .quote-record .work-status.ACTIVE,
+.cf-quotes .quote-record .work-status.AWARDED { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
+.cf-quotes .quote-amount { font: 650 22px/1.3 var(--craft-font); color: var(--craft-ink); }
+.request-quote-panel.cf-quotes { padding-top: 24px; margin-top: 24px; border-color: var(--craft-border); scroll-margin-top: 88px; }
+.cf-quotes .quote-form > h3 { margin: 0; font-size: 17px; }
+.cf-quotes .quote-form .request-actions { margin-bottom: 0; }
+.cf-quote-comparison .work-breadcrumb a { color: var(--craft-ink); }
+.quote-active-count { font-size: 13px; color: var(--craft-muted); white-space: nowrap; }
+.quote-comparison-card { min-width: 0; background: var(--craft-surface); border: 1px solid var(--craft-border); border-radius: 14px; }
+.cf-quotes .quote-comparison-toolbar { align-items: flex-end; margin: 0; border: 0; border-radius: 14px 14px 0 0; }
+.quote-comparison-toolbar .field-help { align-self: center; margin-left: auto; }
+.quote-comparison-card > .review-reason { margin: 0 16px 12px; }
+.quote-comparison-card > .creator-empty { margin: 0; border: 0; border-top: 1px solid var(--craft-border); border-radius: 0 0 14px 14px; }
+.quote-table-scroll { overflow-x: auto; border-radius: 0 0 14px 14px; }
+.quote-table-scroll:focus-visible { outline-offset: -3px; }
+.quote-comparison {
+  --quote-dimension-width: 142px;
+  --quote-value-width: 196px;
+  width: max(100%, calc(var(--quote-dimension-width) + var(--quote-columns) * var(--quote-value-width)));
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: 13px;
+}
+.quote-comparison :is(th, td) { padding: 15px; border-top: 1px solid var(--craft-border); text-align: left; overflow-wrap: anywhere; }
+.quote-comparison th { font-weight: 600; }
+.quote-comparison thead th { background: #f4f4f5; }
+.quote-comparison th:first-child { width: var(--quote-dimension-width); position: sticky; left: 0; z-index: 1; border-right: 1px solid var(--craft-border); background: #fafafa; color: var(--craft-muted); }
+.quote-comparison thead th:first-child { background: #f4f4f5; }
+.quote-comparison tbody :is(th, td) { vertical-align: top; }
+.quote-comparison tbody td + td { border-left: 1px solid var(--craft-border); }
+.quote-comparison tbody p { margin: 0 0 8px; }
+.quote-comparison .field-help { display: block; margin: 5px 0 0; }
+.quote-comparison .field-help.shipping-warning { color: #92400e; }
+.quote-comparison .request-description, .quote-comparison .request-excerpt { margin: 8px 0; max-width: 58ch; }
+.quote-comparison .request-description { max-height: 220px; overflow-y: auto; }
+.quote-comparison .proposal-cell:has(details[open]) .request-excerpt { display: none; }
+.quote-comparison .quote-images { margin: 0; }
+.quote-comparison .quote-image-card { width: 80px; }
+.quote-comparison .quote-image-card .work-image { height: 80px; }
+.quote-comparison .button-primary { width: min(100%, 170px); margin-top: 3px; padding: 8px; white-space: normal; }
+.quote-cell-metric { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; }
+.quote-badge { display: inline-block; padding: 3px 7px; border-radius: 999px; color: #065f46; background: #ecfdf5; font-size: 11px; white-space: nowrap; }
+.quote-badge-duration { color: #1e40af; background: #eff6ff; }
+.cf-quotes .award-panel { scroll-margin-top: 88px; }
+.cf-quotes .award-panel h2 { font: 650 19px/1.4 var(--craft-font); margin-top: 0; }
+.cf-quotes .award-panel .work-field { max-width: 590px; }
+.cf-quotes .award-panel .request-actions { justify-content: flex-start; }
+.cf-quotes .award-address { color: var(--craft-ink); background: #fafafa; border-color: var(--craft-accent); }
+.cf-quotes .award-confirmation input { accent-color: var(--craft-primary); }
+@media (max-width: 600px) {
+  .quote-comparison { --quote-dimension-width: 104px; --quote-value-width: 174px; }
+  .quote-comparison :is(th, td) { padding: 10px; }
+  .quote-comparison-toolbar .field-help { width: 100%; margin: 0; }
+}
+
 .order-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 28px; align-items: start; }
 .order-detail-grid > * { min-width: 0; }
 .order-detail-grid .editor-section { margin-bottom: 24px; }

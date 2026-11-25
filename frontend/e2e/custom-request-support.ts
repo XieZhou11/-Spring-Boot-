@@ -42,6 +42,21 @@ export async function prepareCreator(page: Page, admin: Page, codes: Map<string,
   return { categoryId, applicationId }
 }
 
+/** 同一主品类的第二位真实认证创作者，图片与申请材料均由本人提交。 */
+export async function anotherCreator(page: Page, admin: Page, codes: Map<string, string>, categoryId: string) {
+  await register(page, codes, '木间新作')
+  const imageIds: string[] = []
+  for (let index = 0; index < 6; index++) {
+    const csrf = (await (await page.request.get(`${api}/csrf`)).json()).data
+    const uploaded = await page.request.post(`${api}/creator-application-images`, { headers: { [csrf.headerName]: csrf.token }, multipart: { file: { name: 'creator.png', mimeType: 'image/png', buffer: image } } })
+    expect(uploaded.status()).toBe(201)
+    imageIds.push((await uploaded.json()).data.id)
+  }
+  const response = await mutate(page, '/me/creator-applications', { requestKey: randomUUID(), realName: '测试木匠', contactPhone: '13800138000', province: '北京市', city: '市辖区', district: '东城区', categoryIds: [categoryId], experienceYears: 4, introduction: '专注于原创木作的手艺人，材料选用自然原木，每一件作品均经过手工锯切、打磨和上蜡，希望以耐用的手工器物陪伴生活。', originalWorks: [0, 1, 2].map(index => ({ finishedImageIds: [imageIds[index * 2]], processImageIds: [imageIds[index * 2 + 1]] })), alipayAccount: '13800138000', payeeName: '测试木匠', supportingDescription: '' })
+  expect(response.status()).toBe(201)
+  expect((await mutate(admin, `/admin/creator-applications/${(await response.json()).data.id}/review`, { decision: 'APPROVED', reason: '' }, 'put')).status()).toBe(200)
+}
+
 export async function fillRequest(page: Page, categoryId: string, title: string) {
   await page.getByLabel('需求标题', { exact: true }).fill(title)
   await page.getByLabel('需求品类', { exact: true }).selectOption(categoryId)

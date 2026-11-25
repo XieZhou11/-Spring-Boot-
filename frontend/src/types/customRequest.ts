@@ -75,18 +75,18 @@ export type RequestQuotaVO = PublicationQuotaVO
 export interface ConversationVO {
   /** 会话编号。 */
   id: string
-  /** 关联需求。 */
-  requestId: string
-  /** 定标后关联订单，无订单时为空。 */
+  /** 关联需求，现货会话为空。 */
+  requestId: string | null
+  /** 关联定标或现货订单，无订单时为空。 */
   orderId: string | null
   /** 关联订单标题，无订单时为空。 */
   orderTitle: string | null
   /** 关联订单当前状态，无订单时为空。 */
   orderStatus: string | null
-  /** 需求标题。 */
-  requestTitle: string
-  /** 需求状态。 */
-  requestStatus: string
+  /** 需求标题，无需求时为空。 */
+  requestTitle: string | null
+  /** 需求状态，无需求时为空。 */
+  requestStatus: string | null
   /** 对方编号。 */
   otherUserId: string
   /** 对方昵称。 */

@@ -9,10 +9,11 @@ import { createRequest, getCandidateCreators, getCustomRequest, getRequestQuota,
 import type { CategoryVO } from '@/types/creator'
 import type { CreatorPublicVO } from '@/types/work'
 import type { CustomRequestVO, RequestContent, RequestQuotaVO } from '@/types/customRequest'
-import { requestContent } from '@/utils/customRequest'
+import { requestContent, requestListPaths, requestListReturn } from '@/utils/customRequest'
 import { ApiError } from '@/utils/request'
 import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/custom-request.css'
+import '@/assets/styles/craftflow-demand.css'
 
 const route = useRoute(); const router = useRouter(); const auth = useAuthStore()
 const form = reactive(requestContent()); const current = ref<CustomRequestVO>(); const quota = ref<RequestQuotaVO>()
@@ -21,6 +22,11 @@ const keyword = ref(''); const searching = ref(false); const sourceTitle = ref('
 const loading = ref(true); const ready = ref(false); const busy = ref(false); const uploading = ref(false); const unresolved = ref(false)
 const error = ref(''); const notice = ref(''); const fields = ref<Record<string, string>>({})
 const baseline = ref(''); const dirty = computed(() => ready.value && JSON.stringify(form) !== baseline.value)
+const returnTo = computed(() => {
+  const source = requestListReturn(route.query.returnTo)
+  return router.resolve(source).path === requestListPaths.mine ? source : requestListPaths.mine
+})
+const returnQuery = computed(() => returnTo.value === requestListPaths.mine ? {} : { returnTo: returnTo.value })
 let requestKey = crypto.randomUUID(); let creation: RequestContent | undefined; let disposed = false; let candidateRevision = 0
 const selectable = computed(() => categories.value.flatMap(root => {
   if (form.visibility === 'DIRECTED' && selectedCreator.value && !selectedCreator.value.categories.some(c => c.id === root.id)) return []
@@ -99,7 +105,7 @@ async function persist(publication: boolean) {
     current.value = publication ? await publishRequest(existing.id, requestContent(form), existing.version) : await saveRequest(existing.id, requestContent(form), existing.version)
     Object.assign(form, requestContent(current.value)); baseline.value = JSON.stringify(form)
     notice.value = publication ? '需求已发布' : '草稿已保存'
-    await router.replace(publication ? `/requests/${current.value.id}` : `/my-requests/${current.value.id}/edit`)
+    await router.replace({ path: publication ? `/requests/${current.value.id}` : `/my-requests/${current.value.id}/edit`, query: returnQuery.value })
   } catch (failure) {
     // 明确拒绝且尚未创建时，修正后的内容必须成为新的创建请求。
     if (!current.value && failure instanceof ApiError && [400, 403, 404, 422].includes(failure.status)) { creation = undefined; requestKey = crypto.randomUUID() }
@@ -115,7 +121,7 @@ async function reconcile() {
   try {
     const result = current.value ? await getCustomRequest(current.value.id, true) : await ensureCreated()
     current.value = result; unresolved.value = false
-    if (!result.canEdit) { baseline.value = JSON.stringify(form); await router.replace(`/requests/${result.id}`) }
+    if (!result.canEdit) { baseline.value = JSON.stringify(form); await router.replace({ path: `/requests/${result.id}`, query: returnQuery.value }) }
     else notice.value = '已核验最新版本，输入已保留。请确认后重新保存或发布。'
   } catch (failure) { error.value = failure instanceof Error ? failure.message : '仍无法核验' }
   finally { busy.value = false }
@@ -143,210 +149,212 @@ onMounted(() => { void initialize(); window.addEventListener('beforeunload', bef
 onBeforeUnmount(() => { disposed = true; candidateRevision++; window.removeEventListener('beforeunload', beforeUnload) })
 </script>
 <template>
-  <WorkLayout>
-    <nav class="work-breadcrumb">
-      <RouterLink to="/my-requests">我的需求</RouterLink><span>/</span><span>{{ current ? '编辑草稿' : '发布定制需求' }}</span>
-    </nav>
-    <header class="work-section-heading">
-      <div>
-        <p class="eyebrow">
-          MADE FOR YOUR EVERYDAY
-        </p><h1>{{ current ? '编辑需求草稿' : '发布定制需求' }}</h1><p class="muted">
-          把心里的想法，交给一双有温度的手。发布后内容与范围将锁定。
+  <WorkLayout presentation="craftflow">
+    <div class="cf-request-editor-page">
+      <nav
+        class="cf-request-breadcrumb"
+        aria-label="需求导航"
+      >
+        <RouterLink :to="returnTo">我的需求</RouterLink><span aria-hidden="true">/</span><span>{{ current ? '编辑草稿' : '发布定制需求' }}</span>
+      </nav>
+      <header class="cf-request-editor-heading">
+        <div>
+          <h1>{{ current ? '编辑需求草稿' : '发布定制需求' }}</h1>
+          <p>发布后内容与范围将锁定。</p>
+        </div>
+        <p v-if="quota">
+          开放中 {{ quota.used }} / {{ quota.limit }} 条
         </p>
-      </div><span
-        v-if="quota"
-        class="muted"
-      >开放中 {{ quota.used }} / {{ quota.limit }}</span>
-    </header>
-    <p
-      v-if="error"
-      class="form-alert"
-      role="alert"
-    >
-      {{ error }} <button
-        v-if="unresolved"
-        class="inline-button"
-        :disabled="busy"
-        @click="reconcile"
+      </header>
+      <p
+        v-if="error"
+        class="form-alert"
+        role="alert"
       >
-        核验最新状态
-      </button><button
-        v-else-if="!ready"
-        class="inline-button"
-        @click="initialize"
+        {{ error }} <button
+          v-if="unresolved"
+          class="inline-button"
+          :disabled="busy"
+          @click="reconcile"
+        >
+          核验最新状态
+        </button><button
+          v-else-if="!ready"
+          class="inline-button"
+          @click="initialize"
+        >
+          重新读取
+        </button>
+      </p>
+      <p
+        v-if="notice"
+        class="form-success"
+        role="status"
       >
-        重新读取
-      </button>
-    </p>
-    <p
-      v-if="notice"
-      class="form-success"
-      role="status"
-    >
-      {{ notice }}
-    </p><p
-      v-if="loading"
-      role="status"
-    >
-      正在准备需求表单…
-    </p>
-    <div
-      v-else-if="current && !current.canEdit"
-      class="creator-empty"
-    >
-      <p>此需求已发布，内容已锁定。</p><RouterLink :to="`/requests/${current.id}`">查看需求</RouterLink>
-    </div>
-    <form
-      v-else-if="ready"
-      class="request-editor"
-      @submit.prevent="persist(true)"
-    >
-      <fieldset :disabled="busy || unresolved">
-        <legend class="sr-only">
-          定制需求内容
-        </legend>
-        <section class="editor-section">
-          <header><span>01</span><div><h2>想定制什么</h2><p>先说清用途和期待。</p></div></header>
-          <label class="work-field">需求标题<input
-            v-model="form.title"
-            aria-label="需求标题"
-            maxlength="30"
-            :aria-invalid="!!fields.title"
-          ><small class="field-error">{{ fields.title }}</small></label>
-          <label class="work-field">需求范围<select
-            v-model="form.visibility"
-            aria-label="需求范围"
-            @change="rangeChanged"
-          ><option value="PUBLIC">公开 · 让认证创作者发现需求</option><option value="DIRECTED">定向 · 仅邀请一位创作者</option></select></label>
-          <label class="work-field">需求品类<select
-            v-model="form.categoryId"
-            aria-label="需求品类"
-            :aria-invalid="!!fields.categoryId"
-          ><option :value="null">请选择末级品类</option><option
-            v-for="item in selectable"
-            :key="item.id"
-            :value="item.id"
-          >{{ item.name }}</option></select><small class="field-error">{{ fields.categoryId }}</small></label>
-          <div
-            v-if="form.visibility === 'DIRECTED'"
-            class="request-invite-picker"
-          >
-            <p v-if="selectedCreator">
-              指定创作者：<strong>{{ selectedCreator.nickname }}</strong><button
-                v-if="!form.sourceWorkId"
-                type="button"
-                class="inline-button"
-                @click="rangeChanged(); form.visibility = 'DIRECTED'"
-              >
-                重新选择
-              </button>
-            </p>
-            <template v-else>
-              <label class="work-field">创作者昵称<input
-                v-model="keyword"
-                aria-label="创作者昵称"
-                maxlength="30"
-              ></label><button
-                type="button"
-                class="button-secondary"
-                :disabled="!form.categoryId || searching"
-                @click="searchCreators"
-              >
-                查找同品类创作者
-              </button><label
-                v-if="candidates.length"
-                class="work-field"
-              >受邀创作者<select
-                :value="form.invitedCreatorId || ''"
-                aria-label="受邀创作者"
-                :aria-invalid="!!fields.invitedCreatorId"
-                @change="chooseCreator(($event.target as HTMLSelectElement).value)"
-              ><option value="">请选择一位创作者</option><option
-                v-for="creator in candidates"
-                :key="creator.id"
-                :value="creator.id"
-              >{{ creator.nickname }}</option></select></label><p
-                v-else
+        {{ notice }}
+      </p><p
+        v-if="loading"
+        role="status"
+      >
+        正在准备需求表单…
+      </p>
+      <div
+        v-else-if="current && !current.canEdit"
+        class="creator-empty"
+      >
+        <p>此需求已发布，内容已锁定。</p><RouterLink :to="{ path: `/requests/${current.id}`, query: returnQuery }">查看需求</RouterLink>
+      </div>
+      <form
+        v-else-if="ready"
+        class="request-editor"
+        @submit.prevent="persist(true)"
+      >
+        <fieldset :disabled="busy || unresolved">
+          <legend class="sr-only">
+            定制需求内容
+          </legend>
+          <section class="editor-section">
+            <h2>定制内容</h2>
+            <label class="work-field">需求标题<input
+              v-model="form.title"
+              aria-label="需求标题"
+              maxlength="30"
+              :aria-invalid="!!fields.title"
+            ><small class="field-error">{{ fields.title }}</small></label>
+            <label class="work-field">需求范围<select
+              v-model="form.visibility"
+              aria-label="需求范围"
+              @change="rangeChanged"
+            ><option value="PUBLIC">公开 · 让认证创作者发现需求</option><option value="DIRECTED">定向 · 仅邀请一位创作者</option></select></label>
+            <label class="work-field">需求品类<select
+              v-model="form.categoryId"
+              aria-label="需求品类"
+              :aria-invalid="!!fields.categoryId"
+            ><option :value="null">请选择末级品类</option><option
+              v-for="item in selectable"
+              :key="item.id"
+              :value="item.id"
+            >{{ item.name }}</option></select><small class="field-error">{{ fields.categoryId }}</small></label>
+            <div
+              v-if="form.visibility === 'DIRECTED'"
+              class="request-invite-picker"
+            >
+              <p v-if="selectedCreator">
+                指定创作者：<strong>{{ selectedCreator.nickname }}</strong><button
+                  v-if="!form.sourceWorkId"
+                  type="button"
+                  class="inline-button"
+                  @click="rangeChanged(); form.visibility = 'DIRECTED'"
+                >
+                  重新选择
+                </button>
+              </p>
+              <template v-else>
+                <label class="work-field">创作者昵称<input
+                  v-model="keyword"
+                  aria-label="创作者昵称"
+                  maxlength="30"
+                ></label><button
+                  type="button"
+                  class="button-secondary"
+                  :disabled="!form.categoryId || searching"
+                  @click="searchCreators"
+                >
+                  查找同品类创作者
+                </button><label
+                  v-if="candidates.length"
+                  class="work-field"
+                >受邀创作者<select
+                  :value="form.invitedCreatorId || ''"
+                  aria-label="受邀创作者"
+                  :aria-invalid="!!fields.invitedCreatorId"
+                  @change="chooseCreator(($event.target as HTMLSelectElement).value)"
+                ><option value="">请选择一位创作者</option><option
+                  v-for="creator in candidates"
+                  :key="creator.id"
+                  :value="creator.id"
+                >{{ creator.nickname }}</option></select></label><p
+                  v-else
+                  class="field-help"
+                >
+                  选择需求品类后，按昵称查找正在接单的创作者。
+                </p>
+              </template>
+              <small class="field-error">{{ fields.invitedCreatorId }}</small><p
+                v-if="sourceTitle"
                 class="field-help"
               >
-                选择需求品类后，按昵称查找正在接单的创作者。
+                参考作品：{{ sourceTitle }}。仅作定制参考，不占用现货。
               </p>
-            </template>
-            <small class="field-error">{{ fields.invitedCreatorId }}</small><p
-              v-if="sourceTitle"
-              class="field-help"
-            >
-              参考作品：{{ sourceTitle }}。仅作定制参考，不占用现货。
-            </p>
-          </div>
-          <label
-            v-for="item in [{ key: 'purpose', label: '用途', max: 10000 }, { key: 'materialPreference', label: '材质偏好', max: 10000 }, { key: 'specification', label: '尺寸规格', max: 10000 }] as const"
-            :key="item.key"
-            class="work-field"
-          >{{ item.label }}<input
-            v-model="form[item.key]"
-            :aria-label="item.label"
-            :maxlength="item.max"
-            :aria-invalid="!!fields[item.key]"
-          ><small class="field-error">{{ fields[item.key] }}</small></label>
-        </section>
-        <section class="editor-section">
-          <header><span>02</span><div><h2>预算与时间</h2><p>让创作者知道你的安排。</p></div></header><div class="work-fields-pair">
+            </div>
             <label
-              v-for="item in [{ key: 'budgetMin', label: '预算下限（元）' }, { key: 'budgetMax', label: '预算上限（元）' }] as const"
+              v-for="item in [{ key: 'purpose', label: '用途', max: 10000 }, { key: 'materialPreference', label: '材质偏好', max: 10000 }, { key: 'specification', label: '尺寸规格', max: 10000 }] as const"
               :key="item.key"
               class="work-field"
             >{{ item.label }}<input
               v-model="form[item.key]"
               :aria-label="item.label"
-              inputmode="decimal"
-              placeholder="50—50000"
+              :maxlength="item.max"
               :aria-invalid="!!fields[item.key]"
             ><small class="field-error">{{ fields[item.key] }}</small></label>
-          </div><label class="work-field">期望发货日期<input
-            v-model="form.expectedShipDate"
-            type="date"
-            aria-label="期望发货日期"
-            :min="dateAfter(7)"
-            :max="dateAfter(180)"
-            :aria-invalid="!!fields.expectedShipDate"
-          ><small :class="fields.expectedShipDate ? 'field-error' : 'field-help'">{{ fields.expectedShipDate || '实际发布日后 7—180 天，以北京时间计算。' }}</small></label>
-        </section>
-        <section class="editor-section">
-          <header><span>03</span><div><h2>细节与参考</h2><p>写下制作细节和验收期待。</p></div></header><label class="work-field">需求描述<textarea
-            v-model="form.description"
-            aria-label="需求描述"
-            rows="7"
-            maxlength="2000"
-            :aria-invalid="!!fields.description"
-          /><small :class="fields.description ? 'field-error' : 'field-help'">{{ fields.description || `${form.description.length} / 2000 · 至少 20 字` }}</small></label><PrivateImagePicker
-            v-model="form.referenceImageIds"
-            label="参考图片"
-            :max="9"
-            :disabled="busy || unresolved"
-            @uploading="uploading = $event"
-          /><small class="field-error">{{ fields.referenceImageIds }}</small>
-        </section>
-      </fieldset>
-      <div class="request-actions">
-        <button
-          type="button"
-          class="button-secondary"
-          :disabled="busy || uploading || unresolved"
-          @click="persist(false)"
-        >
-          保存草稿
-        </button><button
-          type="submit"
-          class="button-primary"
-          :disabled="busy || uploading || unresolved"
-        >
-          {{ busy ? '正在保存…' : '发布需求' }}
-        </button><p class="field-help">
-          发布后不可编辑；需要调整时，关闭原需求再复制新建。
-        </p>
-      </div>
-    </form>
+          </section>
+          <section class="editor-section">
+            <h2>预算与时间</h2><div class="work-fields-pair">
+              <label
+                v-for="item in [{ key: 'budgetMin', label: '预算下限（元）' }, { key: 'budgetMax', label: '预算上限（元）' }] as const"
+                :key="item.key"
+                class="work-field"
+              >{{ item.label }}<input
+                v-model="form[item.key]"
+                :aria-label="item.label"
+                inputmode="decimal"
+                placeholder="50—50000"
+                :aria-invalid="!!fields[item.key]"
+              ><small class="field-error">{{ fields[item.key] }}</small></label>
+            </div><label class="work-field">期望发货日期<input
+              v-model="form.expectedShipDate"
+              type="date"
+              aria-label="期望发货日期"
+              :min="dateAfter(7)"
+              :max="dateAfter(180)"
+              :aria-invalid="!!fields.expectedShipDate"
+            ><small :class="fields.expectedShipDate ? 'field-error' : 'field-help'">{{ fields.expectedShipDate || '实际发布日后 7—180 天，以北京时间计算。' }}</small></label>
+          </section>
+          <section class="editor-section">
+            <h2>细节与参考</h2><label class="work-field">需求描述<textarea
+              v-model="form.description"
+              aria-label="需求描述"
+              rows="7"
+              maxlength="2000"
+              :aria-invalid="!!fields.description"
+            /><small :class="fields.description ? 'field-error' : 'field-help'">{{ fields.description || `${form.description.length} / 2000 · 至少 20 字` }}</small></label><PrivateImagePicker
+              v-model="form.referenceImageIds"
+              label="参考图片"
+              :max="9"
+              :disabled="busy || unresolved"
+              @uploading="uploading = $event"
+            /><small class="field-error">{{ fields.referenceImageIds }}</small>
+          </section>
+        </fieldset>
+        <div class="request-actions">
+          <button
+            type="button"
+            class="button-secondary"
+            :disabled="busy || uploading || unresolved"
+            @click="persist(false)"
+          >
+            保存草稿
+          </button><button
+            type="submit"
+            class="button-primary"
+            :disabled="busy || uploading || unresolved"
+          >
+            {{ busy ? '正在保存…' : '发布需求' }}
+          </button><p class="field-help">
+            发布后不可编辑；需要调整时，关闭原需求再复制新建。
+          </p>
+        </div>
+      </form>
+    </div>
   </WorkLayout>
 </template>

@@ -4,6 +4,8 @@
 
 ## 当前记录
 
+[T-023 CraftFlow 第 3 批](tasks/T-023-craftflow-requests-quotes-messages.md)覆盖定制需求、报价定标、会话与系统通知。 [测试记录](../testing/T-023-craftflow-requests-quotes-messages.md)
+
 [T-022 CraftFlow 第 2 批](tasks/T-022-craftflow-account-works.md)覆盖个人中心、创作者入驻、品类与审核、作品管理和互动。 [测试记录](../testing/T-022-craftflow-account-works.md)
 [T-021 CraftFlow 第 1 批](tasks/T-021-craftflow-auth-discovery.md)覆盖认证、公共导航、作品广场及详情，复用现有会话、作品和交易接口。 [测试记录](../testing/T-021-craftflow-auth-discovery.md)
 

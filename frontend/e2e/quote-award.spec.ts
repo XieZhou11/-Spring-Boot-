@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import type { Page } from '@playwright/test'
 import { test, expect } from './fixtures'
-import { api, image, mutate, origin, prepareCreator, register } from './custom-request-support'
+import { anotherCreator, api, image, mutate, origin, prepareCreator, register } from './custom-request-support'
 
 test.use({ storageMode: 'receiver', actionTimeout: 15_000 })
 
@@ -73,6 +72,7 @@ test('报价撤回重报、地址定标未知响应重试、订单取消与历�
     await page.getByRole('link', { name: '查看报价对比', exact: true }).click()
     await expect(page.getByRole('table', { name: '报价方案对比' })).toContainText('暂无评价')
     await expect(page.getByRole('table', { name: '报价方案对比' })).toContainText('180.00')
+    await expect(page.getByText('发货日期以实际付款时间确定', { exact: false })).toBeVisible()
     await page.getByRole('table', { name: '报价方案对比' }).getByRole('button', { name: '放大方案图片 1', exact: true }).click()
     await expect(page.getByRole('dialog').getByRole('img', { name: '方案图片大图', exact: true })).toBeVisible()
     await page.getByRole('button', { name: '关闭大图', exact: true }).last().click()
@@ -174,22 +174,7 @@ test('本人报价与承接订单历史仅需登录，未认证身份没有寻�
   await expect(page.getByRole('alert')).toHaveCount(0)
 })
 
-/** 同一主品类的第二位真实认证创作者，图片与申请材料均由本人提交。 */
-async function anotherCreator(page: Page, admin: Page, codes: Map<string, string>, categoryId: string) {
-  await register(page, codes, '木间新作')
-  const imageIds: string[] = []
-  for (let index = 0; index < 6; index++) {
-    const csrf = (await (await page.request.get(`${api}/csrf`)).json()).data
-    const uploaded = await page.request.post(`${api}/creator-application-images`, { headers: { [csrf.headerName]: csrf.token }, multipart: { file: { name: 'creator.png', mimeType: 'image/png', buffer: image } } })
-    expect(uploaded.status()).toBe(201)
-    imageIds.push((await uploaded.json()).data.id)
-  }
-  const response = await mutate(page, '/me/creator-applications', { requestKey: randomUUID(), realName: '测试木匠', contactPhone: '13800138000', province: '北京市', city: '市辖区', district: '东城区', categoryIds: [categoryId], experienceYears: 4, introduction: '专注于原创木作的手艺人，材料选用自然原木，每一件作品均经过手工锯切、打磨和上蜡，希望以耐用的手工器物陪伴生活。', originalWorks: [0, 1, 2].map(index => ({ finishedImageIds: [imageIds[index * 2]], processImageIds: [imageIds[index * 2 + 1]] })), alipayAccount: '13800138000', payeeName: '测试木匠', supportingDescription: '' })
-  expect(response.status()).toBe(201)
-  expect((await mutate(admin, `/admin/creator-applications/${(await response.json()).data.id}/review`, { decision: 'APPROVED', reason: '' }, 'put')).status()).toBe(200)
-}
-
-test('同表比较多份报价排序，无评价不计零分，创作者不可查看竞争方案', async ({ page, browser, mailbox }, testInfo) => {
+test('同表比较多份报价与访问权限，定标沿用中标会话并归档落选会话', async ({ page, browser, mailbox }, testInfo) => {
   test.setTimeout(180_000)
   const contexts = await Promise.all([browser.newContext({ baseURL: origin }), browser.newContext({ baseURL: origin }), browser.newContext({ baseURL: origin })])
   try {
@@ -201,21 +186,39 @@ test('同表比较多份报价排序，无评价不计零分，创作者不可�
     const content = { title: '多位手艺人的制作方案', categoryId, purpose: '日常使用', materialPreference: '原木', specification: '十二厘米', budgetMin: '100.00', budgetMax: '300.00', expectedShipDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10), description: '希望制作一枚保留原木纹理的书签，适合日常阅读，要求边缘细腻圆润并进行环保木蜡油处理。', referenceImageIds: [], visibility: 'PUBLIC', invitedCreatorId: null, sourceWorkId: null }
     const draft = (await (await mutate(page, '/me/custom-requests', { ...content, requestKey: randomUUID() })).json()).data
     expect((await mutate(page, `/me/custom-requests/${draft.id}/publication`, { ...content, version: draft.version }, 'put')).status()).toBe(200)
+    // 定标前为两位创作者各保留一段真实咨询记录，定标后验证原会话的读写资格。
+    const firstConversation = await mutate(first, `/custom-requests/${draft.id}/conversations`)
+    const secondConversation = await mutate(second, `/custom-requests/${draft.id}/conversations`)
+    expect(firstConversation.status()).toBe(201)
+    expect(secondConversation.status()).toBe(201)
+    const winnerConversationId = (await firstConversation.json()).data.id
+    const loserConversationId = (await secondConversation.json()).data.id
+    const winnerHistory = '可以先确认木纹和书签尺寸。'
+    const loserHistory = '也可以选颜色较浅的山毛榉。'
+    expect((await mutate(first, `/conversations/${winnerConversationId}/messages`, { clientMessageKey: randomUUID(), content: winnerHistory, imageIds: [] })).status()).toBe(201)
+    expect((await mutate(second, `/conversations/${loserConversationId}/messages`, { clientMessageKey: randomUUID(), content: loserHistory, imageIds: [] })).status()).toBe(201)
     const firstQuote = await mutate(first, `/custom-requests/${draft.id}/quotes`, { requestKey: randomUUID(), goodsAmount: '180.00', durationDays: 10, proposal: '选用天然胡桃木，细致打磨并使用环保木蜡油，保留自然纹理，制作前提供草图确认尺寸和姓名刻印。', additionalAgreement: '', imageIds: [] })
     expect(firstQuote.status()).toBe(201)
     expect((await mutate(second, `/custom-requests/${draft.id}/quotes`, { requestKey: randomUUID(), goodsAmount: '120.00', durationDays: 20, proposal: '选用天然山毛榉木，手工锯切并逐级打磨表面，最后进行木蜡油养护，制作前与买家确认字体和位置。', additionalAgreement: '', imageIds: [] })).status()).toBe(201)
     await page.goto(`/requests/${draft.id}/quotes`)
-    const rows = page.getByRole('table', { name: '报价方案对比' }).locator('tbody tr')
-    await expect(rows).toHaveCount(2)
-    await expect(rows.first()).toContainText('木间新作')
-    await expect(rows.first()).toContainText('最低价')
-    await expect(rows.locator('text=暂无评价')).toHaveCount(2)
+    const table = page.getByRole('table', { name: '报价方案对比' })
+    const creatorHeaders = table.getByRole('columnheader').filter({ has: page.getByRole('link') })
+    const comparisonRow = (name: string) => table.getByRole('row').filter({ has: page.getByRole('rowheader', { name, exact: true }) })
+    const firstSelect = comparisonRow('有效期与定标').getByRole('button', { name: '选择此方案', exact: true }).first()
+    await expect(table).toHaveCount(1)
+    await expect(page.getByText('有效报价 2 / 5', { exact: true })).toBeVisible()
+    await expect(creatorHeaders).toHaveCount(2)
+    await expect(creatorHeaders.first()).toContainText('木间新作')
+    await expect(comparisonRow('商品成交金额').getByRole('cell').first()).toContainText('最低价')
+    await expect(comparisonRow('创作者口碑').getByText('暂无评价', { exact: true })).toHaveCount(2)
     await page.getByLabel('报价排序', { exact: true }).selectOption('DURATION')
-    await expect(rows.first()).toContainText('山间器物')
-    await expect(rows.first()).toContainText('最短工期')
+    await expect(creatorHeaders.first()).toContainText('山间器物')
+    await expect(comparisonRow('工期与预计发货').getByRole('cell').first()).toContainText('最短工期')
+    const ratingResponse = page.waitForResponse(response => new URL(response.url()).searchParams.get('sort') === 'RATING')
     await page.getByLabel('报价排序', { exact: true }).selectOption('RATING')
-    await expect(rows.first()).toContainText('山间器物')
-    await rows.first().getByRole('button', { name: '选择此方案', exact: true }).click()
+    expect((await ratingResponse).status()).toBe(200)
+    await expect(creatorHeaders.first()).toContainText('山间器物')
+    await firstSelect.click()
     await expect(page.getByText('没有可用地址，请先添加收货地址。', { exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: '确认定标并生成订单', exact: true })).toBeDisabled()
     await page.getByRole('button', { name: '返回比较', exact: true }).click()
@@ -231,5 +234,33 @@ test('同表比较多份报价排序，无评价不计零分，创作者不可�
     const privateQuotes = (await (await first.request.get(`${api}/custom-requests/${draft.id}/quotes`)).json()).data
     expect(privateQuotes.total).toBe(1)
     expect(privateQuotes.items[0].goodsAmount).toBe('180.00')
+    await page.setViewportSize({ width: 1366, height: 900 })
+    const address = await mutate(page, '/me/addresses', { recipientName: '比较收件人', phone: '13800138000', province: '北京市', city: '市辖区', district: '东城区', detailAddress: '手作测试路二号', isDefault: true })
+    expect(address.status()).toBe(201)
+    await firstSelect.click()
+    await expect(page.getByRole('region', { name: '定标确认' })).toContainText('山间器物')
+    await expect(page.getByLabel('选择收货地址', { exact: true })).toHaveValue((await address.json()).data.id)
+    await page.getByRole('button', { name: '确认定标并生成订单', exact: true }).click()
+    await expect(page).toHaveURL(/\/orders\/\d+$/)
+    const orderId = page.url().split('/').at(-1)!
+    const order = (await (await page.request.get(`${api}/orders/${orderId}`)).json()).data
+    expect(order.conversationId).toBe(winnerConversationId)
+    await page.getByRole('link', { name: '进入订单沟通', exact: true }).click()
+    await expect(page).toHaveURL(`/messages/conversations/${winnerConversationId}`)
+    await expect(page.getByRole('log')).toContainText(winnerHistory)
+    await page.getByLabel('沟通内容', { exact: true }).fill('确认合作后继续在这里沟通。')
+    await page.getByRole('button', { name: '发送消息', exact: true }).click()
+    await expect(page.getByRole('log')).toContainText('确认合作后继续在这里沟通。')
+    await second.goto(`/messages/conversations/${loserConversationId}`)
+    await expect(second.getByRole('log')).toContainText(loserHistory)
+    await expect(second.getByText(/会话已归档.*仅可查看历史/)).toBeVisible()
+    await expect(second.getByLabel('沟通内容', { exact: true })).toHaveCount(0)
+    expect((await mutate(second, `/conversations/${loserConversationId}/messages`, { clientMessageKey: randomUUID(), content: '落选后的消息应被拒绝。', imageIds: [] })).status()).toBe(409)
+    await page.goto(`/requests/${draft.id}/quotes`)
+    await expect(page.getByText('有效报价 0 / 5', { exact: true })).toBeVisible()
+    await page.getByLabel('历史报价状态', { exact: true }).selectOption('AWARDED')
+    await expect(page.locator('.quote-record')).toContainText('山间器物')
+    await page.getByLabel('历史报价状态', { exact: true }).selectOption('LOST')
+    await expect(page.locator('.quote-record')).toContainText('木间新作')
   } finally { for (const context of contexts) await context.close() }
 })

@@ -10,7 +10,7 @@ import type { CustomRequestVO } from '@/types/customRequest'
 import type { QuoteDTO, QuoteQuotaVO, QuoteVO } from '@/types/quote'
 import { ApiError } from '@/utils/request'
 import '@/assets/styles/quote.css'
-const props = defineProps<{ request: CustomRequestVO }>()
+const props = defineProps<{ request: CustomRequestVO; returnTo?: string }>()
 const emit = defineEmits<{ changed: [] }>()
 const auth = useAuthStore(); const creator = computed(() => !props.request.owned && auth.session?.roles.includes('CREATOR'))
 const rows = ref<QuoteVO[]>([]); const total = ref(0); const page = ref(1); const quota = ref<QuoteQuotaVO>()
@@ -68,30 +68,21 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('beforeunload', b
 <template>
   <section
     v-if="request.status !== 'DRAFT'"
-    id="quotes"
-    class="request-quote-panel"
+    class="request-quote-panel cf-quotes"
   >
     <header class="work-section-heading">
       <div>
-        <p class="eyebrow">
-          CRAFT & AGREEMENT
-        </p><h2>{{ request.owned ? '收到的报价' : '我的报价方案' }}</h2>
+        <h2>{{ request.owned ? '收到的报价' : '我的报价方案' }}</h2>
       </div><RouterLink
         v-if="request.owned"
         class="button-primary"
-        :to="`/requests/${request.id}/quotes`"
+        :to="{ name: 'quote-comparison', params: { id: request.id }, query: returnTo ? { returnTo } : {} }"
       >查看报价对比</RouterLink><span
         v-else-if="quota"
         class="muted"
       >今日已提交 {{ quota.used }} / {{ quota.limit }} 次</span>
     </header>
-    <p
-      v-if="request.owned"
-      class="muted"
-    >
-      集中比较商品金额、工期与创作者口碑，选定适合的制作方案。
-    </p>
-    <template v-else>
+    <template v-if="!request.owned">
       <p
         v-if="!request.canQuote && !uncertain"
         class="review-reason"

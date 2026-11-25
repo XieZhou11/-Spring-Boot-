@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures'
-import { api, fillRequest, image, mutate, origin, prepareCreator, register } from './custom-request-support'
+import { anotherCreator, api, fillRequest, image, mutate, origin, prepareCreator, register } from './custom-request-support'
 
 test.use({ storageMode: 'receiver', actionTimeout: 15_000 })
 
@@ -37,7 +37,7 @@ test('买家保存不完整草稿、恢复、发布、关闭复制，普通买�
     expect((await page.request.get(`${api}/custom-requests`)).status()).toBe(403)
     page.once('dialog', d => d.accept())
     await page.getByRole('button', { name: '关闭需求', exact: true }).click()
-    await expect(page.getByText('已关闭', { exact: true }).first()).toBeVisible()
+    await expect(page.getByRole('region', { name: '需求详情' }).getByText('已关闭', { exact: true })).toBeVisible()
     await page.getByRole('button', { name: '复制为新草稿', exact: true }).click()
     await expect(page).toHaveURL(/\/my-requests\/\d+\/edit$/)
     await expect(page.getByLabel('需求标题', { exact: true })).toHaveValue('手工原木书签定制')
@@ -145,29 +145,83 @@ test('公开咨询图文、多端推送与丢响应重试，关闭后历史保�
   } finally { await adminContext.close(); await creatorContext.close() }
 })
 
-test('主页单人定向邀约与隐私，作品入口带入作者及来源', async ({ page, browser, mailbox }) => {
+test('单人定向邀约从报价走到定标，原会话保留且作品入口带入来源', async ({ page, browser, mailbox }, testInfo) => {
   test.setTimeout(240_000)
   const adminContext = await browser.newContext({ baseURL: origin })
   const creatorContext = await browser.newContext({ baseURL: origin })
   const outsiderContext = await browser.newContext({ baseURL: origin })
   try {
     const creator = await creatorContext.newPage(); const admin = await adminContext.newPage(); const outsider = await outsiderContext.newPage()
-    const { categoryId } = await prepareCreator(creator, admin, mailbox.codes, mailbox.promoteAdmin)
+    const { categoryId, applicationId } = await prepareCreator(creator, admin, mailbox.codes, mailbox.promoteAdmin)
     const creatorId = (await (await creator.request.get(`${api}/sessions/current`)).json()).data.userId as string
-    await register(page, mailbox.codes, '定向买家'); await register(outsider, mailbox.codes, '其他买家')
+    const application = (await (await creator.request.get(`${api}/me/creator-applications/${applicationId}`)).json()).data
+    await anotherCreator(outsider, admin, mailbox.codes, application.categoryIds[0])
+    await register(page, mailbox.codes, '定向买家')
     await page.goto(`/creators/${creatorId}`)
     await page.getByRole('link', { name: '邀请定制', exact: false }).click()
     await expect(page.getByLabel('需求范围', { exact: true })).toHaveValue('DIRECTED')
     await fillRequest(page, categoryId, '专属刻字书签定制')
     await page.getByRole('button', { name: '发布需求', exact: true }).click()
     await expect(page).toHaveURL(/\/requests\/\d+$/)
-    const requestId = page.url().split('/').at(-1)!
+    const requestId = new URL(page.url()).pathname.split('/').at(-1)!
     expect((await outsider.request.get(`${api}/custom-requests/${requestId}`)).status()).toBe(404)
+    expect((await mutate(outsider, `/custom-requests/${requestId}/quotes`, {
+      requestKey: crypto.randomUUID(),
+      goodsAmount: '180.00',
+      durationDays: 10,
+      proposal: '使用天然胡桃木，沿木纹切割打磨并刻字，采用木蜡油养护，制作前先确认尺寸及字体。',
+      additionalAgreement: '',
+      imageIds: [],
+    })).status()).toBe(404)
+    const hallResponse = await creator.request.get(`${api}/custom-requests?allCategories=true`)
+    expect(hallResponse.status()).toBe(200)
+    expect((await hallResponse.json()).data.items.map((item: { id: string }) => item.id)).not.toContain(requestId)
     await creator.goto('/creator/invitations')
     await creator.getByRole('link', { name: '专属刻字书签定制', exact: true }).click()
     await creator.getByRole('button', { name: '进入需求沟通', exact: true }).click()
-    const conversationId = creator.url().split('/').at(-1)!
+    await expect(creator).toHaveURL(/\/messages\/conversations\/\d+$/)
+    const conversationId = new URL(creator.url()).pathname.split('/').at(-1)!
     expect((await outsider.request.get(`${api}/conversations/${conversationId}`)).status()).toBe(404)
+    const originalMessage = '可以先确认刻字位置和字体。'
+    await creator.getByLabel('沟通内容', { exact: true }).fill(originalMessage)
+    await creator.getByRole('button', { name: '发送消息', exact: true }).click()
+    await expect(creator.getByRole('log')).toContainText(originalMessage)
+
+    await creator.goto(`/requests/${requestId}#quotes`)
+    await creator.getByLabel('报价金额（元）', { exact: true }).fill('180.00')
+    await creator.getByLabel('工期（自然日）', { exact: true }).fill('10')
+    await creator.getByLabel('方案说明', { exact: true }).fill('选用天然胡桃木，沿木纹切割并手工打磨，刻字位置、字体及尺寸确认后再制作，最后使用环保木蜡油养护。')
+    await creator.getByRole('button', { name: '提交报价', exact: true }).click()
+    await expect(creator.locator('.quote-record')).toContainText('有效报价')
+
+    const addressResponse = await mutate(page, '/me/addresses', {
+      recipientName: '定向测试收件人',
+      phone: '13800138000',
+      province: '北京市',
+      city: '市辖区',
+      district: '东城区',
+      detailAddress: '定向测试路一号',
+      isDefault: true,
+    })
+    expect(addressResponse.status()).toBe(201)
+    const { id: addressId } = (await addressResponse.json()).data
+    await page.goto(`/requests/${requestId}`)
+    await page.getByRole('link', { name: '查看报价对比', exact: true }).click()
+    await expect(page.getByRole('table', { name: '报价方案对比' })).toContainText('180.00')
+    await page.getByRole('button', { name: '选择此方案', exact: true }).click()
+    await expect(page.getByLabel('选择收货地址', { exact: true })).toHaveValue(addressId)
+    await page.getByRole('button', { name: '确认定标并生成订单', exact: true }).click()
+    await expect(page).toHaveURL(/\/orders\/\d+$/)
+    const orderId = new URL(page.url()).pathname.split('/').at(-1)!
+    const ordersResponse = await page.request.get(`${api}/me/orders`)
+    expect(ordersResponse.status()).toBe(200)
+    expect((await ordersResponse.json()).data.total).toBe(1)
+    await page.getByRole('link', { name: '进入订单沟通', exact: true }).click()
+    await expect(page).toHaveURL(`/messages/conversations/${conversationId}`)
+    await expect(page.getByRole('log')).toContainText(originalMessage)
+    await expect(page.getByRole('link', { name: /关联订单/ })).toHaveAttribute('href', `/orders/${orderId}`)
+    await page.screenshot({ path: testInfo.outputPath('directed-order-conversation.png'), fullPage: true })
+
     const csrf = (await (await creator.request.get(`${api}/csrf`)).json()).data
     const uploaded = await creator.request.post(`${api}/work-images`, { headers: { [csrf.headerName]: csrf.token }, multipart: { file: { name: 'work.png', mimeType: 'image/png', buffer: image } } })
     expect(uploaded.status()).toBe(201)

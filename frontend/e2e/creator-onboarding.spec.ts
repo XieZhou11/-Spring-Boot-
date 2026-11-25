@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
+import { errors } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { test, expect, frontendOrigin } from './fixtures'
 
@@ -181,13 +182,47 @@ test('入驻撤回重提、管理员驳回补正通过、实时通知及会话�
     await page.goto('/messages/notifications')
     await expect(page.getByRole('article')).toHaveCount(2)
     await expect(page.getByRole('button', { name: '标为已读', exact: true })).toHaveCount(2)
-    await page.getByRole('button', { name: '标为已读', exact: true }).first().click()
-    await expect(page.getByRole('button', { name: '标为已读', exact: true })).toHaveCount(1)
-    await page.reload()
-    await expect(page.getByRole('button', { name: '标为已读', exact: true })).toHaveCount(1)
-    await page.getByRole('button', { name: '标为已读', exact: true }).click()
-    await expect(page.locator('.notification-link .unread-badge')).toHaveCount(0)
+    const approvalNotice = page.getByRole('article').filter({ has: page.getByRole('heading', { name: '创作者认证已通过' }) })
     const rejectionNotice = page.getByRole('article').filter({ has: page.getByRole('heading', { name: '创作者申请需补正' }) })
+    // 先后选择两条通知，只允许最新操作跳转，离开通知页后即使最新操作也不应跳转。
+    const releases: Array<() => void> = []
+    const responseGates = [0, 1].map(() => new Promise<void>(resolve => { releases.push(resolve) }))
+    let responseIndex = 0
+    const readPath = '**/api/me/notifications/*/read'
+    await page.route(readPath, async route => {
+      if (route.request().method() === 'PUT') await responseGates[responseIndex++]
+      await route.continue()
+    })
+    const nextRead = () => page.waitForRequest(request => request.method() === 'PUT' && /\/notifications\/\d+\/read$/.test(request.url()))
+    async function releaseWithoutRedirect(index: number, requestUrl: string) {
+      const response = page.waitForResponse(response => response.request().method() === 'PUT' && response.url() === requestUrl)
+      releases[index]!()
+      expect((await response).ok()).toBe(true)
+      const redirected = await page.waitForURL(url => url.pathname === '/account/creator-certification', { timeout: 1_500 }).then(() => true, (error: unknown) => {
+        if (!(error instanceof errors.TimeoutError)) throw error
+        return false
+      })
+      expect(redirected).toBe(false)
+    }
+    try {
+      const firstRead = nextRead()
+      await approvalNotice.getByRole('button', { name: /查看申请/ }).click()
+      const firstRequest = await firstRead
+      const latestRead = nextRead()
+      await rejectionNotice.getByRole('button', { name: /查看申请/ }).click()
+      const latestRequest = await latestRead
+      await releaseWithoutRedirect(0, firstRequest.url())
+      await expect(page).toHaveURL('/messages/notifications')
+      await page.getByRole('link', { name: '交易会话', exact: true }).click()
+      await expect(page).toHaveURL('/messages/conversations')
+      await releaseWithoutRedirect(1, latestRequest.url())
+    } finally {
+      releases.forEach(release => release())
+      await page.unroute(readPath)
+    }
+    await page.goto('/messages/notifications')
+    await expect(page.getByRole('button', { name: '标为已读', exact: true })).toHaveCount(0)
+    await expect(page.locator('.notification-link .unread-badge')).toHaveCount(0)
     await rejectionNotice.getByRole('button', { name: /查看申请/ }).click()
     await expect(page).toHaveURL(`/account/creator-certification?applicationId=${secondId}`)
     await expect(page.locator('.current-application .review-note')).toContainText('请补充原创制作方法的文字说明。')

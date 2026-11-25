@@ -1,0 +1,339 @@
+/* 消息中心共用匠心集色板，右侧消息区保留独立滚动。 */
+.craft-messages {
+  --green: var(--craft-primary);
+  --green-hover: #3f3f46;
+  --muted: var(--craft-muted);
+  --border: var(--craft-border);
+  --paper: var(--craft-surface);
+  color: var(--craft-ink);
+  font-family: var(--craft-font);
+  min-width: 0;
+}
+.craft-messages h1, .craft-messages h2 { font-family: var(--craft-font); }
+.craft-messages .message-page-heading { margin: 0 0 18px; }
+.craft-messages .message-page-heading h1 { margin: 0; font-size: 28px; font-weight: 750; line-height: 1.3; }
+.craft-messages .message-center-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 18px;
+  padding: 4px;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--craft-border);
+  border-radius: 11px;
+  background: var(--craft-surface);
+}
+.craft-messages .message-center-tabs a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  color: var(--craft-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+.craft-messages .message-center-tabs a:hover { background: #f4f4f5; color: var(--craft-ink); }
+.craft-messages .message-center-tabs .router-link-active { background: var(--craft-primary); color: #fff; }
+.craft-messages .message-center-tabs .app-icon { width: 15px; height: 15px; }
+.craft-messages .unread-badge {
+  min-width: 19px;
+  min-height: 19px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #78350f;
+  font: 700 11px/17px var(--craft-font);
+  text-align: center;
+}
+.craft-messages :is(.button-primary, .button-secondary) {
+  gap: 6px;
+  min-height: 38px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font: 650 13px/1.4 var(--craft-font);
+}
+.craft-messages .button-primary { border-color: var(--craft-primary); }
+.craft-messages .button-secondary { border-color: var(--craft-border); background: var(--craft-surface); color: var(--craft-ink); }
+.craft-messages .button-secondary:hover:not(:disabled) { background: #f4f4f5; }
+.craft-messages .inline-button { min-height: 32px; color: #3f3f46; font: 600 13px/1.45 var(--craft-font); }
+.craft-messages .inline-button:hover:not(:disabled) { color: var(--craft-ink); text-decoration: underline; }
+.craft-messages :is(a, button, textarea, input, .chat-transcript):focus-visible {
+  outline: 2px solid #b45309;
+  outline-offset: 2px;
+}
+.craft-messages .form-alert {
+  padding: 10px 13px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.craft-messages .account-loading { padding: 20px; color: var(--craft-muted); }
+
+.craft-messages .message-workspace {
+  display: grid;
+  grid-template-columns: minmax(258px, 31%) minmax(0, 1fr);
+  min-height: 560px;
+  overflow: hidden;
+  border: 1px solid var(--craft-border);
+  border-radius: 16px;
+  background: var(--craft-surface);
+}
+.craft-messages .conversation-list { min-width: 0; border-right: 1px solid var(--craft-border); }
+.craft-messages .conversation-list-heading, .craft-messages .conversation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--craft-border);
+  background: var(--craft-surface);
+}
+.craft-messages .conversation-list-heading h2 { margin: 0; font-size: 15px; font-weight: 700; }
+.craft-messages .conversation-rows { max-height: min(570px, 69vh); overflow: auto; }
+.craft-messages .conversation-row {
+  display: grid;
+  gap: 7px;
+  min-height: 88px;
+  padding: 15px 18px;
+  border-bottom: 1px solid #f0f0f2;
+  border-left: 3px solid transparent;
+}
+.craft-messages .conversation-row:hover { background: #fafafa; }
+.craft-messages .conversation-row.selected { border-left-color: #d97706; background: #fffbeb; }
+.craft-messages .conversation-row:focus-visible { outline-offset: -3px; }
+.craft-messages .conversation-row-heading, .craft-messages .conversation-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.craft-messages .conversation-row-heading { color: var(--craft-ink); font-size: 14px; overflow-wrap: anywhere; }
+.craft-messages .conversation-title { margin: 0; color: #713f12; font-size: 13px; overflow-wrap: anywhere; }
+.craft-messages .conversation-meta {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  color: var(--craft-muted);
+  font-size: 12px;
+}
+.craft-messages .conversation-meta time { margin-left: auto; color: inherit; font-size: inherit; }
+.craft-messages .conversation-archive { display: inline-flex; align-items: center; gap: 4px; }
+.craft-messages .conversation-archive .app-icon { width: 13px; height: 13px; }
+.craft-messages .conversation-list .form-alert { margin: 12px; }
+.craft-messages .conversation-empty { display: grid; justify-items: center; gap: 8px; padding: 44px 16px; color: var(--craft-muted); font-size: 14px; }
+.craft-messages .message-offline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 18px;
+  background: #fffbeb;
+  color: #78350f;
+  font-size: 12px;
+}
+.craft-messages .conversation-detail { min-width: 0; background: var(--craft-bg); }
+.craft-messages .message-placeholder {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 11px;
+  min-height: 100%;
+  padding: 34px 16px;
+  color: var(--craft-muted);
+  text-align: center;
+}
+.craft-messages .message-placeholder h2 { margin: 0; font: 650 16px/1.4 var(--craft-font); }
+.craft-messages .message-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--craft-border);
+  border-radius: 13px;
+  background: var(--craft-surface);
+}
+.craft-messages .message-empty-icon .app-icon { width: 24px; height: 24px; }
+.craft-messages .conversation-current > .form-alert { margin: 12px 20px; }
+.craft-messages .conversation-header { align-items: flex-start; padding: 17px 20px; }
+.craft-messages .conversation-header h2 { margin: 0; font-size: 18px; font-weight: 700; overflow-wrap: anywhere; }
+.craft-messages .conversation-reference { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin: 8px 0 0; font-size: 13px; }
+.craft-messages .conversation-reference a { color: #713f12; overflow-wrap: anywhere; }
+.craft-messages .conversation-reference a:hover { text-decoration: underline; }
+.craft-messages .conversation-status {
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: #f4f4f5;
+  color: var(--craft-muted);
+  font-size: 11px;
+}
+.craft-messages .conversation-tools { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }
+.craft-messages .conversation-reconnect { display: none; }
+.craft-messages .conversation-back { display: none; }
+.craft-messages .chat-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 20px;
+  border-bottom: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #78350f;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.craft-messages .chat-state .app-icon { width: 16px; height: 16px; flex: none; }
+.craft-messages .chat-transcript {
+  height: clamp(280px, 43vh, 490px);
+  padding: 17px 20px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.craft-messages .chat-transcript:focus-visible { outline-offset: -3px; }
+.craft-messages .chat-empty { margin: 18px 0; color: var(--craft-muted); font-size: 13px; text-align: center; }
+.craft-messages .chat-older { display: block; margin: 0 auto 12px; }
+.craft-messages .chat-message { width: fit-content; max-width: 81%; margin: 0 0 15px; }
+.craft-messages .chat-message.mine { margin-left: auto; }
+.craft-messages .chat-message > header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 9px; margin-bottom: 5px; color: var(--craft-muted); font-size: 11px; }
+.craft-messages .chat-message.mine > header { justify-content: flex-end; }
+.craft-messages .chat-message strong { font-size: 12px; font-weight: 650; overflow-wrap: anywhere; }
+.craft-messages .chat-bubble {
+  padding: 10px 13px;
+  border: 1px solid var(--craft-border);
+  border-radius: 3px 13px 13px;
+  background: var(--craft-surface);
+  font-size: 14px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.craft-messages .chat-message.mine .chat-bubble { border-color: var(--craft-primary); border-radius: 13px 3px 13px 13px; background: var(--craft-primary); color: #fff; }
+.craft-messages .chat-bubble p { margin: 0; white-space: pre-wrap; }
+.craft-messages .chat-bubble .progress-reference, .craft-messages .chat-compose .progress-reference {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 10px;
+  margin: 0 0 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #fffbeb;
+  color: #78350f;
+  font-size: 12px;
+}
+.craft-messages a.progress-reference:hover { text-decoration: underline; }
+.craft-messages .chat-transcript .request-images { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 0; }
+.craft-messages .chat-transcript .request-images .work-image { width: min(128px, 100%); min-height: 0; }
+.craft-messages .chat-compose { padding: 13px 20px 16px; border-top: 1px solid var(--craft-border); background: var(--craft-surface); }
+.craft-messages .chat-compose .work-field { margin: 0; color: var(--craft-ink); font-size: 13px; font-weight: 650; }
+.craft-messages .chat-compose textarea {
+  display: block;
+  width: 100%;
+  min-height: 62px;
+  padding: 8px 10px;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  background: var(--craft-bg);
+  color: var(--craft-ink);
+  font: 400 14px/1.55 var(--craft-font);
+  resize: vertical;
+}
+.craft-messages .chat-compose :is(.field-help, .field-error) { font-size: 12px; }
+.craft-messages .chat-compose-actions { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px 14px; margin-top: 10px; }
+.craft-messages .chat-compose .private-image-picker { max-width: min(100%, 420px); }
+.craft-messages .chat-compose input[type="file"] { padding: 3px; max-width: 100%; border: 0; border-radius: 5px; background: transparent; font-size: 12px; font-weight: 400; }
+.craft-messages .chat-compose input[type="file"]::file-selector-button { margin-right: 6px; padding: 4px 6px; border: 1px solid var(--craft-border); border-radius: 5px; background: #f4f4f5; color: var(--craft-ink); font: inherit; cursor: pointer; }
+.craft-messages .chat-compose-actions .request-images:empty { display: none; }
+.craft-messages .chat-send { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.craft-messages .chat-send .app-icon { width: 15px; height: 15px; }
+
+.craft-messages .message-notifications {
+  min-height: 370px;
+  overflow: hidden;
+  border: 1px solid var(--craft-border);
+  border-radius: 16px;
+  background: var(--craft-surface);
+}
+.craft-messages .notification-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 15px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--craft-border);
+  color: var(--craft-muted);
+  font-size: 13px;
+}
+.craft-messages .notification-toolbar strong { color: var(--craft-ink); }
+.craft-messages .connection-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: #92400e;
+  font-size: 12px;
+}
+.craft-messages .connection-indicator.connected { color: #166534; }
+.craft-messages .connection-indicator::before { width: 6px; height: 6px; border-radius: 50%; background: currentColor; content: ""; }
+.craft-messages .notification-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
+.craft-messages .notification-toolbar .notification-actions { margin-left: auto; }
+.craft-messages .message-notifications > .message-placeholder { min-height: 280px; }
+.craft-messages .message-notifications > :is(.connection-message, .form-alert) { margin: 12px 20px; font-size: 13px; }
+.craft-messages .notification-list { display: block; }
+.craft-messages .notification-card {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+  padding: 18px 20px;
+  border: solid var(--craft-border);
+  border-width: 0 0 1px 3px;
+  border-left-color: transparent;
+  border-radius: 0;
+  background: var(--craft-surface);
+}
+.craft-messages .notification-card.unread { border-left-color: #d97706; background: #fffbeb; }
+.craft-messages .notification-card > .app-icon { box-sizing: content-box; width: 17px; height: 17px; padding: 8px; border-radius: 8px; background: #f4f4f5; color: var(--craft-muted); }
+.craft-messages .notification-card.unread > .app-icon { background: #fef3c7; color: #92400e; }
+.craft-messages .notification-entry { min-width: 0; }
+.craft-messages .notification-entry header, .craft-messages .notification-entry footer { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 5px 12px; padding: 0; border: 0; }
+.craft-messages .notification-entry h2 { margin: 0; font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
+.craft-messages .notification-entry .read-label { margin: 0; color: var(--craft-muted); font-size: 12px; }
+.craft-messages .notification-card.unread .read-label { color: #92400e; }
+.craft-messages .notification-entry p { margin: 6px 0 10px; color: #3f3f46; font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.craft-messages .notification-entry time { color: var(--craft-muted); font-size: 12px; }
+.craft-messages .pagination { flex-wrap: wrap; gap: 8px; margin: 0; padding: 12px; }
+
+/* 窄屏逐层进入会话，保留滚动区域和明确的返回入口。 */
+@media (max-width: 760px) {
+  .craft-messages .message-workspace { grid-template-columns: minmax(0, 1fr); min-height: 340px; }
+  .craft-messages .message-workspace.has-selection .conversation-list,
+  .craft-messages .message-workspace:not(.has-selection) .conversation-detail { display: none; }
+  .craft-messages .conversation-list { border-right: 0; }
+  .craft-messages .conversation-list-heading, .craft-messages .conversation-header { padding: 12px 14px; }
+  .craft-messages .conversation-header { flex-direction: column; gap: 8px; }
+  .craft-messages .conversation-reconnect { display: inline-block; }
+  .craft-messages .conversation-back {
+    display: block;
+    padding: 12px 14px 3px;
+    background: var(--craft-surface);
+    color: #713f12;
+    font-size: 13px;
+    font-weight: 650;
+  }
+  .craft-messages .chat-transcript { height: clamp(180px, 40vh, 340px); padding: 12px 14px; }
+  .craft-messages .chat-message { max-width: 94%; }
+  .craft-messages .chat-compose { padding: 12px 14px; }
+  .craft-messages .notification-toolbar, .craft-messages .notification-card { padding: 12px 14px; }
+}
+@media (max-width: 400px) {
+  .craft-messages .message-center-tabs { gap: 2px; }
+  .craft-messages .message-center-tabs a { padding: 6px 8px; }
+  .craft-messages .notification-card { grid-template-columns: minmax(0, 1fr); }
+  .craft-messages .notification-card > .app-icon { display: none; }
+}

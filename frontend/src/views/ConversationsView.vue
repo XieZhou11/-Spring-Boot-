@@ -5,16 +5,23 @@ import AppIcon from '@/components/AppIcon.vue'
 import { useRoute } from 'vue-router'
 import WorkPagination from '@/components/WorkPagination.vue'
 import { getConversations } from '@/api/customRequest'
+import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import { countLabel, requestStatus } from '@/utils/customRequest'
 import { formatTime } from '@/utils/creator'
 import { orderStatus } from '@/utils/quote'
 import type { ConversationVO } from '@/types/customRequest'
 const route = useRoute()
+const auth = useAuthStore()
 const notifications = useNotificationsStore()
-const rows = ref<ConversationVO[]>([]); const page = ref(1); const total = ref(0); const error = ref(''); const loading = ref(false)
+const rows = ref<ConversationVO[]>([])
+const page = ref(1)
+const total = ref(0)
+const error = ref('')
+const loading = ref(false)
 let revision = 0
-let pending = false; let disposed = false
+let pending = false
+let disposed = false
 async function load(next = page.value) {
   if (disposed) return
   page.value = next
@@ -30,6 +37,12 @@ function manualRefresh() { void load(); void notifications.refreshChatUnread() }
 watch(() => notifications.chatRevision, () => void load())
 onMounted(() => { focus(); window.addEventListener('focus', focus) })
 onBeforeUnmount(() => { disposed = true; revision++; window.removeEventListener('focus', focus) })
+
+/** 定标后与现货会话优先展示关联订单的当前状态。 */
+function businessStatus(row: ConversationVO) {
+  if (row.orderId && row.orderStatus) return orderStatus[row.orderStatus] || row.orderStatus
+  if (row.requestStatus) return requestStatus[row.requestStatus] || row.requestStatus
+}
 </script>
 <template>
   <MessageLayout>
@@ -39,10 +52,12 @@ onBeforeUnmount(() => { disposed = true; revision++; window.removeEventListener(
     >
       <aside
         class="conversation-list"
-        aria-label="需求会话列表"
+        aria-label="交易会话列表"
       >
         <header class="conversation-list-heading">
-          <h2>全部会话</h2><button
+          <h2>全部会话</h2>
+          <button
+            type="button"
             class="inline-button"
             :disabled="loading"
             @click="manualRefresh"
@@ -55,7 +70,9 @@ onBeforeUnmount(() => { disposed = true; revision++; window.removeEventListener(
           class="message-offline"
           role="status"
         >
-          连接已断开<button
+          连接已断开
+          <button
+            type="button"
             class="inline-button"
             @click="notifications.reconnect"
           >
@@ -80,25 +97,58 @@ onBeforeUnmount(() => { disposed = true; revision++; window.removeEventListener(
           v-else-if="!rows.length && !error"
           class="conversation-empty"
         >
-          <p>暂无需求沟通</p><RouterLink to="/my-requests">查看我的需求</RouterLink>
+          <p>暂无会话</p>
+          <RouterLink
+            v-if="auth.session?.activeRole === 'CREATOR'"
+            class="inline-button"
+            to="/requests"
+          >前往需求大厅</RouterLink>
+          <RouterLink
+            v-else
+            class="inline-button"
+            to="/my-requests"
+          >查看我的需求</RouterLink>
         </div>
-        <RouterLink
-          v-for="row in rows"
-          :key="row.id"
-          :to="`/messages/conversations/${row.id}`"
-          class="conversation-row"
-          active-class="selected"
+        <div
+          v-if="rows.length"
+          class="conversation-rows"
         >
-          <span
-            class="conversation-avatar"
-            aria-hidden="true"
-          >{{ row.otherNickname.slice(0, 1) }}</span>
-          <div class="conversation-copy"><h2>{{ row.otherNickname }} <span
-            v-if="row.unreadCount"
-            class="unread-badge"
-          >{{ countLabel(row.unreadCount) }}</span></h2><p>{{ row.orderTitle || row.requestTitle }}</p><small>{{ row.orderId ? (orderStatus[row.orderStatus || ''] || row.orderStatus) : (requestStatus[row.requestStatus] || row.requestStatus) }} · {{ row.canSend ? '沟通中' : '已归档' }}</small><time v-if="row.lastMessageAt">{{ formatTime(row.lastMessageAt) }}</time></div>
-        </RouterLink>
+          <RouterLink
+            v-for="row in rows"
+            :key="row.id"
+            :to="`/messages/conversations/${row.id}`"
+            class="conversation-row"
+            active-class="selected"
+          >
+            <div class="conversation-row-heading">
+              <strong>{{ row.otherNickname }}</strong>
+              <span
+                v-if="row.unreadCount"
+                class="unread-badge"
+                :aria-label="`${countLabel(row.unreadCount)} 条未读`"
+              >{{ countLabel(row.unreadCount) }}</span>
+            </div>
+            <p
+              v-if="row.orderTitle || row.requestTitle"
+              class="conversation-title"
+            >
+              {{ row.orderTitle || row.requestTitle }}
+            </p>
+            <div class="conversation-meta">
+              <span v-if="businessStatus(row)">{{ businessStatus(row) }}</span>
+              <span
+                v-if="!row.canSend"
+                class="conversation-archive"
+              ><AppIcon name="lock" />{{ row.archivedAt ? '已归档' : '只读' }}</span>
+              <time
+                v-if="row.lastMessageAt"
+                :datetime="row.lastMessageAt"
+              >{{ formatTime(row.lastMessageAt) }}</time>
+            </div>
+          </RouterLink>
+        </div>
         <WorkPagination
+          aria-label="会话分页"
           :page="page"
           :total="total"
           :loading="loading"
@@ -114,7 +164,8 @@ onBeforeUnmount(() => { disposed = true; revision++; window.removeEventListener(
           v-if="!route.params.id"
           class="message-placeholder"
         >
-          <AppIcon name="message" /><h2>选择会话，继续沟通</h2>
+          <span class="message-empty-icon"><AppIcon name="message" /></span>
+          <h2>{{ rows.length ? '请选择会话' : '交易会话' }}</h2>
         </div>
       </section>
     </div>

@@ -1,6 +1,6 @@
 # PC Web 前端重做开发指南
 
-更新于 2026-11-25。新版前端按业务链路实施，第 1、2 批已完成真实后端联调及浏览器验收。 [T-021](../development/tasks/T-021-craftflow-auth-discovery.md) · [T-022](../development/tasks/T-022-craftflow-account-works.md)
+更新于 2026-11-25。新版前端按业务链路实施，第 1 至 3 批已完成真实后端联调及浏览器验收。 [T-021](../development/tasks/T-021-craftflow-auth-discovery.md) · [T-022](../development/tasks/T-022-craftflow-account-works.md) · [T-023](../development/tasks/T-023-craftflow-requests-quotes-messages.md)
 
 ## 1. 实现依据
 
@@ -44,6 +44,8 @@
 - 验收默认地址变更、上传失败保留输入、驳回补正、上架可见、互动状态刷新一致。复测 `personal-center.spec.ts`、`creator-onboarding.spec.ts`、`work-publication.spec.ts`、`work-interactions.spec.ts`。 [创作者原型](../prototypes/craftflow/CreatorViews.tsx) · [个人资料接口](../../frontend/src/api/account.ts) · [入驻接口](../../frontend/src/api/creator.ts) · [作品接口](../../frontend/src/api/work.ts) · [互动接口](../../frontend/src/api/interaction.ts)
 
 ### 第 3 批 · 定制需求、报价与消息
+
+已完成。公开与定向需求均已验证定标建单及关联会话，浏览器回归和验证范围见 [T-023 测试记录](../testing/T-023-craftflow-requests-quotes-messages.md)。
 
 - 完成买家需求、草稿、公开发布、单人定向、关闭和复制，以及创作者需求大厅、收到的定向邀约和我的报价。对比表展示实际成交金额、工期、方案、图片、口碑和有效期。定标选地址后读取后端订单与原有中标会话，未中标会话按服务端状态显示为只读。
 - 重做会话列表、对话区与系统通知。复用 HTTP 图文发送、分页和已读接口及 WebSocket 实时通知，保留断线补拉、去重、重试与业务引用跳转。

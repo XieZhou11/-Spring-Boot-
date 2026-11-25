@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRouter, type RouteLocationRaw } from 'vue-router'
 import MessageLayout from '@/layouts/MessageLayout.vue'
+import AppIcon from '@/components/AppIcon.vue'
+import WorkPagination from '@/components/WorkPagination.vue'
 import { getNotifications, readNotification } from '@/api/creator'
+import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { NotificationVO } from '@/types/creator'
 import { formatTime } from '@/utils/creator'
 
 const notifications = useNotificationsStore()
+const auth = useAuthStore()
 const router = useRouter()
 const rows = ref<NotificationVO[]>([])
 const page = ref(1)
@@ -16,6 +20,8 @@ const loading = ref(false)
 const error = ref('')
 const marking = ref<string[]>([])
 let revision = 0
+let referenceSelection = 0
+const entries = computed(() => rows.value.map(notification => ({ notification, action: notificationAction(notification) })))
 
 /** 即使实时连接断开，持久化通知仍可分页读取。 */
 async function load() {
@@ -45,15 +51,42 @@ async function markRead(notification: NotificationVO) {
   finally { marking.value = marking.value.filter(id => id !== notification.id) }
 }
 
-async function openApplication(notification: NotificationVO) {
+/** 报价从其所属需求进入，其他通知使用各自的业务资源入口。 */
+function notificationAction({ businessReference: reference }: NotificationVO): { label: string; to: RouteLocationRaw } | undefined {
+  if (!reference) return
+  switch (reference.type) {
+    case 'CREATOR_APPLICATION':
+      return { label: '查看申请', to: { path: '/account/creator-certification', query: { applicationId: reference.id } } }
+    case 'WORK':
+      return { label: '查看作品', to: `/creator/works/${reference.id}/edit` }
+    case 'CUSTOM_REQUEST':
+      return { label: '查看需求', to: `/requests/${reference.id}` }
+    case 'QUOTE':
+      if (reference.requestId) return { label: '查看报价', to: { path: `/requests/${reference.requestId}`, hash: '#quotes' } }
+      return
+    case 'ORDER':
+      return { label: '查看订单', to: `/orders/${reference.id}` }
+    case 'REPORT':
+    case 'REVIEW_REPORT':
+      return { label: '查看举报', to: '/me/reports' }
+    case 'USER':
+      return { label: '查看资料', to: '/account/profile' }
+  }
+}
+
+async function openReference(notification: NotificationVO, to: RouteLocationRaw) {
+  const selection = ++referenceSelection
+  const sourceRoute = router.currentRoute.value
+  const sourceUser = auth.session?.userId
   await markRead(notification)
-  if (notification.businessReference?.type === 'CREATOR_APPLICATION') await router.push({ path: '/account/creator-certification', query: { applicationId: notification.businessReference.id } })
-  if (notification.businessReference?.type === 'WORK') await router.push(`/creator/works/${notification.businessReference.id}/edit`)
-  if (notification.businessReference?.type === 'CUSTOM_REQUEST') await router.push(`/requests/${notification.businessReference.id}`)
-  if (notification.businessReference?.type === 'QUOTE' && notification.businessReference.requestId) await router.push(`/requests/${notification.businessReference.requestId}#quotes`)
-  if (notification.businessReference?.type === 'ORDER') await router.push(`/orders/${notification.businessReference.id}`)
-  if (notification.businessReference?.type === 'REPORT' || notification.businessReference?.type === 'REVIEW_REPORT') await router.push('/me/reports')
-  if (notification.businessReference?.type === 'USER') await router.push('/account/profile')
+  // 已读仍按原操作提交，只有当前页面的最新选择可以跳转。
+  if (selection !== referenceSelection || router.currentRoute.value !== sourceRoute || auth.session?.userId !== sourceUser) return
+  await router.push(to)
+}
+
+function changePage(next: number) {
+  page.value = next
+  void load()
 }
 function refreshOnFocus() {
   void load()
@@ -66,99 +99,113 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('focus', refreshO
 
 <template>
   <MessageLayout>
-    <div class="queue-toolbar">
-      <p>
-        未读 <strong>{{ notifications.unreadCount }}</strong> 条 <span
+    <section
+      class="message-notifications"
+      aria-label="通知列表"
+    >
+      <header class="notification-toolbar">
+        <p>未读 <strong>{{ notifications.unreadCount }}</strong> 条</p>
+        <span
           class="connection-indicator"
           :class="{ connected: notifications.connected }"
         >{{ notifications.connected ? '实时连接中' : '离线通知仍可查询' }}</span>
-      </p><button
-        class="button-secondary"
-        :disabled="loading"
-        @click="load"
+        <div class="notification-actions">
+          <button
+            type="button"
+            class="button-secondary"
+            :disabled="loading"
+            @click="load"
+          >
+            刷新通知
+          </button>
+          <button
+            v-if="!notifications.connected"
+            type="button"
+            class="inline-button"
+            @click="notifications.reconnect()"
+          >
+            重新连接
+          </button>
+        </div>
+      </header>
+      <p
+        v-if="notifications.connectionMessage"
+        class="connection-message"
+        role="status"
       >
-        刷新通知
-      </button><button
-        v-if="!notifications.connected"
-        class="button-secondary"
-        @click="notifications.reconnect()"
+        {{ notifications.connectionMessage }}
+      </p>
+      <p
+        v-if="error"
+        class="form-alert"
+        role="alert"
       >
-        重新连接
-      </button>
-    </div><p
-      v-if="notifications.connectionMessage"
-      class="field-help connection-message"
-      role="status"
-    >
-      {{ notifications.connectionMessage }}
-    </p><p
-      v-if="error"
-      class="form-alert"
-      role="alert"
-    >
-      {{ error }}
-    </p><p
-      v-if="loading && !rows.length"
-      class="account-loading"
-      role="status"
-    >
-      正在读取通知…
-    </p><div
-      v-else-if="!rows.length && !error"
-      class="creator-empty"
-    >
-      <h2>暂无系统通知</h2>
-    </div><div
-      v-else
-      class="notification-list"
-    >
-      <article
-        v-for="notification in rows"
-        :key="notification.id"
-        class="notification-card"
-        :class="{ unread: !notification.readAt }"
+        {{ error }}
+      </p>
+      <p
+        v-if="loading && !rows.length"
+        class="account-loading"
+        role="status"
       >
-        <header>
-          <span
-            class="notice-dot"
-            aria-hidden="true"
-          /><h2>{{ notification.title }}</h2><span class="read-label">{{ notification.readAt ? '已读' : '未读' }}</span>
-        </header><p>{{ notification.content }}</p><footer>
-          <time :datetime="notification.createdAt">{{ formatTime(notification.createdAt) }}</time><div>
-            <button
-              v-if="!notification.readAt"
-              class="inline-button"
-              :disabled="marking.includes(notification.id)"
-              @click="markRead(notification)"
-            >
-              {{ marking.includes(notification.id) ? '正在更新…' : '标为已读' }}
-            </button><button
-              v-if="notification.businessReference"
-              class="inline-button"
-              @click="openApplication(notification)"
-            >
-              {{ notification.businessReference?.type === 'WORK' ? '查看作品' : notification.businessReference?.type === 'CUSTOM_REQUEST' ? '查看需求' : notification.businessReference?.type === 'QUOTE' ? '查看报价' : notification.businessReference?.type === 'ORDER' ? '查看订单' : '查看申请' }} ↗
-            </button>
+        正在读取通知…
+      </p>
+      <div
+        v-else-if="!rows.length && !error"
+        class="message-placeholder"
+      >
+        <span class="message-empty-icon"><AppIcon name="bell" /></span>
+        <h2>暂无系统通知</h2>
+      </div>
+      <div
+        v-if="rows.length"
+        class="notification-list"
+      >
+        <article
+          v-for="{ notification, action } in entries"
+          :key="notification.id"
+          class="notification-card"
+          :class="{ unread: !notification.readAt }"
+        >
+          <AppIcon name="bell" />
+          <div class="notification-entry">
+            <header>
+              <h2>{{ notification.title }}</h2>
+              <span class="read-label">{{ notification.readAt ? '已读' : '未读' }}</span>
+            </header>
+            <p>{{ notification.content }}</p>
+            <footer>
+              <time :datetime="notification.createdAt">{{ formatTime(notification.createdAt) }}</time>
+              <div class="notification-actions">
+                <button
+                  v-if="!notification.readAt"
+                  type="button"
+                  class="inline-button"
+                  :disabled="marking.includes(notification.id)"
+                  @click="markRead(notification)"
+                >
+                  {{ marking.includes(notification.id) ? '正在更新…' : '标为已读' }}
+                </button>
+                <button
+                  v-if="action"
+                  type="button"
+                  class="button-secondary"
+                  :disabled="marking.includes(notification.id)"
+                  @click="openReference(notification, action.to)"
+                >
+                  {{ action.label }} <span aria-hidden="true">↗</span>
+                </button>
+              </div>
+            </footer>
           </div>
-        </footer>
-      </article>
-    </div><div
-      v-if="total > 20"
-      class="pagination"
-    >
-      <button
-        class="button-secondary"
-        :disabled="loading || page <= 1"
-        @click="page--; load()"
-      >
-        上一页
-      </button><span>第 {{ page }} 页 · 共 {{ total }} 条</span><button
-        class="button-secondary"
-        :disabled="loading || page * 20 >= total"
-        @click="page++; load()"
-      >
-        下一页
-      </button>
-    </div>
+        </article>
+      </div>
+      <WorkPagination
+        aria-label="通知分页"
+        :page="page"
+        :total="total"
+        :loading="loading"
+        @change="changePage"
+      />
+    </section>
   </MessageLayout>
 </template>
