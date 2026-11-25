@@ -108,13 +108,7 @@
   .quote-comparison-toolbar .field-help { width: 100%; margin: 0; }
 }
 
-.order-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 28px; align-items: start; }
-.order-detail-grid > * { min-width: 0; }
-.order-detail-grid .editor-section { margin-bottom: 24px; }
 /* 订单金额与日期标签保留完整一行，长流水和金额仍可在窄屏内折行。 */
-.order-detail-grid .work-specifications dt { width: 9em; }
-.order-detail-grid .work-specifications dd { min-width: 0; flex: 1; }
-.order-detail-grid .work-specifications .quote-amount { white-space: normal; }
 .order-timeline { padding-left: 20px; }
 .order-timeline li { padding: 8px 0 18px; }
 .order-timeline time { display: block; color: var(--muted); font-size: 12px; margin-top: 6px; }
@@ -130,9 +124,6 @@
 .fulfillment-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .fulfillment-heading h2 { margin-bottom: 8px; }
 .fulfillment-heading .progress-count { font: 500 36px var(--serif); color: var(--green); white-space: nowrap; }
-.fulfillment-panel > progress { display: block; width: 100%; height: 6px; border: none; border-radius: 0; margin: 16px 0; accent-color: var(--green); }
-.fulfillment-panel > progress::-webkit-progress-bar { background: #e7e9df; }
-.fulfillment-panel > progress::-webkit-progress-value { background: var(--green); }
 .fulfillment-stage { color: var(--green); }
 .fulfillment-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin: 20px 0; }
 .fulfillment-progress > li { position: relative; border-left: 2px solid var(--border); border-bottom: 0; padding: 12px 0 26px 20px; }
@@ -160,5 +151,4 @@
 .refund-result { background: #f3f5ed; padding: 22px; }
 .progress-reference { display: flex; align-items: center; gap: 12px; margin: 12px 0; padding: 10px 14px; background: #e8eee3; color: var(--green); font-size: 13px; }
 .chat-message .progress-reference { margin-top: 0; background: #eef1e8; }
-@media (max-width: 900px) { .order-detail-grid { grid-template-columns: 1fr; } .award-panel { padding: 20px; } .quote-record { padding: 18px; } }
-@media (max-width: 520px) { .order-detail-grid .work-specifications > div { gap: 12px; } .order-detail-grid .work-specifications dt { width: 7em; } }
+@media (max-width: 900px) { .award-panel { padding: 20px; } .quote-record { padding: 18px; } }

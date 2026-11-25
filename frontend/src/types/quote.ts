@@ -162,7 +162,7 @@ export interface OrderVO {
   termsConfirmedAt: string | null
   /** 支付时固定的最终约定发货日。 */
   shipDate: string | null
-  /** 发货日次日零时，排他截止时刻。 */
+  /** 服务端排他的发货截止时刻，现货按支付后 48 小时，定制按约定日期次日零时。 */
   shipDeadlineAt: string | null
   /** 约定工期。 */
   durationDays: number | null
@@ -238,8 +238,8 @@ export interface OrderVO {
   settlement: OrderSettlementVO | null
   /** 支付后固定的五个节点，列表不返回详情。 */
   progressNodes: OrderProgressNodeVO[]
-  /** 中标双方继续使用的会话编号。 */
-  conversationId: string
+  /** 订单双方继续使用的会话编号；无关联时为空。 */
+  conversationId: string | null
   /** 已提交的订单状态历史。 */
   history: OrderHistoryVO[]
 }
@@ -255,7 +255,7 @@ export interface OrderPaymentDTO {
 export interface OrderPaymentPreviewVO {
   /** 按当前支付日测算的发货日。 */
   shipDate: string
-  /** 发货日次日零时的排他截止时刻。 */
+  /** 服务端预估的排他发货截止时刻。 */
   shipDeadlineAt: string
   /** 服务端提供的条款版本。 */
   termsVersion: string

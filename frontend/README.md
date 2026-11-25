@@ -194,6 +194,10 @@ CraftFlow 第 3 批重做买家需求双栏、定向邀约、大厅、报价工�
 
 专项回归：`npm run test:e2e -- e2e/order-fulfillment.spec.ts`，先执行后端verify生成最新JAR；若开发后端正占用标准产物，可用`HANDCRAFT_E2E_BACKEND_JAR`指定独立构建的可执行JAR，路径相对于frontend或使用绝对路径。夹具仅对隔离随机库内由真实业务链建立的订单调整时间，用于48小时退款、自动收货与需求窗口；不增加生产测试接口。实际结果见[T-013测试记录](../docs/testing/T-013-order-fulfillment.md)，普通售后由T-014接入，结算执行继续独立验收。
 
+## CraftFlow 第 4 批 · 订单、支付与履约
+
+从作品详情选择已有地址直购，或从定标结果进入订单详情。`/orders` 支持买入与承接、状态筛选和分页，`/orders/:id` 保留列表条件与进度引用。模拟付款确认及未知结果恢复使用已有接口。现货展示准确发货截止时间和物流，定制展示五节点计划、图文及偏差。两类订单结案后仍可从详情进入原会话。 [T-024](../docs/development/tasks/T-024-craftflow-orders-payment-fulfillment.md) · [测试记录](../docs/testing/T-024-craftflow-orders-payment-fulfillment.md)
+
 ## 普通售后与管理员裁定（T-014）
 
 专项：`npm run test:e2e -- e2e/order-refund.spec.ts e2e/order-refund-pagination.spec.ts e2e/order-refund-flow.spec.ts`。`order-refund.spec.ts`通过受控网络验证未知结果、原键核验、版本冲突重阅、存储失败、终态草稿只读与乱序隔离；`order-refund-pagination.spec.ts`验证双方和后台证据/聊天分页及队列条件保留；`order-refund-flow.spec.ts`从注册、入驻、定标及付款的真实链路建立订单，验证双方图文证据、状态恢复、管理员聊天只读、退回核验与原子退款。真实OSS独立结果在后端测试记录中区分，浏览器协议接收器不代替云端验证。详细结果见[T-014测试记录](../docs/testing/T-014-refund-adjudication.md)。

@@ -195,8 +195,7 @@
 }
 
 .cf-work-detail .work-specifications,
-.cf-work-detail .trade-summary,
-.cf-work-detail .stock-purchase {
+.cf-work-detail .trade-summary {
   margin: 0 0 12px;
   padding: 12px 14px;
   border: 1px solid #eeeef0;
@@ -238,7 +237,7 @@
 .cf-work-detail .work-interactions .work-section-heading { flex-wrap: wrap; margin-bottom: 13px; }
 .cf-work-detail .work-section-heading h2 { margin: 0; }
 .cf-work-detail .work-interactions .muted { color: var(--craft-muted); }
-.cf-work-detail :is(.comment-form textarea, .stock-purchase select) {
+.cf-work-detail .comment-form textarea {
   border-color: var(--craft-border);
   border-radius: 7px;
   background: var(--craft-surface);

@@ -12,7 +12,7 @@
 
 前后台导航、审核双栏及消息工作区交互修复见 [T-008 测试记录](T-008-navigation-layout.md)。
 
-CraftFlow 首批认证、公共导航及作品浏览的浏览器回归见 [T-021 测试记录](T-021-craftflow-auth-discovery.md)。个人中心、入驻、发布、审核与互动的回归见 [T-022 测试记录](T-022-craftflow-account-works.md)。定制需求、报价定标与消息的回归见 [T-023 测试记录](T-023-craftflow-requests-quotes-messages.md)。
+CraftFlow 首批认证、公共导航及作品浏览的浏览器回归见 [T-021 测试记录](T-021-craftflow-auth-discovery.md)。个人中心、入驻、发布、审核与互动的回归见 [T-022 测试记录](T-022-craftflow-account-works.md)。定制需求、报价定标与消息的回归见 [T-023 测试记录](T-023-craftflow-requests-quotes-messages.md)。现货直购、两类订单与履约回归见 [T-024 测试记录](T-024-craftflow-orders-payment-fulfillment.md)。
 
 聊天心跳、有限重连、按会话刷新及凭证查询优化见 [T-010 测试记录](T-010-chat-reliability.md)，包含原始问题、修复复测与隔离验证范围。
 

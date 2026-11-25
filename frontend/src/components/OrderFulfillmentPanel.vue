@@ -113,12 +113,12 @@ watch(() => props.pending, pending => {
   <section
     v-if="order.progressNodes?.length || stock && ['PENDING_SHIP', 'SHIPPED', 'COMPLETED', 'AFTER_SALE', 'REFUNDED'].includes(order.status)"
     class="editor-section fulfillment-panel"
-    aria-label="订单制作履约"
+    :aria-label="stock ? '现货履约' : '订单制作履约'"
   >
     <header class="fulfillment-heading">
       <div>
         <h2>{{ stock ? '现货履约' : '制作进度' }}</h2><p class="field-help">
-          {{ stock ? '现货不经过制作节点，支付后48小时内发货。' : '支付时固定的初始参考计划 · 北京时间' }}
+          {{ stock ? '现货不经过制作节点，支付后 48 小时内发货。' : '参考计划在支付时确定，时间均为北京时间。' }}
         </p>
       </div>
       <strong
@@ -126,12 +126,22 @@ watch(() => props.pending, pending => {
         class="progress-count"
       >{{ completed }}/5</strong>
     </header>
-    <progress
+    <div
       v-if="!stock"
-      :value="completed"
-      max="5"
-      :aria-label="`已处理${completed}个节点，共5个`"
-    />
+      class="order-progress-meter"
+      role="progressbar"
+      aria-label="已处理制作节点"
+      :aria-valuenow="completed"
+      aria-valuemin="0"
+      aria-valuemax="5"
+    >
+      <span
+        v-for="node in order.progressNodes"
+        :key="node.id"
+        :data-node-status="node.status"
+        aria-hidden="true"
+      />
+    </div>
     <p
       v-if="completed === 4 && !frozen"
       class="fulfillment-stage"
@@ -161,7 +171,7 @@ watch(() => props.pending, pending => {
       v-else-if="terminal"
       class="field-help"
     >
-      订单已{{ order.status === 'REFUNDED' ? '退款' : order.status === 'CANCELLED' ? '取消' : '完成' }}，制作节点和初始计划只读。补充证据请进入订单会话。
+      订单已{{ order.status === 'REFUNDED' ? '退款' : order.status === 'CANCELLED' ? '取消' : '完成' }}。{{ stock ? '' : '制作节点和初始计划只读。' }}补充证据请进入订单会话。
     </p>
     <div
       v-if="order.canStart || order.canRequestNoStartRefund"
@@ -217,10 +227,13 @@ watch(() => props.pending, pending => {
         :id="`progress-${node.id}`"
         :key="node.id"
         :data-node-code="node.nodeCode"
+        :data-node-status="node.status"
+        tabindex="-1"
         :class="{ 'node-handled': ['CHECKED', 'SKIPPED'].includes(node.status), 'node-overdue': node.overdue }"
       >
         <div class="node-heading">
-          <strong><small>{{ String(node.sortOrder).padStart(2, '0') }}</small>{{ progressNodeName[node.nodeCode] || node.nodeCode }}</strong><span>{{ progressNodeStatus[node.status] || node.status }}</span>
+          <strong>{{ progressNodeName[node.nodeCode] || node.nodeCode }}</strong>
+          <span class="order-node-status">{{ progressNodeStatus[node.status] || node.status }}</span>
         </div>
         <div class="node-dates">
           <p>参考完成日 {{ node.plannedFinishDate }}</p><span
@@ -282,7 +295,10 @@ watch(() => props.pending, pending => {
           >
             包装并发货
           </button>
-          <RouterLink :to="{ path: `/messages/conversations/${order.conversationId}`, query: { progressNodeId: node.id } }">讨论此进度 ↗</RouterLink>
+          <RouterLink
+            v-if="order.conversationId"
+            :to="{ path: `/messages/conversations/${order.conversationId}`, query: { progressNodeId: node.id } }"
+          >讨论此进度 ↗</RouterLink>
         </div>
       </li>
     </ol>

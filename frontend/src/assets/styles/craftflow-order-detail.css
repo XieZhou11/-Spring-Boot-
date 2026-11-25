@@ -1,0 +1,219 @@
+/* 订单概要集中展示当前操作，履约、快照和业务历史使用同一套卡片。 */
+.craftflow-order-main {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+  color: var(--craft-ink);
+  overflow-wrap: anywhere;
+}
+.craftflow-order-main .order-back {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--craft-muted);
+}
+.craftflow-order-main .order-back a:hover { color: var(--craft-ink); }
+.craftflow-order-main > .order-overview,
+.craftflow-order-main > .editor-section,
+.craftflow-order-main > .payment-confirmation,
+.craftflow-order-main > .order-detail-empty {
+  margin: 0;
+  padding: 23px;
+  min-width: 0;
+  border: 1px solid var(--craft-border);
+  border-radius: 16px;
+  background: var(--craft-surface);
+}
+.craftflow-order-main .order-overview {
+  display: flex;
+  gap: 12px;
+}
+.craftflow-order-main .order-overview-heading {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 13px 24px;
+  margin: 0;
+}
+.craftflow-order-main .order-overview-heading h1 {
+  margin: 8px 0 4px;
+  color: var(--craft-ink);
+  font: 700 clamp(20px, 2vw, 27px)/1.35 var(--craft-font);
+  letter-spacing: normal;
+}
+.craftflow-order-main .order-overview-badges,
+.craftflow-order-main .order-overview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.craftflow-order-main .order-overview-actions { margin-block: 4px; }
+.craftflow-order-main :is(.order-type-badge, .work-status),
+.craftflow-order-main .order-node-status {
+  display: inline-flex;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: #f4f4f5;
+  color: #3f3f46;
+  font: 600 12px/1.4 var(--craft-font);
+}
+.craftflow-order-main .order-type-badge[data-type=CUSTOM],
+.craftflow-order-main [data-order-status=PENDING_PAY],
+.craftflow-order-main [data-node-status=UNLOCKED] .order-node-status {
+  background: #fef3c7;
+  color: #92400e;
+}
+.craftflow-order-main :is([data-order-status=IN_PRODUCTION], [data-order-status=PAID]) {
+  background: #e0f2fe;
+  color: #075985;
+}
+.craftflow-order-main :is([data-order-status=SHIPPED], [data-order-status=COMPLETED]),
+.craftflow-order-main .node-handled .order-node-status {
+  background: #dcfce7;
+  color: #166534;
+}
+.craftflow-order-main :is([data-order-status=REFUNDED], [data-order-status=AFTER_SALE]) {
+  background: #fce7f3;
+  color: #9d174d;
+}
+.craftflow-order-main .order-number,
+.craftflow-order-main .muted,
+.craftflow-order-main .field-help {
+  color: var(--craft-muted);
+  font-size: 13px;
+}
+.craftflow-order-main .order-number { margin-bottom: 4px; }
+.craftflow-order-main .order-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 146px), 1fr));
+  gap: 10px 16px;
+  margin: 0;
+  padding-block: 12px 0;
+  border-top: 1px solid var(--craft-border);
+}
+.craftflow-order-main .order-facts > div { display: block; padding: 0; line-height: 1.45; }
+.craftflow-order-main .order-facts dt {
+  color: var(--craft-muted);
+  font-size: 13px;
+}
+.craftflow-order-main .order-facts dd {
+  margin: 4px 0 0;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.craftflow-order-main .order-total { font-size: 18px; }
+.craftflow-order-main :is(.editor-section, .payment-confirmation) h2 {
+  margin: 0 0 12px;
+  color: var(--craft-ink);
+  font: 700 18px/1.35 var(--craft-font);
+}
+.craftflow-order-main .editor-section h3 { color: var(--craft-ink); }
+.craftflow-order-main .editor-section > p { line-height: 1.75; }
+.craftflow-order-main .payment-confirmation .order-facts { margin-block: 14px; }
+.craftflow-order-main .payment-confirmation .quote-amount {
+  color: var(--craft-ink);
+  font: 700 20px/1.4 var(--craft-font);
+}
+.craftflow-order-main .award-address {
+  margin: 8px 0;
+  padding: 11px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: #f4f4f5;
+}
+.craftflow-order-main :is(.button-primary, .button-secondary) {
+  min-height: 36px;
+  padding: 7px 13px;
+  border: 1px solid var(--craft-border);
+  border-radius: 8px;
+  color: var(--craft-ink);
+  background: var(--craft-surface);
+  font: 600 13px/1.45 var(--craft-font);
+  text-decoration: none;
+}
+.craftflow-order-main .button-primary { border-color: var(--craft-primary); background: var(--craft-primary); color: #fff; }
+.craftflow-order-main .button-primary:not(:disabled):hover { background: #3f3f46; }
+.craftflow-order-main .button-secondary:not(:disabled):hover { background: #f4f4f5; }
+.craftflow-order-main :is(.button-primary, .button-secondary):disabled { opacity: 0.58; }
+.craftflow-order-main .inline-button {
+  color: var(--craft-muted);
+  background: transparent;
+  font-size: 13px;
+}
+.craftflow-order-main :is(a, button, input, textarea, summary):focus-visible {
+  outline: 2px solid #52525b;
+  outline-offset: 3px;
+}
+
+/* 仅定制订单显示节点色带和时间轴，状态仍直接读取服务端。 */
+.craftflow-order-main .fulfillment-heading {
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+}
+.craftflow-order-main .fulfillment-heading h2 { margin-bottom: 4px; }
+.craftflow-order-main .fulfillment-heading .progress-count {
+  color: #166534;
+  font: 700 23px/1.2 var(--craft-font);
+}
+.craftflow-order-main .order-progress-meter {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+  margin-bottom: 13px;
+}
+.craftflow-order-main .order-progress-meter span {
+  height: 8px;
+  border-radius: 5px;
+  background: #e4e4e7;
+}
+.craftflow-order-main .order-progress-meter [data-node-status=UNLOCKED] { background: #fbbf24; }
+.craftflow-order-main .order-progress-meter :is([data-node-status=CHECKED], [data-node-status=SKIPPED]) { background: #15803d; }
+.craftflow-order-main .fulfillment-progress { margin-bottom: 0; }
+.craftflow-order-main .fulfillment-progress > li {
+  margin: 0 0 10px 5px;
+  padding: 13px 14px 13px 17px;
+  border: 1px solid var(--craft-border);
+  border-radius: 10px;
+}
+.craftflow-order-main .fulfillment-progress > li::before { top: 18px; border-color: #a1a1aa; background: #fafafa; }
+.craftflow-order-main .fulfillment-progress > li[data-node-status=UNLOCKED]::before { border-color: #d97706; background: #fbbf24; }
+.craftflow-order-main .fulfillment-progress > .node-handled::before { border-color: #15803d; background: #15803d; }
+.craftflow-order-main .fulfillment-progress .node-heading strong { font-size: 15px; }
+.craftflow-order-main .progress-record,
+.craftflow-order-main .fulfillment-form {
+  border: 1px solid var(--craft-border);
+  border-radius: 10px;
+  background: #fafafa;
+}
+.craftflow-order-main .progress-record .request-description,
+.craftflow-order-main .order-progress :is(time, .node-dates) { color: var(--craft-muted); }
+.craftflow-order-main .fulfillment-progress .node-dates .shipping-warning,
+.craftflow-order-main .shipping-warning { color: #92400e; }
+.craftflow-order-main .shipment-information,
+.craftflow-order-main .refund-result { border-color: var(--craft-border); }
+.craftflow-order-main .fulfillment-panel .work-specifications {
+  margin: 12px 0;
+  padding-top: 8px;
+  border-color: var(--craft-border);
+}
+.craftflow-order-main .fulfillment-panel .work-specifications dt { width: 8em; color: var(--craft-muted); }
+.craftflow-order-main .work-field { color: var(--craft-muted); }
+.craftflow-order-main .work-field :is(input, textarea) {
+  border-color: var(--craft-border);
+  background: var(--craft-surface);
+  color: var(--craft-ink);
+}
+.craftflow-order-main .fulfillment-actions,
+.craftflow-order-main .fulfillment-progress .node-actions { gap: 9px; }
+@media (max-width: 600px) {
+  .craftflow-order-main > :is(.order-overview, .editor-section, .payment-confirmation, .order-detail-empty) { padding: 15px; }
+}
+
+
+@media (max-width: 840px) {
+  .craftflow-order-detail-workspace > .craftflow-order-collection { display: none; }
+}

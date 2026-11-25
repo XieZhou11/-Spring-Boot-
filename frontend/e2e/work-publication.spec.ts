@@ -333,7 +333,17 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
     await expect(buyer.getByRole('heading', { level: 1, name: '原木手工杯垫' })).toBeVisible()
     await expect(buyer.locator('.trade-summary')).toContainText('15 个自然日')
     await expect(buyer.getByRole('region', { name: '现货直购' })).toBeVisible()
-    await buyer.getByRole('link', { name: /管理收货地址/ }).click()
+    const buyStock = buyer.getByRole('button', { name: '立即购买现货', exact: true })
+    const checkout = buyer.getByRole('dialog', { name: '确认现货直购订单', exact: true })
+    await buyStock.focus()
+    await buyer.keyboard.press('Enter')
+    await expect(checkout).toBeVisible()
+    await expect(checkout.getByRole('button', { name: /^确认购买/ })).toBeDisabled()
+    await buyer.keyboard.press('Escape')
+    await expect(checkout).toBeHidden()
+    await expect(buyStock).toBeFocused()
+    await buyStock.click()
+    await checkout.getByRole('link', { name: /管理收货地址/ }).click()
     await expect(buyer).toHaveURL('/account/addresses')
     const address = await mutate(buyer, '/me/addresses', 'post', { recipientName: '直购验收收件人', phone: '13800138000', province: '北京市', city: '市辖区', district: '东城区', detailAddress: '现货直购验收路一号', isDefault: true })
     expect(address.status()).toBe(201)
@@ -346,8 +356,12 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
       expect(response.status()).toBe(200)
       await route.fulfill({ response })
     })
-    await buyer.getByRole('button', { name: /确认购买/ }).click()
-    await expect(buyer.getByRole('status')).toContainText('建单结果尚未确认')
+    await buyer.setViewportSize({ width: 1366, height: 900 })
+    await buyStock.click()
+    await expect(checkout.getByRole('radio', { name: /直购验收收件人/ })).toBeChecked()
+    await buyer.screenshot({ path: testInfo.outputPath('stock-checkout-1366.png'), fullPage: true })
+    await checkout.getByRole('button', { name: /^确认购买/ }).click()
+    await expect(checkout.getByRole('status')).toContainText('建单结果尚未确认')
     expect(await buyer.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('stock-order:')))).toHaveLength(1)
     await buyer.reload()
     await expect(buyer.getByRole('button', { name: '重试确认建单结果', exact: true })).toBeVisible()
@@ -364,6 +378,14 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
     await buyer.getByLabel('我已阅读并同意现货支付条款', { exact: true }).check()
     await buyer.getByRole('button', { name: '确认模拟支付', exact: true }).click()
     await expect(buyer.locator('.work-section-heading .work-status')).toHaveText('待发货')
+    const paidStock = (await (await buyer.request.get(`${api}/orders/${stockOrderId}`)).json()).data
+    const deadline = new Date(Date.parse(paidStock.paidAt) + 48 * 60 * 60 * 1000)
+    expect(Date.parse(paidStock.shipDeadlineAt)).toBe(deadline.getTime())
+    const deadlineText = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai', dateStyle: 'medium', timeStyle: 'short',
+    }).format(deadline)
+    await expect(buyer.locator(`time[datetime="${paidStock.shipDeadlineAt}"]`).first()).toHaveText(deadlineText)
+    await buyer.screenshot({ path: testInfo.outputPath('stock-paid-1366.png'), fullPage: true })
     await expect(buyer.locator('.fulfillment-panel')).toContainText('现货不经过制作节点')
     await expect(buyer.locator('.order-progress')).toHaveCount(0)
     // 现货会话只关联订单，不能生成指向空需求编号的链接。
@@ -419,6 +441,91 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
     await page.goto('/messages/notifications')
     await expect(page.getByRole('article').filter({ hasText: '管理员验收下架' })).toBeVisible()
   } finally { await adminContext.close(); await buyerContext.close() }
+})
+
+test('取消现货订单后另一位买家可下单，订单列表保留承接筛选和页码', async ({ page, browser, mailbox }, testInfo) => {
+  test.setTimeout(180_000)
+  const contexts = await Promise.all(Array.from({ length: 3 }, () => browser.newContext({
+    baseURL: frontendOrigin, viewport: { width: 1366, height: 900 },
+  })))
+  try {
+    const [admin, buyer, nextBuyer] = await Promise.all(contexts.map(context => context.newPage()))
+    const { categoryId } = await prepareCreator(page, admin, mailbox.codes, mailbox.promoteAdmin)
+    const title = '取消释放现货验收杯垫'
+    const workId = await publishBrowseWork(page, admin, {
+      title, categoryId, stockPrice: '88.00', customReferenceDays: null,
+      description: '圆形木制杯垫，保留原木纹理。边缘经过手工打磨并涂以透明木蜡油，可用于日常茶具。灵感来自自然原木。',
+    })
+    await register(buyer, mailbox.codes, '首位现货买家')
+    await register(nextBuyer, mailbox.codes, '后续现货买家')
+    const addressFields = {
+      recipientName: '现货收件人', phone: '13800138000', province: '北京市', city: '市辖区',
+      district: '东城区', detailAddress: '现货验收路一号', isDefault: true,
+    }
+    const buyerAddress = await mutate(buyer, '/me/addresses', 'post', addressFields)
+    expect(buyerAddress.status()).toBe(201)
+    expect((await mutate(nextBuyer, '/me/addresses', 'post', addressFields)).status()).toBe(201)
+    const { id: addressId } = (await buyerAddress.json()).data
+    const create = () => mutate(buyer, `/works/${workId}/orders`, 'post', { addressId, requestKey: randomUUID() })
+
+    const first = await create()
+    expect(first.status()).toBe(201)
+    const { id: firstOrderId } = (await first.json()).data
+    await nextBuyer.goto(`/works/${workId}`)
+    await expect(nextBuyer.getByRole('heading', { name: title, exact: true })).toBeVisible()
+    await expect(nextBuyer.getByRole('button', { name: '立即购买现货', exact: true })).toHaveCount(0)
+    await buyer.goto(`/orders/${firstOrderId}`)
+    buyer.once('dialog', dialog => dialog.accept())
+    await buyer.getByRole('button', { name: '取消订单', exact: true }).click()
+    await expect(buyer.locator('.work-section-heading .work-status')).toHaveText('已取消')
+    await expect(buyer.getByRole('link', { name: '进入订单沟通', exact: true })).toBeVisible()
+
+    // 通过真实建单、取消生成第二页，核验列表服务端分页与双方实际交易关系。
+    for (let count = 0; count < 20; count++) {
+      const created = await create()
+      expect(created.status()).toBe(201)
+      const { id } = (await created.json()).data
+      expect((await mutate(buyer, `/orders/${id}/cancellation`, 'put')).status()).toBe(200)
+    }
+    await nextBuyer.reload()
+    await nextBuyer.getByRole('button', { name: '立即购买现货', exact: true }).click()
+    await nextBuyer.getByRole('dialog', { name: '确认现货直购订单', exact: true })
+      .getByRole('button', { name: /^确认购买/ }).click()
+    await expect(nextBuyer).toHaveURL(/\/orders\/\d+$/)
+    expect(new URL(nextBuyer.url()).pathname).not.toBe(`/orders/${firstOrderId}`)
+
+    await page.goto('/orders')
+    await expect(page.getByRole('heading', { name: '暂无订单', exact: true })).toBeVisible()
+    await page.getByRole('link', { name: '我承接的', exact: true }).click()
+    const status = page.getByLabel('订单状态', { exact: true })
+    await status.selectOption('CANCELLED')
+    const orderList = page.getByRole('region', { name: '订单列表', exact: true })
+    const firstOrder = orderList.getByRole('link', { name: title, exact: true })
+    await expect(firstOrder).toHaveCount(20)
+    await page.getByRole('button', { name: '下一页', exact: true }).click()
+    await expect(page).toHaveURL('/orders?side=CREATOR&status=CANCELLED&page=2')
+    await expect(firstOrder).toHaveCount(1)
+    await expect(firstOrder).toHaveAttribute('href', `/orders/${firstOrderId}?side=CREATOR&status=CANCELLED&page=2`)
+    await expect(orderList).not.toContainText(/工期|个自然日/)
+    await firstOrder.click()
+    await expect(page).toHaveURL(`/orders/${firstOrderId}?side=CREATOR&status=CANCELLED&page=2`)
+    await expect(firstOrder).toHaveAttribute('aria-current', 'page')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: testInfo.outputPath('order-collection-detail-1366.png'), fullPage: true })
+    await page.getByRole('link', { name: /返回订单列表/ }).click()
+    await expect(page).toHaveURL('/orders?side=CREATOR&status=CANCELLED&page=2')
+    await expect(status).toHaveValue('CANCELLED')
+    await expect(firstOrder).toHaveCount(1)
+
+    await buyer.goto('/orders?status=CANCELLED')
+    await expect(buyer.getByRole('link', { name: '我购买的', exact: true })).toBeVisible()
+    await expect(buyer.getByRole('region', { name: '订单列表' }).getByRole('link', { name: title, exact: true })).toHaveCount(20)
+    await nextBuyer.goto(`/orders/${firstOrderId}`)
+    await expect(nextBuyer.getByRole('alert')).toBeVisible()
+    await expect(nextBuyer.getByRole('heading', { name: title, exact: true })).toHaveCount(0)
+  } finally {
+    await Promise.all(contexts.map(context => context.close()))
+  }
 })
 
 test('草稿响应丢失、断网保留、续签、撤回删除与初始化失败保护', async ({ page, browser, mailbox }) => {

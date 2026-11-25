@@ -195,6 +195,8 @@ test('五节点图文制作、跳过打样、补充、发货更正到买家收�
     await creator.setViewportSize({ width: 1366, height: 1000 })
     expect(await creator.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     // 分屏检查长时间轴，避免低内存环境一次生成超长截图耗尽浏览器绘图资源。
+    await creator.evaluate(() => window.scrollTo(0, 0))
+    await creator.screenshot({ path: testInfo.outputPath('shipped-order-overview.png') })
     await creator.locator('.fulfillment-panel').evaluate(element => element.scrollIntoView({ block: 'start' }))
     await creator.screenshot({ path: testInfo.outputPath('shipped-fulfillment.png') })
     await creator.locator('.shipment-information').evaluate(element => element.scrollIntoView({ block: 'start' }))
@@ -220,7 +222,11 @@ test('五节点图文制作、跳过打样、补充、发货更正到买家收�
     const chatResponse = await sent
     expect(chatResponse.status()).toBe(201)
     expect((await chatResponse.json()).data.referencedNodeId).toBe(completed.progressNodes[4].id)
-    await expect(page.getByRole('link', { name: /^引用进度：包装发货/ })).toBeVisible()
+    const progressReference = page.getByRole('link', { name: /^引用进度：包装发货/ })
+    await expect(progressReference).toBeVisible()
+    await progressReference.click()
+    await expect(page).toHaveURL(`/orders/${order.id}#progress-${completed.progressNodes[4].id}`)
+    await expect(page.locator('.order-progress > li[data-node-code="SHIPPING"]')).toBeInViewport()
   } finally { await adminContext.close(); await creatorContext.close() }
 })
 
