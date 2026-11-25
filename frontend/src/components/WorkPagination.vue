@@ -1,12 +1,12 @@
 <script setup lang="ts">
-defineProps<{ page: number; total: number; size?: number; loading?: boolean }>()
+defineProps<{ page: number; total: number; size?: number; loading?: boolean; label?: string }>()
 const emit = defineEmits<{ change: [page: number] }>()
 </script>
 <template>
   <nav
     v-if="total > (size || 20)"
     class="pagination"
-    aria-label="作品分页"
+    :aria-label="label || '作品分页'"
   >
     <button
       class="button-secondary"

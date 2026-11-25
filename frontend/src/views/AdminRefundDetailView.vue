@@ -29,6 +29,18 @@ watch(input, value => { const c = context(); if (!restoring && c.userId && c.app
 function clearSensitive() {
   const c = context(); if (c.userId && c.applicationId) { clearRefundState(c.userId, c.applicationId, 'admin-attempt'); clearRefundState(c.userId, c.applicationId, 'admin-draft') }
   restoring = true; detail.value = undefined; evidence.value = []; messages.value = []; attempt.value = undefined; input.value = { expectedVersion: 0, decision: 'REJECT', reason: '', returnRequired: false, returnedConfirmed: false, returnTrackingNo: '', returnEvidenceImageIds: [], noReturnBasis: '' }; reviewed.value = false; restoring = false
+  evidenceCursor.value = null
+  moreEvidenceAvailable.value = false
+  moreMessagesAvailable.value = false
+  checked.value = false
+  recoveryConflict.value = false
+  stale.value = false
+  notice.value = ''
+}
+/** 原申请或会话不可访问时撤下已显示材料，并清除本申请裁定输入。 */
+function readFailed(failure: unknown, fallback: string) {
+  if (failure instanceof ApiError && [401, 403, 404].includes(failure.status)) clearSensitive()
+  error.value = failure instanceof Error ? failure.message : fallback
 }
 async function load() {
   const c = context(); if (!sameContext(c)) { clearSensitive(); return }
@@ -49,15 +61,14 @@ async function load() {
     }
   } catch (failure) {
     if (current !== revision || !sameContext(c)) return
-    if (failure instanceof ApiError && [401, 403, 404].includes(failure.status)) clearSensitive()
-    error.value = failure instanceof Error ? failure.message : '查证材料读取失败'
+    readFailed(failure, '查证材料读取失败')
   } finally { if (current === revision) loading.value = false }
 }
 async function moreEvidence() {
   const c = context(); if (!sameContext(c) || loading.value || writing.value || !moreEvidenceAvailable.value || !evidenceCursor.value) return
   const current = revision; loading.value = true
   try { const result = await getRefundEvidence(c.applicationId!, { cursor: evidenceCursor.value }, true); if (current === revision && sameContext(c)) { evidence.value = [...evidence.value, ...result.items.filter(item => !evidence.value.some(old => old.id === item.id))]; evidenceCursor.value = result.nextCursor; moreEvidenceAvailable.value = result.hasMore } }
-  catch (failure) { if (current === revision) error.value = failure instanceof Error ? failure.message : '证据读取失败' }
+  catch (failure) { if (current === revision && sameContext(c)) readFailed(failure, '证据读取失败') }
   finally { if (current === revision) loading.value = false }
 }
 async function moreMessages() {
@@ -65,7 +76,7 @@ async function moreMessages() {
   const before = messages.value.reduce<string | undefined>((min, item) => !min || BigInt(item.seqNo) < BigInt(min) ? item.seqNo : min, undefined)
   const current = revision; loading.value = true
   try { const result = await getAdminRefundMessages(c.applicationId!, { before }); if (current === revision && sameContext(c)) { messages.value = [...result.items.filter(item => !messages.value.some(old => old.id === item.id)), ...messages.value].sort((a, b) => BigInt(a.seqNo) < BigInt(b.seqNo) ? -1 : 1); moreMessagesAvailable.value = result.hasMore } }
-  catch (failure) { if (current === revision) error.value = failure instanceof Error ? failure.message : '聊天读取失败' }
+  catch (failure) { if (current === revision && sameContext(c)) readFailed(failure, '聊天读取失败') }
   finally { if (current === revision) loading.value = false }
 }
 function acknowledge() { if (detail.value && !loading.value && !writing.value && !attempt.value) { input.value.expectedVersion = detail.value.application.version; stale.value = false; reviewed.value = true; error.value = '' } }
@@ -118,18 +129,23 @@ onMounted(() => { window.addEventListener('order-updated', refresh); window.addE
 onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', visible) })
 </script>
 <template>
-  <div class="admin-refund-detail">
+  <div
+    class="admin-refund-detail"
+    :aria-busy="loading || writing"
+  >
     <header class="review-detail-heading">
-      <h2>查证与裁定</h2><RouterLink :to="{ path: '/admin/refunds', query: route.query }">返回队列</RouterLink>
+      <h2>查证与裁定</h2>
+      <div class="refund-actions">
+        <button
+          type="button"
+          class="inline-button"
+          :disabled="loading || writing"
+          @click="load"
+        >
+          刷新查证材料
+        </button><RouterLink :to="{ path: '/admin/refunds', query: route.query }">返回队列</RouterLink>
+      </div>
     </header>
-    <button
-      type="button"
-      class="inline-button"
-      :disabled="loading || writing"
-      @click="load"
-    >
-      刷新查证材料
-    </button>
     <p
       v-if="error"
       class="form-alert"
@@ -157,16 +173,36 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
       正在读取订单与售后证据…
     </p>
     <template v-if="detail">
-      <header class="refund-detail-section">
-        <span class="work-status">{{ refundStatuses[detail.application.status] }}</span><h2>{{ detail.order.title }}</h2><p>订单 {{ detail.order.orderNo }} · 申请 {{ detail.application.id }} · 材料版本 {{ detail.application.version }}</p><p>{{ detail.order.buyerNickname }} × {{ detail.order.creatorNickname }}</p><p class="quote-amount">
-          全额退款 ¥ {{ detail.application.refundAmount }}
-        </p><p>原状态 {{ orderStatus[detail.application.originalOrderStatus] }} · 当前 {{ orderStatus[detail.order.status] }}</p>
+      <header class="refund-summary">
+        <div class="refund-summary-heading">
+          <h3>{{ detail.order.title }}</h3><span
+            class="work-status refund-status"
+            :data-status="detail.application.status"
+          >{{ refundStatuses[detail.application.status] }}</span>
+        </div>
+        <p class="refund-summary-ids">
+          订单 {{ detail.order.orderNo }} · 申请 {{ detail.application.id }} · 材料版本 {{ detail.application.version }}
+        </p>
+        <dl class="refund-summary-facts">
+          <div>
+            <dt>全额退款金额</dt>
+            <dd class="refund-amount">
+              ¥ {{ detail.application.refundAmount }}
+            </dd>
+          </div>
+          <div>
+            <dt>买家 / 创作者</dt>
+            <dd>{{ detail.order.buyerNickname }} / {{ detail.order.creatorNickname }}</dd>
+          </div>
+          <div><dt>原订单状态</dt><dd>{{ orderStatus[detail.application.originalOrderStatus] }}</dd></div>
+          <div><dt>当前订单状态</dt><dd>{{ orderStatus[detail.order.status] }}</dd></div>
+        </dl>
       </header>
       <section
         class="refund-detail-section"
         aria-label="售后初始申请"
       >
-        <h3>初始申请 · {{ refundReasons[detail.application.reasonCode] || detail.application.reasonCode }}</h3><time>{{ formatTime(detail.application.createdAt) }}</time><p class="request-description">
+        <h3>初始申请 · {{ detail.application.applicationType === 'NORMAL' ? refundReasons[detail.application.reasonCode] || detail.application.reasonCode : '系统无责退款' }}</h3><time>{{ formatTime(detail.application.createdAt) }}</time><p class="request-description">
           {{ detail.application.description }}
         </p><QuoteImages
           :image-ids="detail.application.imageIds"
@@ -269,9 +305,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
         </article>
       </details>
       <details class="refund-detail-section">
-        <summary>原订单会话（只读）</summary><p class="field-help">
-          查证不改变双方已读游标，管理员不能发送消息。
-        </p><button
+        <summary>原订单会话（只读）</summary><button
           v-if="moreMessagesAvailable"
           class="inline-button"
           :disabled="loading || writing"
@@ -376,9 +410,12 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
               :disabled="frozen"
             /></label>
           </div>
-          <div class="refund-confirmation">
-            订单 {{ detail.order.orderNo }} · 申请 {{ detail.application.id }}<br>{{ input.decision === 'APPROVE' ? `全额退款 ¥ ${detail.application.refundAmount}，终止履约并取消待结算` : '驳回后恢复原订单状态，不重开原完成时间或售后窗口' }}
-          </div><button
+          <p
+            class="refund-confirmation"
+            :class="{ 'refund-confirmation-approval': input.decision === 'APPROVE' }"
+          >
+            {{ input.decision === 'APPROVE' ? `全额退款 ¥ ${detail.application.refundAmount}，终止履约并取消待结算` : '驳回后恢复原订单状态，沿用原完成时间和售后期限' }}
+          </p><button
             class="button-primary"
             :disabled="frozen || loading || stale || !reviewed"
           >
@@ -397,9 +434,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
           原成品退回核实：{{ detail.application.returnTrackingNo || '已保存凭证' }} · {{ formatTime(detail.application.returnConfirmedAt) }}
         </p><p v-if="detail.application.noReturnBasis">
           无需退货依据：{{ detail.application.noReturnBasis }}
-        </p><time>{{ formatTime(detail.application.finishedAt) }}</time><p class="field-help">
-          终结申请、资金和履约记录只读。
-        </p>
+        </p><time>{{ formatTime(detail.application.finishedAt) }}</time>
       </section>
       <details class="refund-detail-section">
         <summary>处理历史</summary><ol class="order-timeline">

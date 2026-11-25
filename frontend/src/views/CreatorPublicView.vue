@@ -5,14 +5,17 @@ import WorkLayout from '@/layouts/WorkLayout.vue'
 import CreatorFollow from '@/components/CreatorFollow.vue'
 import WorkCard from '@/components/WorkCard.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
+import PrivateImage from '@/components/PrivateImage.vue'
 import { getCreator, getWorks } from '@/api/work'
 import { addReviewReportEvidence, getCreatorReviews, getReviewReportsForActor, reportReview, uploadReviewImage } from '@/api/review'
 import { reportCreatorProfile } from '@/api/report'
 import type { ReportInput } from '@/types/report'
 import ReportDialog from '@/components/ReportDialog.vue'
 import { useAuthStore } from '@/stores/auth'
+import type { PageVO } from '@/types/creator'
 import type { CreatorPublicVO, WorkVO } from '@/types/work'
 import type { CreatorReviewVO, ReviewReportVO } from '@/types/review'
+import { formatTime } from '@/utils/creator'
 import '@/assets/styles/craftflow-works.css'
 const route = useRoute()
 const auth = useAuthStore()
@@ -24,7 +27,10 @@ const creatorLocation = computed(() => {
   return [district, categories.map(category => category.name).join(' / ')].filter(Boolean).join(' · ')
 })
 const works = ref<WorkVO[]>([])
-const reviews = ref<CreatorReviewVO[]>([])
+const reviews = ref<PageVO<CreatorReviewVO>>()
+const reviewsLoading = ref(false)
+const reviewsError = ref('')
+const requestedReviewPage = ref(1)
 const reviewError = ref('')
 const reportingId = ref('')
 const reportReason = ref('OTHER')
@@ -39,6 +45,7 @@ const total = ref(0)
 const error = ref('')
 const loading = ref(false)
 let revision = 0
+let reviewsRevision = 0
 let reportRevision = 0
 let timer: ReturnType<typeof setTimeout> | undefined
 /** 公开资料及作品独立查询，头像到期前重新从资料接口核验签名。 */
@@ -49,23 +56,52 @@ async function load(next = page.value) {
   error.value = ''
   clearTimeout(timer)
   try {
-    const [profile, result, reviewPage] = await Promise.all([getCreator(String(route.params.id)), getWorks({ creatorId: String(route.params.id), page: next }), getCreatorReviews(String(route.params.id))])
+    const [profile, result] = await Promise.all([getCreator(String(route.params.id)), getWorks({ creatorId: String(route.params.id), page: next })])
     if (current !== revision) return
-    creator.value = profile; works.value = result.items; total.value = result.total; reviews.value = reviewPage.items
+    creator.value = profile; works.value = result.items; total.value = result.total
     if (profile.avatarExpiresAt) timer = setTimeout(() => void load(), Math.max(5000, Date.parse(profile.avatarExpiresAt) - Date.now() - 20_000))
   } catch (failure) { if (current === revision) { creator.value = undefined; error.value = failure instanceof Error ? failure.message : '创作者资料读取失败' } }
   finally { if (current === revision) loading.value = false }
 }
+/** 评价使用独立分页，作品翻页和头像续签不重置当前评价页。 */
+async function loadReviews(next = requestedReviewPage.value) {
+  const current = ++reviewsRevision
+  requestedReviewPage.value = next
+  reviewsLoading.value = true
+  reviewsError.value = ''
+  try {
+    const result = await getCreatorReviews(String(route.params.id), next)
+    if (current !== reviewsRevision) return
+    const lastPage = Math.max(1, Math.ceil(result.total / result.size))
+    if (next > lastPage) {
+      void loadReviews(lastPage)
+      return
+    }
+    reviews.value = result
+    if (reportingId.value && !result.items.some(review => review.id === reportingId.value)) openReviewReport('')
+  } catch (failure) {
+    if (current === reviewsRevision) reviewsError.value = failure instanceof Error ? failure.message : '评价读取失败'
+  } finally {
+    if (current === reviewsRevision) reviewsLoading.value = false
+  }
+}
+const reviewFormRevision = ref(0)
+function openReviewReport(id: string) {
+  reviewFormRevision.value++
+  reportingId.value = reportingId.value === id ? '' : id
+  reportReason.value = 'OTHER'
+  reportDescription.value = ''
+  reportImages.value = []
+}
 async function flagReview(review: CreatorReviewVO) {
   if (!window.confirm('确认提交评价举报？')) return
   const current = reportRevision
+  const formRevision = reviewFormRevision.value
   try {
     await reportReview(review.id, { reasonCode: reportReason.value, description: reportDescription.value.trim(), imageIds: reportImages.value.map(x => x.id) })
     if (current !== reportRevision) return
     reviewError.value = '举报已提交；若已有待处理举报，会追加到原记录。'
-    reportingId.value = ''
-    reportDescription.value = ''
-    reportImages.value = []
+    if (formRevision === reviewFormRevision.value) openReviewReport('')
   } catch (failure) {
     if (current === reportRevision) reviewError.value = failure instanceof Error ? failure.message : '举报提交失败'
   }
@@ -75,9 +111,10 @@ async function uploadReportImage(event: Event) {
   const file = input.files?.[0]
   if (!file || reportImages.value.length >= 6) return
   const current = reportRevision
+  const formRevision = reviewFormRevision.value
   try {
     const image = await uploadReviewImage(file)
-    if (current === reportRevision) reportImages.value.push(image)
+    if (current === reportRevision && formRevision === reviewFormRevision.value) reportImages.value.push(image)
   } catch (failure) {
     if (current === reportRevision) reviewError.value = failure instanceof Error ? failure.message : '证据图片上传失败'
   } finally {
@@ -155,10 +192,11 @@ watch([() => route.params.id, () => auth.session?.userId, () => auth.session?.ac
   profileReportError.value = ''
   creator.value = undefined
   works.value = []
-  reviews.value = []
+  reviews.value = undefined
   void load(1)
+  void loadReviews(1)
 }, { immediate: true, flush: 'sync' })
-onBeforeUnmount(() => { revision++; reportRevision++; clearTimeout(timer) })
+onBeforeUnmount(() => { revision++; reviewsRevision++; reportRevision++; clearTimeout(timer) })
 </script>
 <template>
   <WorkLayout
@@ -263,7 +301,11 @@ onBeforeUnmount(() => { revision++; reportRevision++; clearTimeout(timer) })
         :loading="loading"
         @change="load"
       />
-      <section class="creator-reviews">
+      <section
+        class="creator-reviews"
+        aria-label="交易评价"
+        :aria-busy="reviewsLoading"
+      >
         <header class="work-section-heading">
           <h2>交易评价</h2><span class="muted">{{ creator.reviewCount }} 条有效评价</span>
         </header><p
@@ -272,27 +314,59 @@ onBeforeUnmount(() => { revision++; reportRevision++; clearTimeout(timer) })
           role="status"
         >
           {{ reviewError }}
-        </p><p
-          v-if="!reviews.length"
+        </p>
+        <p
+          v-if="reviewsError"
+          class="form-alert"
+          role="alert"
+        >
+          {{ reviewsError }} <button
+            class="inline-button"
+            type="button"
+            @click="loadReviews()"
+          >
+            重新读取评价
+          </button>
+        </p>
+        <p
+          v-if="reviewsLoading && !reviews"
+          class="field-help"
+          role="status"
+        >
+          正在读取评价…
+        </p>
+        <p
+          v-else-if="reviews && !reviews.items.length"
           class="muted"
         >
           暂无评价，完成交易后买家可以分享体验。
         </p><article
-          v-for="review in reviews"
+          v-for="review in reviews?.items"
           :key="review.id"
           class="creator-review-card"
         >
-          <p><strong>{{ review.buyerNickname }}</strong><span> · {{ review.rating }} 星</span></p><p>{{ review.content }}</p><div class="review-images">
-            <img
-              v-for="image in review.images"
+          <header class="creator-review-heading">
+            <strong>{{ review.buyerNickname }}</strong><span>{{ review.rating }} 星</span>
+            <time :datetime="review.createdAt">{{ formatTime(review.createdAt) }}</time>
+          </header>
+          <p class="creator-review-content">
+            {{ review.content }}
+          </p>
+          <div
+            v-if="review.images.length"
+            class="review-images"
+          >
+            <PrivateImage
+              v-for="(image, index) in review.images"
               :key="image.id"
-              :src="image.url"
-              alt="订单评价图片"
-            >
-          </div><time>{{ review.createdAt }}</time><button
+              :image-id="image.id"
+              scope="review"
+              :label="`订单评价图片 ${index + 1}`"
+            />
+          </div><button
             v-if="review.canReport"
             class="inline-button"
-            @click="reportingId = reportingId === review.id ? '' : review.id"
+            @click="openReviewReport(review.id)"
           >
             举报评价
           </button><form
@@ -356,6 +430,15 @@ onBeforeUnmount(() => { revision++; reportRevision++; clearTimeout(timer) })
             </p>
           </article>
         </article>
+        <WorkPagination
+          v-if="reviews"
+          :page="reviews.page"
+          :size="reviews.size"
+          :total="reviews.total"
+          :loading="reviewsLoading"
+          label="评价分页"
+          @change="loadReviews"
+        />
       </section>
     </template><p
       v-else-if="loading"

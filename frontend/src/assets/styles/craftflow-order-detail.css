@@ -110,6 +110,30 @@
 }
 .craftflow-order-main .editor-section h3 { color: var(--craft-ink); }
 .craftflow-order-main .editor-section > p { line-height: 1.75; }
+
+/* 授权状态与操作同卡展示，颜色仅作为文字状态的补充。 */
+.order-publication-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.craftflow-order-main .order-publication-heading h2 { margin: 0; }
+.order-publication { scroll-margin-top: 90px; }
+.order-publication-times { margin: 14px 0 0; }
+.craftflow-order-main .order-service-badge {
+  display: inline-flex;
+  padding: 3px 9px;
+  border-radius: 100px;
+  background: #f4f4f5;
+  color: #52525b;
+  font: 600 12px/1.4 var(--craft-font);
+}
+.craftflow-order-main .order-service-badge.is-pending { background: #fffbeb; color: #92400e; }
+.craftflow-order-main .order-service-badge:is(.is-approved, .is-settled) { background: #ecfdf5; color: #166534; }
+.craftflow-order-main .order-service-badge.is-rejected { background: #fef2f2; color: #991b1b; }
+.order-publication .order-overview-actions:empty { display: none; }
 .craftflow-order-main .payment-confirmation .order-facts { margin-block: 14px; }
 .craftflow-order-main .payment-confirmation .quote-amount {
   color: var(--craft-ink);

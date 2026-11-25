@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import AppIcon from '@/components/AppIcon.vue'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
 import { getAdminRefunds } from '@/api/refund'
@@ -12,38 +13,121 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { ApiError } from '@/utils/request'
 import '@/assets/styles/quote.css'
 import '@/assets/styles/refund.css'
-const route = useRoute(); const router = useRouter(); const auth = useAuthStore(); const notifications = useNotificationsStore()
-const rows = ref<AdminRefundQueueVO[]>([]); const total = ref(0); const page = ref(1); const status = ref('WAIT_ADMIN'); const applicationType = ref('NORMAL'); const orderNo = ref(''); const createdFrom = ref(''); const createdTo = ref(''); const minAmount = ref(''); const maxAmount = ref(''); const loading = ref(false); const error = ref('')
-let revision = 0
-/** 队列条件保存到URL，选择申请及返回时保留筛选与页码。 */
-async function filter(next = 1) {
-  const target = { path: '/admin/refunds', query: { status: status.value || 'ALL', applicationType: applicationType.value || 'ALL', orderNo: orderNo.value.trim() || undefined, createdFrom: createdFrom.value || undefined, createdTo: createdTo.value || undefined, minAmount: minAmount.value || undefined, maxAmount: maxAmount.value || undefined, page: next > 1 ? String(next) : undefined } }
-  if (router.resolve(target).fullPath === route.fullPath) void load(next)
-  else await router.push(target)
+const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
+const notifications = useNotificationsStore()
+const rows = ref<AdminRefundQueueVO[]>([])
+const total = ref(0)
+const loading = ref(false)
+const error = ref('')
+function readQuery(key: string) {
+  const value = route.query[key]
+  return typeof value === 'string' ? value : ''
 }
-async function load(next = page.value) {
-  const userId = auth.session?.userId; if (!userId || !auth.session?.roles.includes('ADMIN')) { rows.value = []; return }
-  const current = ++revision; loading.value = true; error.value = ''; page.value = next
-  try { const result = await getAdminRefunds({ status: status.value || 'ALL', applicationType: applicationType.value || 'ALL', orderNo: orderNo.value.trim(), createdFrom: createdFrom.value || undefined, createdTo: createdTo.value || undefined, minAmount: minAmount.value || undefined, maxAmount: maxAmount.value || undefined, page: next }); if (current === revision && userId === auth.session?.userId && auth.session?.roles.includes('ADMIN')) { rows.value = result.items; total.value = result.total } }
-  catch (failure) { if (current === revision && userId === auth.session?.userId) { if (failure instanceof ApiError && [401, 403, 404].includes(failure.status)) rows.value = []; error.value = failure instanceof Error ? failure.message : '售后队列读取失败' } }
-  finally { if (current === revision) loading.value = false }
+const filters = computed(() => {
+  const status = readQuery('status')
+  const applicationType = readQuery('applicationType')
+  return {
+    status: Object.hasOwn(refundStatuses, status) || status === 'ALL' ? status : 'WAIT_ADMIN',
+    applicationType: applicationType === 'ALL' || applicationType === 'NO_START_TIMEOUT' ? applicationType : 'NORMAL',
+    orderNo: readQuery('orderNo'),
+    createdFrom: readQuery('createdFrom'),
+    createdTo: readQuery('createdTo'),
+    minAmount: readQuery('minAmount'),
+    maxAmount: readQuery('maxAmount'),
+  }
+})
+const draft = ref({ ...filters.value, status: '', applicationType: '' })
+const page = computed(() => {
+  const value = Number(readQuery('page'))
+  return Number.isSafeInteger(value) && value > 0 ? value : 1
+})
+let revision = 0
+/** 数字输入可能被 Vue 转为 number，金额 0 仍是有效筛选条件。 */
+function amountQuery(value: string | number) {
+  return value === '' ? undefined : String(value)
+}
+function resetDraft() {
+  const { status, applicationType } = filters.value
+  draft.value = {
+    ...filters.value,
+    status: status === 'ALL' ? '' : status,
+    applicationType: applicationType === 'ALL' ? '' : applicationType,
+  }
+}
+/** 仅提交表单时应用筛选草稿。翻页、会话重连和焦点刷新使用地址栏中的条件。 */
+async function showPage(next: number, values = filters.value) {
+  const target = {
+    path: '/admin/refunds',
+    query: {
+      status: values.status || 'ALL',
+      applicationType: values.applicationType || 'ALL',
+      orderNo: values.orderNo.trim() || undefined,
+      createdFrom: values.createdFrom || undefined,
+      createdTo: values.createdTo || undefined,
+      minAmount: amountQuery(values.minAmount),
+      maxAmount: amountQuery(values.maxAmount),
+      page: next > 1 ? String(next) : undefined,
+    },
+  }
+  if (router.resolve(target).fullPath === route.fullPath) {
+    if (values === draft.value) resetDraft()
+    void load()
+  } else await router.push(target)
+}
+async function load() {
+  const userId = auth.session?.userId
+  if (!userId || !auth.session?.roles.includes('ADMIN')) return
+  const current = ++revision
+  const { status, applicationType, orderNo, createdFrom, createdTo, minAmount, maxAmount } = filters.value
+  loading.value = true
+  error.value = ''
+  try {
+    const result = await getAdminRefunds({
+      status, applicationType, orderNo: orderNo.trim(),
+      createdFrom: createdFrom || undefined, createdTo: createdTo || undefined,
+      minAmount: amountQuery(minAmount), maxAmount: amountQuery(maxAmount),
+      page: page.value,
+    })
+    if (current !== revision || userId !== auth.session?.userId || !auth.session?.roles.includes('ADMIN')) return
+    rows.value = result.items
+    total.value = result.total
+  } catch (failure) {
+    if (current !== revision || userId !== auth.session?.userId) return
+    if (failure instanceof ApiError && [401, 403, 404].includes(failure.status)) {
+      rows.value = []
+      total.value = 0
+    }
+    error.value = failure instanceof Error ? failure.message : '售后队列读取失败'
+  } finally {
+    if (current === revision) loading.value = false
+  }
 }
 function refresh() { void load() }
 function visible() { if (document.visibilityState === 'visible') refresh() }
 watch([() => route.query, () => auth.session?.userId, () => auth.session?.roles.includes('ADMIN')], () => {
-  revision++; if (!auth.session?.roles.includes('ADMIN')) { rows.value = []; total.value = 0; loading.value = false; return }
-  status.value = route.query.status === 'ALL' ? '' : ['WAIT_ADMIN', 'REFUNDED', 'REJECTED', 'WITHDRAWN'].includes(String(route.query.status)) ? String(route.query.status) : 'WAIT_ADMIN'
-  applicationType.value = route.query.applicationType === 'ALL' ? '' : route.query.applicationType === 'NO_START_TIMEOUT' ? 'NO_START_TIMEOUT' : 'NORMAL'
-  orderNo.value = typeof route.query.orderNo === 'string' ? route.query.orderNo : ''; createdFrom.value = typeof route.query.createdFrom === 'string' ? route.query.createdFrom : ''; createdTo.value = typeof route.query.createdTo === 'string' ? route.query.createdTo : ''; minAmount.value = typeof route.query.minAmount === 'string' ? route.query.minAmount : ''; maxAmount.value = typeof route.query.maxAmount === 'string' ? route.query.maxAmount : ''; page.value = Math.max(1, Number(route.query.page) || 1); void load()
-}, { immediate: true })
+  revision++
+  rows.value = []
+  total.value = 0
+  loading.value = false
+  error.value = ''
+  resetDraft()
+  if (!auth.session?.roles.includes('ADMIN')) return
+  void load()
+}, { immediate: true, flush: 'sync' })
 watch(() => notifications.connected, (value, old) => { if (value && !old) refresh() })
 onMounted(() => { window.addEventListener('order-updated', refresh); window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', visible) })
 onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', visible) })
 </script>
 <template>
-  <AdminLayout title="售后与退款">
+  <AdminLayout
+    title="售后与退款"
+    presentation="craftflow"
+  >
     <template #actions>
       <button
+        type="button"
         class="button-secondary"
         :disabled="loading"
         @click="load()"
@@ -52,22 +136,23 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
       </button>
     </template>
     <div
-      class="admin-review-grid"
+      class="admin-review-grid admin-refund-workspace"
       :class="{ 'has-selection': !!route.params.id }"
     >
       <section
         class="review-queue"
         aria-label="售后申请队列"
+        :aria-busy="loading"
       >
         <header class="review-queue-heading">
           <h2>售后申请</h2><span>{{ total }} 条记录</span>
         </header>
         <form
           class="refund-filters"
-          @submit.prevent="filter()"
+          @submit.prevent="showPage(1, draft)"
         >
           <label class="work-field">申请状态<select
-            v-model="status"
+            v-model="draft.status"
             aria-label="申请状态"
           ><option value="">全部状态</option><option
             v-for="(label, value) in refundStatuses"
@@ -75,14 +160,35 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
             :value="value"
           >{{ label }}</option></select></label>
           <label class="work-field">申请类型<select
-            v-model="applicationType"
+            v-model="draft.applicationType"
             aria-label="申请类型"
           ><option value="NORMAL">普通退款</option><option value="NO_START_TIMEOUT">系统无责退款</option><option value="">全部类型</option></select></label>
-          <label class="work-field">订单编号<input
-            v-model="orderNo"
+          <label class="work-field refund-order-filter">订单编号<input
+            v-model="draft.orderNo"
             aria-label="按订单编号筛选"
+            type="search"
+            maxlength="32"
             placeholder="输入订单编号"
-          ></label><label class="work-field">申请创建时间从<input v-model="createdFrom" type="datetime-local"></label><label class="work-field">至<input v-model="createdTo" type="datetime-local"></label><label class="work-field">金额从<input v-model="minAmount" type="number" min="0" step="0.01"></label><label class="work-field">至<input v-model="maxAmount" type="number" min="0" step="0.01"></label><button class="button-secondary">
+          ></label><label class="work-field">申请时间从<input
+            v-model="draft.createdFrom"
+            type="datetime-local"
+          ></label><label class="work-field">申请时间至<input
+            v-model="draft.createdTo"
+            type="datetime-local"
+          ></label><label class="work-field">金额从<input
+            v-model="draft.minAmount"
+            type="number"
+            min="0"
+            step="0.01"
+          ></label><label class="work-field">金额至<input
+            v-model="draft.maxAmount"
+            type="number"
+            min="0"
+            step="0.01"
+          ></label><button
+            class="button-secondary"
+            type="submit"
+          >
             筛选申请
           </button>
         </form>
@@ -93,7 +199,8 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
         >
           {{ error }}
         </p><p
-          v-if="loading"
+          v-if="loading && !rows.length"
+          class="account-loading"
           role="status"
         >
           正在读取售后队列…
@@ -104,23 +211,35 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
         >
           <h3>当前条件下暂无售后申请</h3>
         </div>
-        <div class="managed-work-list">
+        <div
+          v-if="rows.length"
+          class="managed-work-list"
+        >
           <article
             v-for="item in rows"
             :key="item.id"
-            class="managed-work-row"
+            class="managed-work-row refund-queue-row"
             :class="{ selected: route.params.id === item.id }"
           >
             <div class="managed-work-copy">
-              <span class="work-status">{{ refundStatuses[item.status] || item.status }}</span><h3>{{ item.title }}</h3><p>{{ item.orderNo }} · {{ item.applicationType === 'NORMAL' ? refundReasons[item.reasonCode] : '系统无责退款' }}</p><p>¥ {{ item.totalAmount }} · {{ formatTime(item.createdAt) }}</p>
-            </div><RouterLink :to="{ path: `/admin/refunds/${item.id}`, query: route.query }">{{ item.status === 'WAIT_ADMIN' ? '查证与裁定' : '查看记录' }} ↗</RouterLink>
+              <span
+                class="work-status refund-status"
+                :data-status="item.status"
+              >{{ refundStatuses[item.status] || item.status }}</span><h3>{{ item.title }}</h3><p>{{ item.orderNo }} · {{ item.applicationType === 'NORMAL' ? refundReasons[item.reasonCode] : '系统无责退款' }}</p><time>{{ formatTime(item.createdAt) }}</time>
+            </div><div class="refund-queue-action">
+              <strong>¥ {{ item.totalAmount }}</strong><RouterLink
+                class="text-link"
+                :aria-current="route.params.id === item.id ? 'true' : undefined"
+                :to="{ path: `/admin/refunds/${item.id}`, query: route.query }"
+              >{{ item.status === 'WAIT_ADMIN' ? '查证与裁定' : '查看记录' }} ↗</RouterLink>
+            </div>
           </article>
         </div>
         <WorkPagination
           :page="page"
           :total="total"
           :loading="loading"
-          @change="filter"
+          @change="showPage"
         />
       </section>
       <section
@@ -137,7 +256,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
           v-if="!route.params.id"
           class="review-placeholder"
         >
-          <h2>选择申请查看约定、履约和证据</h2><p>核查双方材料后，由一名管理员作出结论。</p>
+          <AppIcon name="shield" /><h2>选择申请查看约定、履约和证据</h2>
         </div>
       </section>
     </div>

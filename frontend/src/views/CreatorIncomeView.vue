@@ -1,117 +1,182 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import CreatorLayout from '@/layouts/CreatorLayout.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
 import { getMySettlements } from '@/api/income'
+import { useAuthStore } from '@/stores/auth'
 import type { CreatorSettlementVO } from '@/types/income'
 import { settlementStatus } from '@/utils/quote'
 import { formatTime } from '@/utils/creator'
+import '@/assets/styles/craftflow-publication.css'
+import '@/assets/styles/craftflow-settlement.css'
 
-const rows = ref<CreatorSettlementVO[]>([]); const status = ref(''); const page = ref(1); const total = ref(0); const error = ref(''); const loading = ref(false)
+const auth = useAuthStore()
+const rows = ref<CreatorSettlementVO[]>([])
+const status = ref('')
+const page = ref(1)
+const total = ref(0)
+const error = ref('')
+const loading = ref(false)
 let revision = 0
-/** 收入记录为只读查询，会话或焦点恢复时静默刷新当前页。 */
+
+/** 收入按本人身份只读查询，退出或切换账号后丢弃旧响应。 */
 async function load(next = page.value) {
-  const current = ++revision; page.value = next; loading.value = true; error.value = ''
+  if (!auth.session) return
+  const current = ++revision
+  page.value = next
+  loading.value = true
+  error.value = ''
   try {
     const result = await getMySettlements({ status: status.value || undefined, page: next })
     if (current !== revision) return
-    rows.value = result.items; total.value = result.total
-  } catch (failure) { if (current === revision) error.value = failure instanceof Error ? failure.message : '收入记录读取失败' }
-  finally { if (current === revision) loading.value = false }
+    rows.value = result.items
+    total.value = result.total
+  } catch (failure) {
+    if (current !== revision) return
+    error.value = failure instanceof Error ? failure.message : '收入记录读取失败'
+  } finally {
+    if (current === revision) loading.value = false
+  }
 }
+
 function refresh() { void load() }
-onMounted(() => { refresh(); window.addEventListener('focus', refresh) })
-onBeforeUnmount(() => { revision++; window.removeEventListener('focus', refresh) })
+watch(() => auth.session?.userId, () => {
+  revision++
+  rows.value = []
+  total.value = 0
+  loading.value = false
+  status.value = ''
+  error.value = ''
+  void load(1)
+}, { immediate: true, flush: 'sync' })
+onMounted(() => window.addEventListener('focus', refresh))
+onBeforeUnmount(() => {
+  revision++
+  window.removeEventListener('focus', refresh)
+})
 </script>
 
 <template>
-  <CreatorLayout>
-    <header class="work-section-heading">
-      <div>
-        <p class="eyebrow">
-          INCOME RECORDS
-        </p><h1>收入记录</h1><p class="muted">
-          每笔订单的应结算金额与模拟结算进度。
+  <CreatorLayout presentation="craftflow">
+    <section class="cf-settlement">
+      <header class="cf-settlement-heading">
+        <h1>收入记录</h1>
+        <p>订单完成满 7 天且无处理中售后时，系统自动模拟结算。</p>
+      </header>
+
+      <section
+        class="cf-settlement-card"
+        aria-label="逐单结算记录"
+        :aria-busy="loading"
+      >
+        <form
+          class="cf-settlement-filters"
+          @submit.prevent="load()"
+        >
+          <label>结算状态<select
+            v-model="status"
+            aria-label="结算状态"
+            @change="rows = []; total = 0; load(1)"
+          >
+            <option value="">全部状态</option>
+            <option
+              v-for="(label, value) in settlementStatus"
+              :key="value"
+              :value="value"
+            >
+              {{ label }}
+            </option>
+          </select></label>
+          <button
+            class="button-secondary"
+            :disabled="loading"
+          >
+            刷新记录
+          </button>
+        </form>
+
+        <p
+          v-if="error"
+          class="form-alert"
+          role="alert"
+        >
+          {{ error }}
+          <button
+            type="button"
+            class="inline-button"
+            @click="refresh"
+          >
+            重试
+          </button>
         </p>
-      </div>
-    </header>
-    <form
-      class="request-filters"
-      @submit.prevent="load(1)"
-    >
-      <label>结算状态<select
-        v-model="status"
-        aria-label="结算状态"
-        @change="load(1)"
-      ><option value="">全部状态</option><option
-        v-for="(label, value) in settlementStatus"
-        :key="value"
-        :value="value"
-      >{{ label }}</option></select></label><button
-        class="button-secondary"
-        :disabled="loading"
-      >
-        刷新记录
-      </button>
-    </form>
-    <p
-      v-if="error"
-      class="form-alert"
-      role="alert"
-    >
-      {{ error }}
-    </p><p
-      v-if="loading && !rows.length"
-      role="status"
-    >
-      正在读取收入记录…
-    </p><div
-      v-else-if="!rows.length && !error"
-      class="creator-empty"
-    >
-      <h2>暂无收入记录</h2><p>订单完成满七天且无处理中售后时，系统会自动生成模拟结算记录。</p>
-    </div>
-    <ul
-      v-else
-      class="income-list"
-    >
-      <li
-        v-for="row in rows"
-        :key="row.orderId"
-        class="income-row"
-      >
-        <div class="income-main">
-          <RouterLink
-            class="income-title"
-            :to="`/orders/${row.orderId}`"
-          >{{ row.title }}</RouterLink>
-          <span class="muted">{{ row.orderNo }}</span>
+        <p
+          v-if="loading && !rows.length"
+          class="cf-settlement-state"
+          role="status"
+        >
+          正在读取收入记录…
+        </p>
+        <div
+          v-else-if="!rows.length && !error"
+          class="cf-settlement-state"
+        >
+          <h2>暂无收入记录</h2>
+          <p>{{ status ? '可以切换结算状态查看其他记录。' : '买家付款后，订单会显示在此。' }}</p>
         </div>
-        <dl class="income-facts">
-          <div><dt>应结算金额</dt><dd>¥ {{ row.paidAmount }}</dd></div>
-          <div><dt>结算状态</dt><dd>{{ settlementStatus[row.status] || row.status }}</dd></div>
-          <div><dt>结算时间</dt><dd>{{ row.settledAt ? formatTime(row.settledAt) : '—' }}</dd></div>
-          <div><dt>收款账户</dt><dd>{{ row.maskedPayee }}</dd></div>
-        </dl>
-      </li>
-    </ul>
-    <WorkPagination
-      :page="page"
-      :total="total"
-      :loading="loading"
-      @change="load"
-    />
+        <div
+          v-if="rows.length"
+          class="cf-settlement-table"
+        >
+          <table aria-label="收入记录明细">
+            <thead>
+              <tr>
+                <th scope="col">
+                  订单
+                </th>
+                <th scope="col">
+                  买家实付 / 应结算
+                </th>
+                <th scope="col">
+                  结算状态
+                </th>
+                <th scope="col">
+                  模拟结算时间
+                </th>
+                <th scope="col">
+                  收款账户
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="row in rows"
+                :key="row.orderId"
+                class="income-row"
+              >
+                <td>
+                  <RouterLink :to="{ name: 'order-detail', params: { id: row.orderId }, query: { side: 'CREATOR' } }">
+                    {{ row.title }}
+                  </RouterLink>
+                  <small>{{ row.orderNo }}</small>
+                </td>
+                <td class="cf-settlement-amount">
+                  ¥ {{ row.paidAmount }}
+                </td>
+                <td><span :data-status="row.status">{{ settlementStatus[row.status] || row.status }}</span></td>
+                <td><time :datetime="row.settledAt || undefined">{{ formatTime(row.settledAt) }}</time></td>
+                <td>{{ row.maskedPayee }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <WorkPagination
+          label="收入记录分页"
+          :page="page"
+          :total="total"
+          :loading="loading"
+          @change="load"
+        />
+      </section>
+    </section>
   </CreatorLayout>
 </template>
-
-<style scoped>
-.income-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-.income-row { border: 1px solid #e5e1d8; border-radius: 12px; padding: 16px 20px; display: grid; gap: 10px; background: #fff; }
-.income-main { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.income-title { font-weight: 600; color: inherit; text-decoration: none; }
-.income-title:hover { text-decoration: underline; }
-.income-facts { display: flex; gap: 32px; flex-wrap: wrap; margin: 0; }
-.income-facts div { display: grid; gap: 4px; }
-.income-facts dt { font-size: 12px; color: #909399; }
-.income-facts dd { margin: 0; font-weight: 500; }
-</style>

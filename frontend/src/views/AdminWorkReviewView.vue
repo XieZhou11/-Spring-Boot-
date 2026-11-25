@@ -73,6 +73,7 @@ onBeforeUnmount(() => revision++)
           class="work-status"
           :class="work.reviewStatus"
         >{{ workStatusLabels[work.reviewStatus] }}</span><span>作品编号 {{ work.id }}</span><span>提交于 {{ formatTime(work.submittedAt) }}</span>
+        <span v-if="work.sourceOrderId">定制案例 · 来源订单 {{ work.sourceOrderId }}</span>
       </div><div
         class="review-material-scroll"
         role="region"

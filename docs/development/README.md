@@ -4,6 +4,8 @@
 
 ## 当前记录
 
+[T-025 CraftFlow 第 5 批](tasks/T-025-craftflow-after-sale-reviews-consent.md)覆盖定制普通售后、模拟结算查询、订单评价和定制成品案例。 [测试记录](../testing/T-025-craftflow-after-sale-reviews-consent.md)
+
 [T-023 CraftFlow 第 3 批](tasks/T-023-craftflow-requests-quotes-messages.md)覆盖定制需求、报价定标、会话与系统通知。 [测试记录](../testing/T-023-craftflow-requests-quotes-messages.md)
 
 [T-024 CraftFlow 第 4 批](tasks/T-024-craftflow-orders-payment-fulfillment.md)覆盖现货直购、现货与定制订单、模拟支付与履约。 [测试记录](../testing/T-024-craftflow-orders-payment-fulfillment.md)

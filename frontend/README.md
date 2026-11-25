@@ -198,6 +198,10 @@ CraftFlow 第 3 批重做买家需求双栏、定向邀约、大厅、报价工�
 
 从作品详情选择已有地址直购，或从定标结果进入订单详情。`/orders` 支持买入与承接、状态筛选和分页，`/orders/:id` 保留列表条件与进度引用。模拟付款确认及未知结果恢复使用已有接口。现货展示准确发货截止时间和物流，定制展示五节点计划、图文及偏差。两类订单结案后仍可从详情进入原会话。 [T-024](../docs/development/tasks/T-024-craftflow-orders-payment-fulfillment.md) · [测试记录](../docs/testing/T-024-craftflow-orders-payment-fulfillment.md)
 
+## CraftFlow 第 5 批 · 售后、结算、评价与成品授权
+
+订单详情提供定制售后、买家图文评价和成品授权。管理员从 `/admin/refunds` 查证并裁定定制普通售后。创作者从 `/creator/income` 查收入，管理员从 `/admin/settlements` 查资金并打开对应订单。买家可通过通知定位授权区，创作者获同意后可从订单进入作品编辑器关联来源并提交审核。 [T-025](../docs/development/tasks/T-025-craftflow-after-sale-reviews-consent.md) · [测试记录](../docs/testing/T-025-craftflow-after-sale-reviews-consent.md)
+
 ## 普通售后与管理员裁定（T-014）
 
 专项：`npm run test:e2e -- e2e/order-refund.spec.ts e2e/order-refund-pagination.spec.ts e2e/order-refund-flow.spec.ts`。`order-refund.spec.ts`通过受控网络验证未知结果、原键核验、版本冲突重阅、存储失败、终态草稿只读与乱序隔离；`order-refund-pagination.spec.ts`验证双方和后台证据/聊天分页及队列条件保留；`order-refund-flow.spec.ts`从注册、入驻、定标及付款的真实链路建立订单，验证双方图文证据、状态恢复、管理员聊天只读、退回核验与原子退款。真实OSS独立结果在后端测试记录中区分，浏览器协议接收器不代替云端验证。详细结果见[T-014测试记录](../docs/testing/T-014-refund-adjudication.md)。

@@ -16,6 +16,8 @@ CraftFlow 首批认证、公共导航及作品浏览的浏览器回归见 [T-021
 
 聊天心跳、有限重连、按会话刷新及凭证查询优化见 [T-010 测试记录](T-010-chat-reliability.md)，包含原始问题、修复复测与隔离验证范围。
 
+CraftFlow 第 5 批的普通售后、结算、评价与成品授权回归见 [T-025 测试记录](T-025-craftflow-after-sale-reviews-consent.md)。
+
 定制订单模拟支付、待结算及五节点初始化见[T-011测试记录](T-011-order-payment.md)，包含真实MySQL并发与回滚、HTTP/WebSocket及付款结果恢复验证。
 
 定制订单履约、制作图文、原子发货、收货扫描与未开工退款见[T-013测试记录](T-013-order-fulfillment.md)，包含权限、时限、并发、故障回滚及页面恢复；真实OSS与协议接收器结果分别记录。

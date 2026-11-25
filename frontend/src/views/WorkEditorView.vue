@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import WorkLayout from '@/layouts/WorkLayout.vue'
 import WorkImagePicker from '@/components/WorkImagePicker.vue'
 import WorkHistory from '@/components/WorkHistory.vue'
@@ -22,6 +22,9 @@ const work = ref<WorkVO>()
 const categories = ref<CategoryVO[]>([])
 const quota = ref<PublicationQuotaVO>()
 const publicationOrders = ref<PublicationOrderOptionVO[]>([])
+const linkedSource = computed(() => route.path === '/creator/works/new' ? route.query.sourceOrderId : undefined)
+const creatorId = computed(() => auth.session?.roles.includes('CREATOR') ? auth.session.userId : undefined)
+const sourceUnavailable = ref(false)
 const error = ref('')
 const notice = ref('')
 const fieldErrors = ref<Record<string, string>>({})
@@ -36,12 +39,13 @@ const mainUploading = ref(false)
 const specificationUploading = ref(false)
 const uploading = computed(() => mainUploading.value || specificationUploading.value)
 const unresolved = ref(false)
-const requestKey = crypto.randomUUID()
+let requestKey = crypto.randomUUID()
 const baseline = ref(JSON.stringify(form))
 const dirty = computed(() => JSON.stringify(form) !== baseline.value)
 const selectable = computed(() => categories.value.flatMap(parent => parent.children.length ? parent.children.filter(c => c.enabled && c.selectableForWork).map(c => ({ id: c.id, name: `${parent.name} / ${c.name}` })) : parent.selectableForWork ? [{ id: parent.id, name: parent.name }] : []))
 const pending = computed(() => work.value?.reviewStatus === 'PENDING')
-let disposed = false
+let initialization = 0
+let editorRevision = 0
 
 /** 四段表单操作后将反馈带入视口，字段校验时优先定位可修正的位置。 */
 watch([error, notice, fieldErrors], ([failure, result]) => {
@@ -56,16 +60,33 @@ watch([error, notice, fieldErrors], ([failure, result]) => {
 
 /** 服务端读取只在初始化或明确刷新时覆盖表单；失败和冲突保留输入。 */
 async function initialize() {
-  loading.value = true; error.value = ''
+  const operation = ++initialization
+  const source = linkedSource.value
+  const userId = creatorId.value
+  if (!userId) return
+  loading.value = true; error.value = ''; ready.value = false; sourceUnavailable.value = false
   try {
     const [available, limits, current, orders] = await Promise.all([getCategories(), getPublicationQuota(), route.params.id ? getManagedWork(String(route.params.id)) : Promise.resolve(undefined), getApprovedPublicationOrders()])
-    if (disposed) return
+    if (operation !== initialization || userId !== creatorId.value) return
     categories.value = available; quota.value = limits; publicationOrders.value = orders
     if (current) { work.value = current; Object.assign(form, workContent(current)) }
+    // 从授权订单进入时，以服务端同意列表校验来源，防止意外发布成普通作品。
+    if (source !== undefined) {
+      if (typeof source !== 'string' || !orders.some(item => item.orderId === source)) {
+        sourceUnavailable.value = true
+        error.value = '该订单当前无法关联，请返回订单查看公开授权。'
+        return
+      }
+      form.sourceOrderId = source
+      sourceOrderChanged()
+    }
     baseline.value = JSON.stringify(form)
     ready.value = true
-  } catch (failure) { error.value = failure instanceof Error ? failure.message : '表单读取失败' }
-  finally { loading.value = false }
+  } catch (failure) {
+    if (operation === initialization && userId === creatorId.value) error.value = failure instanceof Error ? failure.message : '表单读取失败'
+  } finally {
+    if (operation === initialization) loading.value = false
+  }
 }
 function validate() {
   const errors: Record<string, string> = {}
@@ -87,27 +108,33 @@ function validate() {
 }
 /** 关联订单后立即关闭现货销售；已保存来源由服务端禁止解除或替换。 */
 function sourceOrderChanged() { if (form.sourceOrderId) { form.saleEnabled = false; form.stockPrice = null } }
-/** 创建响应丢失时复用请求键重查；提交未知时先查状态，禁止盲目二次提交。 */
-async function ensureCreated() {
-  if (!work.value) work.value = await createWork(workContent(form), requestKey)
-  return work.value
-}
+/** 草稿创建后才保存或提交，切换账号后停止串联写入及回填。 */
 async function persist(submit: boolean) {
-  if (busy.value || uploading.value || !ready.value || loading.value || unresolved.value) return
+  if (!creatorId.value || busy.value || uploading.value || !ready.value || loading.value || unresolved.value) return
   error.value = ''; notice.value = ''; fieldErrors.value = {}
   if (submit && !validate()) return
   if (submit && work.value?.reviewStatus === 'ONLINE' && !window.confirm('展示内容修改将重新审核，提交后立即停止公开展示。确定提交？')) return
   busy.value = true
+  const revision = editorRevision
+  const fields = workContent(form)
+  const isCurrent = () => revision === editorRevision
   let attemptedSubmission = false
   try {
-    const current = await ensureCreated()
+    const current = work.value ?? await createWork(fields, requestKey)
+    if (!isCurrent()) return
+    work.value = current
     attemptedSubmission = submit
-    work.value = submit ? await submitWork(current.id, workContent(form), current.version) : await saveWork(current.id, workContent(form), current.version)
+    const result = submit ? await submitWork(current.id, fields, current.version) : await saveWork(current.id, fields, current.version)
+    if (!isCurrent()) return
+    work.value = result
     Object.assign(form, workContent(work.value)); baseline.value = JSON.stringify(form)
     if (!route.params.id) await router.replace(`/creator/works/${work.value.id}/edit`)
+    if (!isCurrent()) return
     notice.value = submit ? work.value.reviewStatus === 'ONLINE' ? '交易设置已即时更新' : '作品已提交，等待管理员审核' : '草稿已保存'
-    quota.value = await getPublicationQuota()
+    const limits = await getPublicationQuota()
+    if (isCurrent()) quota.value = limits
   } catch (failure) {
+    if (!isCurrent()) return
     if (failure instanceof ApiError && failure.status) {
       fieldErrors.value = failure.fieldErrors || {}
       error.value = failure.status === 409 ? `${failure.message}。输入已保留，请先核验最新状态。` : failure.message
@@ -115,59 +142,115 @@ async function persist(submit: boolean) {
     } else {
       // 只能以服务器状态确认结果；无法查询时冻结写操作并保留表单。
       try {
-        const current = work.value ? await getManagedWork(work.value.id) : await createWork(workContent(form), requestKey)
+        const current = work.value ? await getManagedWork(work.value.id) : await createWork(fields, requestKey)
+        if (!isCurrent()) return
         work.value = current
         if (attemptedSubmission && ['PENDING', 'ONLINE'].includes(current.reviewStatus) && JSON.stringify(workContent(current)) === JSON.stringify(workContent(form))) {
           baseline.value = JSON.stringify(form)
           if (!route.params.id) await router.replace(`/creator/works/${current.id}/edit`)
-          notice.value = '已核验：服务器已接收本次提交'
+          if (isCurrent()) notice.value = '已核验：服务器已接收本次提交'
         } else error.value = '已核验服务器状态，输入仍保留，可继续保存或提交。'
-      } catch { unresolved.value = true; error.value = '网络中断，操作结果尚未确认。输入已保留，请恢复网络后核验。' }
+      } catch {
+        if (isCurrent()) {
+          unresolved.value = true
+          error.value = '网络中断，操作结果尚未确认。输入已保留，请恢复网络后核验。'
+        }
+      }
     }
-  } finally { busy.value = false }
+  } finally { if (isCurrent()) busy.value = false }
 }
 async function reconcile() {
+  if (!creatorId.value || busy.value) return
+  const revision = editorRevision
   busy.value = true; error.value = ''; notice.value = ''
-  try { work.value = work.value ? await getManagedWork(work.value.id) : await createWork(workContent(form), requestKey); unresolved.value = false; notice.value = '已核验最新状态。输入已保留，请确认后再操作。' }
-  catch (failure) { error.value = failure instanceof Error ? failure.message : '仍无法核验，请稍后重试' }
-  finally { busy.value = false }
+  try {
+    const result = work.value ? await getManagedWork(work.value.id) : await createWork(workContent(form), requestKey)
+    if (revision !== editorRevision) return
+    work.value = result
+    unresolved.value = false
+    notice.value = '已核验最新状态。输入已保留，请确认后再操作。'
+  } catch (failure) {
+    if (revision === editorRevision) error.value = failure instanceof Error ? failure.message : '仍无法核验，请稍后重试'
+  } finally { if (revision === editorRevision) busy.value = false }
 }
 async function trading() {
-  if (!work.value || busy.value || uploading.value || unresolved.value) return
+  if (!creatorId.value || !work.value || busy.value || uploading.value || unresolved.value) return
+  const revision = editorRevision
   const errors = fieldErrors.value
   if (!validate()) { fieldErrors.value = Object.fromEntries(Object.entries(fieldErrors.value).filter(([key]) => ['stockPrice', 'customReferenceDays'].includes(key))); if (Object.keys(fieldErrors.value).length) return }
   fieldErrors.value = errors; error.value = ''; notice.value = ''; busy.value = true
   try {
-    work.value = await updateTrading(work.value.id, { version: work.value.version, saleEnabled: form.saleEnabled, customEnabled: form.customEnabled, stockPrice: form.saleEnabled ? form.stockPrice : null, customReferenceDays: form.customEnabled ? form.customReferenceDays : null })
+    const result = await updateTrading(work.value.id, { version: work.value.version, saleEnabled: form.saleEnabled, customEnabled: form.customEnabled, stockPrice: form.saleEnabled ? form.stockPrice : null, customReferenceDays: form.customEnabled ? form.customReferenceDays : null })
+    if (revision !== editorRevision) return
+    work.value = result
     // 展示内容的未保存修改仍保持脏状态，交易设置成功不能吞掉它们。
     const saved = JSON.parse(baseline.value)
     Object.assign(saved, { saleEnabled: work.value.saleEnabled, customEnabled: work.value.customEnabled, stockPrice: work.value.stockPrice, customReferenceDays: work.value.customReferenceDays })
     baseline.value = JSON.stringify(saved); notice.value = '交易设置已即时更新，作品保持上架'
-  } catch (failure) { error.value = failure instanceof Error ? failure.message : '更新结果未知，请核验'; unresolved.value = true }
-  finally { busy.value = false }
+  } catch (failure) {
+    if (revision === editorRevision) {
+      error.value = failure instanceof Error ? failure.message : '更新结果未知，请核验'
+      unresolved.value = true
+    }
+  } finally { if (revision === editorRevision) busy.value = false }
 }
 async function withdraw() {
-  if (!work.value || busy.value || !window.confirm('确定撤回本轮审核并返回草稿？')) return
+  if (!creatorId.value || !work.value || busy.value || !window.confirm('确定撤回本轮审核并返回草稿？')) return
+  const revision = editorRevision
   busy.value = true; error.value = ''; notice.value = ''
   try {
     const preserveInput = dirty.value
-    work.value = await withdrawWork(work.value.id, work.value.version)
+    const result = await withdrawWork(work.value.id, work.value.version)
+    if (revision !== editorRevision) return
+    work.value = result
     if (!preserveInput) Object.assign(form, workContent(work.value))
     baseline.value = JSON.stringify(workContent(work.value)); notice.value = preserveInput ? '已撤回，之前未保存的输入仍保留' : '已撤回，可继续编辑'
   }
-  catch (failure) { error.value = failure instanceof Error ? failure.message : '结果未知，请核验'; unresolved.value = true }
-  finally { busy.value = false }
+  catch (failure) {
+    if (revision === editorRevision) {
+      error.value = failure instanceof Error ? failure.message : '结果未知，请核验'
+      unresolved.value = true
+    }
+  } finally { if (revision === editorRevision) busy.value = false }
 }
 function beforeUnload(event: BeforeUnloadEvent) { if (auth.session && (dirty.value || busy.value || uploading.value)) { event.preventDefault(); event.returnValue = '' } }
 onBeforeRouteLeave(to => {
   // 退出成功或会话失效后必须离开受保护页面，未保存提示不能阻挡登录跳转。
-  if (!auth.session) return true
+  if (!creatorId.value) return true
   if (!route.params.id && work.value && to.path === `/creator/works/${work.value.id}/edit`) return true
   if (busy.value || uploading.value) return false
   if (dirty.value) return window.confirm('还有未保存的修改，确定离开？')
 })
+onBeforeRouteUpdate((to, from) => {
+  if (!creatorId.value || to.path !== '/creator/works/new' || to.query.sourceOrderId === from.query.sourceOrderId) return
+  if (busy.value || uploading.value || unresolved.value) return false
+  if (dirty.value) return window.confirm('还有未保存的修改，确定切换来源？')
+})
+/** 账号或来源改变时立即隐藏旧表单，同时作废此前的异步响应。 */
+watch([creatorId, linkedSource], ([userId], [previousUser]) => {
+  if (userId === previousUser && route.path !== '/creator/works/new') return
+  initialization++
+  editorRevision++
+  requestKey = crypto.randomUUID()
+  ready.value = false
+  loading.value = false
+  busy.value = false
+  mainUploading.value = false
+  specificationUploading.value = false
+  Object.assign(form, emptyWork())
+  work.value = undefined
+  publicationOrders.value = []
+  quota.value = undefined
+  baseline.value = JSON.stringify(form)
+  error.value = ''
+  notice.value = ''
+  fieldErrors.value = {}
+  unresolved.value = false
+  if (userId) void initialize()
+  else if (auth.session) error.value = '当前账号需要通过创作者认证才能发布作品。'
+}, { flush: 'sync' })
 onMounted(() => { void initialize(); window.addEventListener('beforeunload', beforeUnload) })
-onBeforeUnmount(() => { disposed = true; window.removeEventListener('beforeunload', beforeUnload) })
+onBeforeUnmount(() => { initialization++; editorRevision++; window.removeEventListener('beforeunload', beforeUnload) })
 </script>
 
 <template>
@@ -184,7 +267,7 @@ onBeforeUnmount(() => { disposed = true; window.removeEventListener('beforeunloa
         <span aria-current="page">{{ work ? '编辑作品' : '发布作品' }}</span>
       </nav>
       <header class="cf-publication-heading">
-        <h1>{{ pending ? '待审核作品' : work ? '编辑作品' : '发布新作品' }}</h1>
+        <h1>{{ pending ? '待审核作品' : work ? '编辑作品' : linkedSource !== undefined ? '发布定制成品案例' : '发布新作品' }}</h1>
         <span
           v-if="work"
           class="work-status"
@@ -199,8 +282,18 @@ onBeforeUnmount(() => { disposed = true; window.removeEventListener('beforeunloa
         tabindex="-1"
       >
         {{ error }}
+        <RouterLink
+          v-if="!creatorId"
+          class="inline-button"
+          to="/account/creator-certification"
+        >查看创作者认证</RouterLink>
+        <RouterLink
+          v-else-if="sourceUnavailable"
+          class="inline-button"
+          to="/creator/works/new"
+        >发布普通作品</RouterLink>
         <button
-          v-if="unresolved"
+          v-else-if="unresolved"
           type="button"
           class="inline-button"
           :disabled="busy"
@@ -318,7 +411,7 @@ onBeforeUnmount(() => { disposed = true; window.removeEventListener('beforeunloa
               <select
                 v-model="form.sourceOrderId"
                 aria-label="关联已授权的定制成品"
-                :disabled="Boolean(work?.sourceOrderId)"
+                :disabled="Boolean(work?.sourceOrderId) || linkedSource !== undefined"
                 @change="sourceOrderChanged"
               >
                 <option :value="null">普通作品，不关联定制订单</option>
@@ -329,7 +422,7 @@ onBeforeUnmount(() => { disposed = true; window.removeEventListener('beforeunloa
                 >订单 {{ item.orderId }} · {{ item.title }} · 完成于 {{ item.completedAt.slice(0, 10) }}</option>
               </select>
               <small class="field-help">
-                {{ work?.sourceOrderId ? `来源订单 ${work.sourceOrderId} 已固定，不能更换或解除关联。` : '仅列出买家已同意公开的定制订单。' }}
+                {{ work?.sourceOrderId ? `来源订单 ${work.sourceOrderId} 已固定，不能更换或解除关联。` : linkedSource !== undefined ? '该定制订单的买家已同意公开成品。' : '仅列出买家已同意公开的定制订单。' }}
               </small>
             </label>
           </fieldset>

@@ -232,7 +232,7 @@ test('终态通知保留补证草稿并冻结编辑上传提交，仍可关闭�
   await panel.getByLabel('补充证据说明', { exact: true }).fill(text)
   Object.assign(current, { status: 'REFUNDED', canSupplement: false, canWithdraw: false, finishedAt: '2026-11-19T10:00:00+08:00', version: 1 })
   await page.evaluate(() => window.dispatchEvent(new Event('order-updated')))
-  await expect(panel.getByText('本申请及证据已只读。后续沟通与补证使用原订单会话，不重开原申请期限。')).toBeVisible()
+  await expect(panel.getByText('本申请及证据已只读。可前往原订单会话继续沟通，售后处理不重开原申请期限。')).toBeVisible()
   await expect(panel.getByLabel('补充证据说明', { exact: true })).toHaveValue(text)
   await expect(panel.getByLabel('补充证据说明', { exact: true })).toBeDisabled()
   await expect(panel.getByLabel('售后凭证', { exact: true })).toBeDisabled()

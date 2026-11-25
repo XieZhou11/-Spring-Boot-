@@ -52,7 +52,7 @@ async function markRead(notification: NotificationVO) {
 }
 
 /** 报价从其所属需求进入，其他通知使用各自的业务资源入口。 */
-function notificationAction({ businessReference: reference }: NotificationVO): { label: string; to: RouteLocationRaw } | undefined {
+function notificationAction({ businessReference: reference, eventType }: NotificationVO): { label: string; to: RouteLocationRaw } | undefined {
   if (!reference) return
   switch (reference.type) {
     case 'CREATOR_APPLICATION':
@@ -65,7 +65,7 @@ function notificationAction({ businessReference: reference }: NotificationVO): {
       if (reference.requestId) return { label: '查看报价', to: { path: `/requests/${reference.requestId}`, hash: '#quotes' } }
       return
     case 'ORDER':
-      return { label: '查看订单', to: `/orders/${reference.id}` }
+      return { label: '查看订单', to: { path: `/orders/${reference.id}`, hash: eventType.startsWith('PUBLICATION_') ? '#publication-consent' : undefined } }
     case 'REPORT':
     case 'REVIEW_REPORT':
       return { label: '查看举报', to: '/me/reports' }

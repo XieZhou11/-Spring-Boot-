@@ -1,6 +1,6 @@
 # PC Web 前端重做开发指南
 
-更新于 2026-11-25。新版前端按业务链路实施，第 1 至 4 批已完成真实后端联调及浏览器验收。 [T-021](../development/tasks/T-021-craftflow-auth-discovery.md) · [T-022](../development/tasks/T-022-craftflow-account-works.md) · [T-023](../development/tasks/T-023-craftflow-requests-quotes-messages.md) · [T-024](../development/tasks/T-024-craftflow-orders-payment-fulfillment.md)
+更新于 2026-11-25。新版前端按业务链路实施，第 1 至 5 批已完成真实后端联调及浏览器验收。 [T-021](../development/tasks/T-021-craftflow-auth-discovery.md) · [T-022](../development/tasks/T-022-craftflow-account-works.md) · [T-023](../development/tasks/T-023-craftflow-requests-quotes-messages.md) · [T-024](../development/tasks/T-024-craftflow-orders-payment-fulfillment.md) · [T-025](../development/tasks/T-025-craftflow-after-sale-reviews-consent.md)
 
 ## 1. 实现依据
 
@@ -61,9 +61,11 @@
 
 ### 第 5 批 · 售后、结算、评价与成品授权
 
+已完成。实现及验收见 [T-025](../development/tasks/T-025-craftflow-after-sale-reviews-consent.md) 和 [专项测试记录](../testing/T-025-craftflow-after-sale-reviews-consent.md)。
+
 - 接入普通售后的买家申请和撤回、双方追加证据、管理员只读查证及裁定。保留按请求键查验和裁定版本校验，核对撤回、驳回或退款后的订单与会话。
 - 重做创作者收入与后台资金查询，展示真实待结算、已结算及已取消记录。结算由服务端执行，页面提供只读查询。验证原完成时间、售后状态与金额口径，并按角色显示收款资料。
-- 接通买家图文评价和创作者公开口碑。通过订单页发起成品公开授权，由买家明确同意或拒绝。获同意后发布关联订单的案例并进入作品审核，遵循案例的现货销售限制。
+- 接通买家图文评价和创作者公开口碑，创作者主页支持评价独立分页。通过订单页发起成品公开授权，由买家明确同意或拒绝。授权通知定位原订单的授权区。获同意后从订单进入作品编辑器，经服务端核对后预选来源，案例关闭现货销售并按作品审核流程上架。
 - 复测 `order-refund.spec.ts`、`order-refund-flow.spec.ts`、`order-refund-pagination.spec.ts`、`settlement-income.spec.ts`。按既有验收流程把图文评价、口碑变化及案例授权保存为可重复的 E2E。 [售后组件](../../frontend/src/components/OrderRefundPanel.vue) · [结算接口](../../frontend/src/api/income.ts) · [评价接口](../../frontend/src/api/review.ts) · [评价验收](../testing/T-017-order-reviews-reputation.md) · [案例验收](../testing/T-018-custom-publication-consent.md)
 
 ### 第 6 批 · 后台管理与内容治理

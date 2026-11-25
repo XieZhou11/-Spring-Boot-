@@ -147,31 +147,45 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
   <section
     class="editor-section refund-panel"
     aria-label="订单售后"
+    :aria-busy="loading || writing"
   >
     <header class="fulfillment-heading">
-      <h2>售后与退款</h2><button
-        type="button"
-        class="inline-button"
-        :disabled="loading || writing || uploading"
-        @click="load"
-      >
-        刷新售后
-      </button>
+      <h2>售后与退款</h2>
+      <div class="refund-actions">
+        <button
+          type="button"
+          class="inline-button"
+          :disabled="loading || writing || uploading"
+          @click="load"
+        >
+          刷新售后
+        </button>
+        <button
+          v-if="order.canRequestRefund && !draft"
+          type="button"
+          class="button-secondary"
+          :disabled="disabled"
+          @click="begin('create')"
+        >
+          申请普通退款
+        </button>
+      </div>
     </header>
     <p class="field-help">
-      普通退款由管理员依据双方证据裁定，全额退还原实付金额。售后处理中暂停开工、打卡、发货和收货，原订单会话继续保留。
+      管理员依据双方证据裁定是否全额退款。售后处理中暂停履约，双方仍可通过原订单会话沟通。
     </p>
-    <p
+    <dl
       v-if="order.originalCompletedAt"
-      class="refund-window"
+      class="refund-window order-facts"
     >
-      最初完成 {{ formatTime(order.originalCompletedAt) }}<br>普通售后申请截止 {{ order.refundWindowEndsAt ? formatTime(order.refundWindowEndsAt) : '请刷新订单核对' }}（截止时刻起不可新申请）
-    </p>
+      <div><dt>最初完成</dt><dd>{{ formatTime(order.originalCompletedAt) }}</dd></div>
+      <div><dt>普通售后申请截止</dt><dd>{{ order.refundWindowEndsAt ? formatTime(order.refundWindowEndsAt) : '请刷新订单核对' }}</dd></div>
+    </dl>
     <p
       v-else
       class="field-help"
     >
-      已付款履约期间或最初完成后七天内可申请；已受理申请跨过期限仍可补证、撤回及裁定。
+      已付款履约期间或最初完成后七天内可申请。已受理的申请跨过期限仍可补证、撤回及裁定。
     </p>
     <p
       v-if="error"
@@ -195,14 +209,6 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
     >
       {{ notice }}
     </p>
-    <button
-      v-if="order.canRequestRefund && !draft"
-      class="button-secondary"
-      :disabled="disabled"
-      @click="begin('create')"
-    >
-      申请普通退款
-    </button>
     <nav
       v-if="rows.length"
       class="refund-history-list"
@@ -213,10 +219,14 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
         :key="item.id"
         type="button"
         :class="{ selected: selected?.id === item.id }"
+        :aria-pressed="selected?.id === item.id"
         :disabled="writing || uploading || !!attempt"
         @click="select(item)"
       >
-        <strong>{{ refundStatuses[item.status] || item.status }}</strong><span>{{ item.applicationType === 'NORMAL' ? refundReasons[item.reasonCode] : '未开工系统无责退款' }}</span><time>{{ formatTime(item.createdAt) }}</time>
+        <strong>{{ item.applicationType === 'NORMAL' ? refundReasons[item.reasonCode] : '未开工系统无责退款' }}</strong><span
+          class="work-status refund-status"
+          :data-status="item.status"
+        >{{ refundStatuses[item.status] || item.status }}</span><time>{{ formatTime(item.createdAt) }}</time>
       </button>
     </nav>
     <WorkPagination
@@ -232,14 +242,17 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
       :aria-label="`退款申请 ${selected.id}`"
     >
       <header class="fulfillment-heading">
-        <h3>申请 {{ selected.id }}</h3><span class="work-status">{{ refundStatuses[selected.status] || selected.status }}</span>
+        <h3>申请 {{ selected.id }}</h3><span
+          class="work-status refund-status"
+          :data-status="selected.status"
+        >{{ refundStatuses[selected.status] || selected.status }}</span>
       </header>
-      <dl class="work-specifications">
+      <dl class="work-specifications order-facts">
         <div><dt>原订单状态</dt><dd>{{ orderStatus[selected.originalOrderStatus] || selected.originalOrderStatus }}</dd></div><div><dt>申请原因</dt><dd>{{ refundReasons[selected.reasonCode] || selected.reasonCode }}</dd></div><div><dt>全额退款金额</dt><dd>¥ {{ selected.refundAmount }}</dd></div>
       </dl>
       <ol class="order-timeline refund-evidence">
         <li>
-          <strong>买家初次申请 · {{ formatTime(selected.createdAt) }}</strong><p class="request-description">
+          <strong>{{ selected.applicationType === 'NORMAL' ? '买家初次申请' : '系统无责退款' }}</strong><time>{{ formatTime(selected.createdAt) }}</time><p class="request-description">
             {{ selected.description }}
           </p><QuoteImages
             :image-ids="selected.imageIds"
@@ -299,13 +312,17 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
           @click="withdrawal"
         >
           撤回退款申请
-        </button><RouterLink :to="`/messages/conversations/${selected.conversationId}`">进入原订单会话 ↗</RouterLink>
+        </button><RouterLink
+          v-if="selected.conversationId"
+          class="button-secondary"
+          :to="`/messages/conversations/${selected.conversationId}`"
+        >进入原订单会话 ↗</RouterLink>
       </div>
       <p
         v-if="selected.status !== 'WAIT_ADMIN'"
         class="field-help"
       >
-        本申请及证据已只读。后续沟通与补证使用原订单会话，不重开原申请期限。
+        本申请及证据已只读。可前往原订单会话继续沟通，售后处理不重开原申请期限。
       </p>
     </article>
     <form
@@ -373,6 +390,12 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
       role="status"
     >
       正在读取售后记录…
+    </p>
+    <p
+      v-else-if="!rows.length && !draft && !error"
+      class="refund-empty"
+    >
+      暂无售后记录
     </p>
   </section>
 </template>

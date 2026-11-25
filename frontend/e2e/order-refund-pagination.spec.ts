@@ -97,6 +97,29 @@ test('用户证据afterId与后台证据cursor各自排他分页，后台会话�
     await expect(admin.getByRole('button', { name: '读取更早会话', exact: true })).toHaveCount(0)
     await expect(admin.getByText('只读会话 3', { exact: true })).toHaveCount(1)
     expect(adminWrites).toEqual([])
+
+    // 证据页失去管理员权限、会话页资源失效时，原材料与裁定草稿都必须从页面撤下。
+    for (const denied of [
+      { path: 'evidence', cursor: 'cursor', action: '继续读取证据', status: 403 },
+      { path: 'messages', cursor: 'before', action: '读取更早会话', status: 404 },
+    ]) {
+      await admin.reload()
+      await expect(proof.getByText('分页证据 20', { exact: true })).toBeVisible()
+      await admin.getByLabel('裁定原因').fill('权限失效后需要清除的核查草稿。')
+      if (denied.path === 'messages') await admin.getByText('原订单会话（只读）', { exact: true }).click()
+      await admin.route(`${api}/admin/refund-applications/301/${denied.path}*`, route => {
+        const url = new URL(route.request().url())
+        return url.searchParams.has(denied.cursor)
+          ? route.fulfill({ status: denied.status, json: { code: denied.status, message: '查证材料不可访问' } })
+          : route.fallback()
+      })
+      await admin.getByRole('button', { name: denied.action, exact: true }).click()
+      await expect(admin.getByRole('alert')).toContainText('查证材料不可访问')
+      await expect(proof).toHaveCount(0)
+      await expect(admin.getByText('只读会话 3', { exact: true })).toHaveCount(0)
+      await expect(admin.getByLabel('裁定原因')).toHaveCount(0)
+      expect(await admin.evaluate(() => sessionStorage.getItem('order-refund:19:admin-draft:301'))).toBeNull()
+    }
   } finally { await admin.close() }
 })
 
@@ -118,6 +141,7 @@ test('后台队列超过二十条可翻页，查看与返回及焦点刷新保�
   await queue.getByLabel('申请状态', { exact: true }).selectOption('REFUNDED')
   await queue.getByLabel('申请类型', { exact: true }).selectOption('NO_START_TIMEOUT')
   await queue.getByLabel('按订单编号筛选').fill('  PAGING  ')
+  await queue.getByLabel('金额从', { exact: true }).fill('0')
   await queue.getByRole('button', { name: '筛选申请', exact: true }).click()
   await expect(queue.locator('.managed-work-row')).toHaveCount(20)
   await expect(queue.getByText('第 1 页 · 共 21 条', { exact: true })).toBeVisible()
@@ -128,8 +152,9 @@ test('后台队列超过二十条可翻页，查看与返回及焦点刷新保�
   await expect(queue.getByRole('button', { name: '下一页', exact: true })).toBeDisabled()
   const assertConditions = () => {
     const query = new URL(page.url()).searchParams
-    expect(Object.fromEntries(query)).toEqual({ status: 'REFUNDED', applicationType: 'NO_START_TIMEOUT', orderNo: 'PAGING', page: '2' })
-    expect(Object.fromEntries(queries.at(-1)!.searchParams)).toMatchObject({ status: 'REFUNDED', applicationType: 'NO_START_TIMEOUT', orderNo: 'PAGING', page: '2' })
+    const expected = { status: 'REFUNDED', applicationType: 'NO_START_TIMEOUT', orderNo: 'PAGING', minAmount: '0', page: '2' }
+    expect(Object.fromEntries(query)).toEqual(expected)
+    expect(Object.fromEntries(queries.at(-1)!.searchParams)).toMatchObject(expected)
   }
   assertConditions()
   await queue.getByRole('link', { name: '查看记录 ↗', exact: true }).click()
@@ -142,10 +167,14 @@ test('后台队列超过二十条可翻页，查看与返回及焦点刷新保�
   await expect(queue.getByLabel('申请状态', { exact: true })).toHaveValue('REFUNDED')
   await expect(queue.getByLabel('申请类型', { exact: true })).toHaveValue('NO_START_TIMEOUT')
   await expect(queue.getByLabel('按订单编号筛选')).toHaveValue('PAGING')
+  await expect(queue.getByLabel('金额从', { exact: true })).toHaveValue('0')
   assertConditions()
+  // 焦点刷新依据已应用的 URL 条件，保留表单里尚未提交的筛选草稿。
+  await queue.getByLabel('按订单编号筛选').fill('UNAPPLIED')
   const beforeFocus = queries.length
   await page.evaluate(() => window.dispatchEvent(new Event('focus')))
   await expect.poll(() => queries.length).toBeGreaterThan(beforeFocus)
+  await expect(queue.getByLabel('按订单编号筛选')).toHaveValue('UNAPPLIED')
   await expect(queue.getByText('第 2 页 · 共 21 条', { exact: true })).toBeVisible()
   await expect(queue.locator('.managed-work-row')).toHaveCount(1)
   await expect(queue.getByRole('heading', { name: '分页申请 21', exact: true })).toBeVisible()

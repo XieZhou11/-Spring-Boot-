@@ -30,6 +30,12 @@ const paymentState = ref<'idle' | 'submitting' | 'unknown'>('idle'); const payme
 const fulfillmentState = ref<'idle' | 'submitting' | 'unknown'>('idle'); const fulfillmentAttempt = ref<FulfillmentAttempt>(); const fulfillmentError = ref(''); const fulfillmentRetryChecked = ref(false); const fulfillmentReset = ref(0); const fulfillmentUploading = ref(false)
 const refundBusy = ref(false); const refundBlocked = ref(false)
 const publicationBusy = ref(false)
+const publicationNeedsCheck = ref(false)
+const publicationError = ref('')
+const publicationLabels = { NONE: '尚未申请', PENDING: '等待买家回复', APPROVED: '已同意公开', REJECTED: '已拒绝公开' }
+const publicationStatus = computed(() => order.value?.publicationConsentStatus ?? 'NONE')
+const showPublication = computed(() => order.value?.orderType === 'CUSTOM'
+  && (order.value.canRequestPublicationConsent || publicationStatus.value !== 'NONE' || publicationNeedsCheck.value))
 const collectionRefresh = ref(0)
 const orderHeading = ref<HTMLElement>()
 const paymentHeading = ref<HTMLElement>()
@@ -66,6 +72,10 @@ async function load() {
     if (current !== revision || !sameContext(context)) return
     if (order.value?.paymentPreview?.shipDate !== result.paymentPreview?.shipDate || order.value?.paymentPreview?.termsVersion !== result.paymentPreview?.termsVersion) agreed.value = false
     order.value = result
+    if (publicationNeedsCheck.value) {
+      publicationNeedsCheck.value = false
+      publicationError.value = ''
+    }
     if (!result.canPay) confirmationOpen.value = false
     if (paymentState.value === 'unknown') {
       // 截止时刻的取消可能只是查询投影，不能据此抹掉尚在提交的原付款确认。
@@ -96,7 +106,8 @@ async function cancel() {
 }
 /** 授权只通过订单详情按钮提交，聊天内容不参与授权状态判断。 */
 async function publicationAction(decision?: 'APPROVED' | 'REJECTED') {
-  if (!order.value || busy.value || publicationBusy.value) return
+  if (busy.value || fulfillmentBlocked.value || publicationNeedsCheck.value
+    || !(decision ? order.value?.canRespondPublicationConsent : order.value?.canRequestPublicationConsent)) return
   const prompt = decision === 'APPROVED'
     ? '确认同意创作者展示本次定制成品？授权不包含你的收货资料和聊天记录。'
     : decision === 'REJECTED'
@@ -107,14 +118,27 @@ async function publicationAction(decision?: 'APPROVED' | 'REJECTED') {
   const current = ++revision
   loading.value = false
   publicationBusy.value = true
-  error.value = ''
+  publicationError.value = ''
   try {
     const result = decision
       ? await respondPublicationConsent(context.orderId, decision)
       : await requestPublicationConsent(context.orderId)
     if (current === revision && sameContext(context)) order.value = result
   } catch (failure) {
-    if (current === revision && sameContext(context)) error.value = failure instanceof Error ? failure.message : '公开授权操作失败，请刷新订单核对结果'
+    if (current !== revision || !sameContext(context)) return
+    // 应答丢失时先读订单，既有回复以服务端结果为准。
+    publicationNeedsCheck.value = true
+    try {
+      const result = await getOrder(context.orderId)
+      if (current !== revision || !sameContext(context)) return
+      order.value = result
+      publicationNeedsCheck.value = false
+      if (result.publicationConsentStatus === (decision ? 'PENDING' : 'NONE')) {
+        publicationError.value = failure instanceof Error ? failure.message : '未能提交公开授权，请重试。'
+      }
+    } catch {
+      if (current === revision && sameContext(context)) publicationError.value = '公开授权结果尚未确认，请先刷新授权状态。'
+    }
   } finally {
     if (sameContext(context)) {
       publicationBusy.value = false
@@ -229,6 +253,8 @@ function visible() { if (document.visibilityState === 'visible') refresh() }
 onBeforeRouteLeave(() => !auth.session || !busy.value); onBeforeRouteUpdate(() => !auth.session || !busy.value)
 watch([() => route.name, () => route.params.id, () => auth.session?.userId], () => {
   revision++; order.value = undefined; loading.value = false; cancelling.value = false; publicationBusy.value = false; deferredRefresh = false; confirmationOpen.value = false; agreed.value = false; error.value = ''; paymentError.value = ''; retryChecked.value = false; fulfillmentUploading.value = false; fulfillmentError.value = ''; fulfillmentRetryChecked.value = false; refundBusy.value = false; refundBlocked.value = false
+  publicationNeedsCheck.value = false
+  publicationError.value = ''
   // 普通离页只重置本页内存，保留原订单的未知付款标记，返回后仍须核验再重试。
   const context = currentContext()
   if (route.name === 'order-detail' && !context.orderId) error.value = '订单编号无效。'
@@ -243,11 +269,12 @@ watch(() => order.value?.status, (status, previous) => {
   if (status && previous && status !== previous) collectionRefresh.value++
 })
 watch(() => notifications.connected, (connected, previous) => { if (connected && !previous) refresh() })
-/** 会话中的节点引用在详情异步加载后定位到原节点，不改变初始参考计划。 */
-watch([() => route.hash, () => order.value?.id], () => {
+/** 会话引用和授权通知在详情加载后定位到对应区块。 */
+watch([() => route.hash, () => order.value?.id, showPublication], () => {
   if (!order.value) return
   void nextTick(() => {
-    const target = /^#progress-[1-9]\d*$/.test(route.hash)
+    const anchor = /^#progress-[1-9]\d*$/.test(route.hash) || route.hash === '#publication-consent'
+    const target = anchor
       ? document.getElementById(route.hash.slice(1)) ?? orderHeading.value
       : orderHeading.value
     if (!target) return
@@ -390,6 +417,11 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
                   :to="'/messages/conversations/' + order.conversationId"
                   class="button-secondary"
                 >进入订单沟通</RouterLink>
+                <a
+                  v-if="showPublication"
+                  class="inline-button"
+                  href="#publication-consent"
+                >查看公开授权</a>
                 <button
                   class="inline-button"
                   :disabled="loading || busy"
@@ -599,6 +631,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
             v-if="order.originalCompletedAt"
             :key="'review-' + order.id"
             :order-id="order.id"
+            :order-status="order.status"
           />
           <OrderRefundPanel
             v-if="order.orderType === 'CUSTOM'"
@@ -614,14 +647,26 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
           <section
             v-if="!order.owned && order.settlement"
             class="editor-section"
+            aria-label="结算信息"
           >
             <h2>结算信息</h2>
             <dl class="order-facts work-specifications">
               <div><dt>应结算金额</dt><dd>¥ {{ order.settlement.paidAmount }}</dd></div>
-              <div><dt>结算状态</dt><dd>{{ settlementStatus[order.settlement.status] || order.settlement.status }}</dd></div>
+              <div>
+                <dt>结算状态</dt><dd>
+                  <span
+                    class="order-service-badge"
+                    :class="`is-${order.settlement.status.toLowerCase()}`"
+                  >{{ settlementStatus[order.settlement.status] || order.settlement.status }}</span>
+                </dd>
+              </div>
               <div><dt>结算时间</dt><dd>{{ order.settlement.settledAt ? formatTime(order.settlement.settledAt) : '—' }}</dd></div>
               <div><dt>收款账户</dt><dd>{{ order.settlement.maskedPayee }}</dd></div>
             </dl>
+            <RouterLink
+              class="inline-button"
+              to="/creator/income"
+            >查看收入记录 ↗</RouterLink>
           </section>
 
           <section
@@ -656,46 +701,70 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
           </section>
 
           <section
-            v-if="order.orderType === 'CUSTOM'"
-            class="editor-section"
+            v-if="showPublication"
+            id="publication-consent"
+            class="editor-section order-publication"
+            aria-label="定制成品公开授权"
+            tabindex="-1"
           >
-            <h2>定制成品公开授权</h2>
-            <p v-if="order.publicationConsentStatus === 'NONE'">
-              尚未申请。授权仅用于展示本次成品。
+            <header class="order-publication-heading">
+              <h2>定制成品公开授权</h2>
+              <span
+                class="order-service-badge"
+                :class="`is-${publicationStatus.toLowerCase()}`"
+              >
+                {{ publicationLabels[publicationStatus] }}
+              </span>
+            </header>
+            <p v-if="publicationStatus === 'NONE'">
+              授权仅覆盖本次成品的展示，收货资料和聊天记录仍受保护。
             </p>
-            <p v-else-if="order.publicationConsentStatus === 'PENDING'">
-              等待买家在订单页面明确回复。
+            <p v-else-if="publicationStatus === 'PENDING'">
+              {{ order.canRespondPublicationConsent ? '请明确选择是否同意创作者展示本次成品。' : '买家可在订单详情回复。' }}
             </p>
-            <p v-else-if="order.publicationConsentStatus === 'APPROVED'">
-              买家已同意公开本次成品。
+            <p v-else-if="publicationStatus === 'APPROVED' && !order.owned">
+              整理本次成品的图片和描述，作为新作品提交审核。
             </p>
-            <p v-else>
-              买家不同意公开本次成品案例。
-            </p>
-            <p
+            <dl
               v-if="order.publicationRequestedAt"
-              class="field-help"
+              class="order-facts order-publication-times"
             >
-              申请时间：{{ formatTime(order.publicationRequestedAt) }}
-              <template v-if="order.publicationRespondedAt">
-                · 回复时间：{{ formatTime(order.publicationRespondedAt) }}
-              </template>
+              <div><dt>申请时间</dt><dd>{{ formatTime(order.publicationRequestedAt) }}</dd></div>
+              <div v-if="order.publicationRespondedAt">
+                <dt>回复时间</dt><dd>{{ formatTime(order.publicationRespondedAt) }}</dd>
+              </div>
+            </dl>
+            <p
+              v-if="publicationError"
+              class="form-alert"
+              role="alert"
+            >
+              {{ publicationError }}
             </p>
             <div class="order-overview-actions">
               <button
-                v-if="order.canRequestPublicationConsent"
+                v-if="publicationNeedsCheck"
                 type="button"
                 class="button-secondary"
-                :disabled="busy"
+                :disabled="loading || busy"
+                @click="load"
+              >
+                刷新授权状态
+              </button>
+              <button
+                v-else-if="order.canRequestPublicationConsent"
+                type="button"
+                class="button-secondary"
+                :disabled="busy || fulfillmentBlocked"
                 @click="publicationAction()"
               >
                 申请公开成品案例
               </button>
-              <template v-if="order.canRespondPublicationConsent">
+              <template v-else-if="order.canRespondPublicationConsent">
                 <button
                   type="button"
                   class="button-primary"
-                  :disabled="busy"
+                  :disabled="busy || fulfillmentBlocked"
                   @click="publicationAction('APPROVED')"
                 >
                   同意公开
@@ -703,15 +772,15 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
                 <button
                   type="button"
                   class="button-secondary"
-                  :disabled="busy"
+                  :disabled="busy || fulfillmentBlocked"
                   @click="publicationAction('REJECTED')"
                 >
                   不同意公开
                 </button>
               </template>
               <RouterLink
-                v-if="order.publicationConsentStatus === 'APPROVED' && !order.owned"
-                to="/creator/works/new"
+                v-if="publicationStatus === 'APPROVED' && !order.owned"
+                :to="{ path: '/creator/works/new', query: { sourceOrderId: order.id } }"
                 class="button-primary"
               >
                 手动发布定制成品案例
