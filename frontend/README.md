@@ -1,5 +1,9 @@
 # 前端工程
 
+**PC Web 前端重做待开发。** 新版将按 TSX 原型整体重做并替换现有前端。原型已绘制页面还原其布局、样式和交互，V1.5 MVP 的其余页面沿用同一风格补齐。重做要求见 [原型索引](../docs/prototypes/README.md)。
+
+以下为当前 Vue 前端的运行说明和已实现功能记录。
+
 Vue 3 + TypeScript + Vite 工程。登录注册、个人中心、创作者入驻、管理员审核、两级品类管理及系统通知已接入后端，沿用原型“拾作”的纸张底色、深绿主操作和手作插画。实施及验收见 [T-002](../docs/development/tasks/T-002-frontend-auth.md)、[T-003](../docs/development/tasks/T-003-personal-center.md)、[T-004](../docs/development/tasks/T-004-creator-onboarding.md)。作品发布、审核与浏览见 [T-005](../docs/development/tasks/T-005-work-publication.md)，点赞、收藏、评论及关注见[T-006](../docs/development/tasks/T-006-work-interactions.md)，报价、定标见 [T-009](../docs/development/tasks/T-009-quote-award.md)，模拟付款及待开工见[T-011](../docs/development/tasks/T-011-order-payment.md)；制作履约与未开工退款见[T-013](../docs/development/tasks/T-013-order-fulfillment.md)。
 
 ## 环境与依赖

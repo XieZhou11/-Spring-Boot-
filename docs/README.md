@@ -1,6 +1,6 @@
 # 项目文档中心
 
-更新日期：2026-11-20。
+更新日期：2026-11-25。
 
 这里是从 0 开发时的统一上下文入口。先确认当前资料与任务，再按需要阅读相关文档；不要把所有历史版本同时作为实现依据。
 
@@ -12,7 +12,7 @@
 | MVP 版中文文件名副本 | 与当前正文逐字节一致，同步维护 | [MVP 版需求规格说明书](requirements/archive/手工定制作品分享与交易平台需求规格说明书_V1.5_MVP版.md)，与正式入口为同一份需求内容 |
 | 后续功能清单 | 独立于 MVP 正文，完成后按剩余时间选择补充 | [后续功能清单](requirements/archive/手工定制作品分享与交易平台后续功能清单.md)，保存移出功能及补充规则线索 |
 | 需求历史资料 | V1.4 MVP 版、修订版、旧版 Markdown 和 Word 保留供追溯及展示版本更替 | [需求索引](requirements/README.md)，区分当前版本同步副本与历史资料 |
-| 页面原型 | 基于 V1.3 的第一版静态 PC 原型，待适配 V1.5 | [原型索引](prototypes/README.md)，说明布局、入口与示例流程 |
+| 页面原型 | 用户指定 TSX 为 PC Web 前端整体重做的界面依据，待开发 | [原型索引](prototypes/README.md)，含角色页面索引、TSX 原件及验收口径 |
 | AI 协作约定 | 已建立 | [AGENTS.md](../AGENTS.md)，规定任务、实现与验证方式 |
 | 技术选型 | 用户已确认采用；账号本地业务集成已验证，QQ/163 公网收件及找回密码补充验收已由用户于 2026-11-23 手动验证通过（依据用户反馈），其他业务能力按任务验证 | [ADR-001](design/decisions/ADR-001-technology-stack.md) |
 | 数据库详细设计 | V1.5 设计草稿；27 表 Flyway SQL 已在本地执行，迁移及失败补偿在 MySQL 8.4 验证 | [数据库表结构](design/数据库表结构.md)，含字段、索引、应用关联与事务回滚 |
@@ -35,7 +35,7 @@
 
 用户已于 2026-11-12 指定 V1.5 MVP 版为后续需求与开发依据，`requirements.md` 已同步替换。2026-11-23 完成 T-017—T-020 独立验收后，正文状态由“待审核”改为“已确认”，作为最终实现与验收依据。历史版本仍保留原有状态与内容；遇到影响实现的歧义或冲突，记录具体问题并澄清，不拼接不同版本的规则。
 
-V1.5 MVP 版正文仅描述完整实现范围，不划分功能优先级，也不混入后续功能清单或版本对比。阅读重点为第 4 章功能、第 6 章规则、第 8 章验收及附录 A 状态流转；后续功能另见独立清单。原 V1.3 数据库设计及配套建模草稿已删除，原型仍待适配 V1.5，不能从旧材料重新引入已移出的功能。
+V1.5 MVP 版正文仅描述完整实现范围，不划分功能优先级，也不混入后续功能清单或版本对比。阅读重点为第 4 章功能、第 6 章规则、第 8 章验收及附录 A 状态流转；后续功能另见独立清单。原 V1.3 数据库设计及配套建模草稿已删除，不能从旧材料重新引入已移出的功能。
 
 `requirements/requirements.md` 与 `requirements/archive/手工定制作品分享与交易平台需求规格说明书_V1.5_MVP版.md` 是当前需求的两份相同内容文件。日常以 `requirements.md` 为编辑入口，每次修改后同步当前版本中文副本并验证逐字节一致。V1.4 MVP 版、`_修订版.md`、旧版 Markdown 与原始 Word 作为历史资料保留，不随当前正文同步；版本升级时保留上一版本文件及其原有内容，用于展示版本更替。
 
@@ -68,7 +68,7 @@ T-005 已完成作品草稿、发布额度、版本冲突、审核历史、作�
 | 目录 | 放什么 | 入口 |
 | --- | --- | --- |
 | `requirements/` | 当前需求、当前版本中文副本及历史资料 | [需求管理](requirements/README.md) |
-| `prototypes/` | 原型索引、原始说明和 PNG | [页面原型](prototypes/README.md) |
+| `prototypes/` | 原型索引、当前 TSX 及历史静态原型 | [页面原型](prototypes/README.md) |
 | `design/` | 架构、领域、权限、状态、数据库、UI 和设计决策 | [设计文档约定](design/README.md) |
 | `development/` | 实际业务功能开发及缺陷修复任务 | [任务管理](development/README.md) |
 | `testing/` | 实际业务功能测试的通过、失败及复测记录 | [测试记录约定](testing/README.md) |
@@ -90,7 +90,9 @@ docs/
 │       └── 手工定制作品分享与交易平台需求规格说明书_修订版.md # 历史修订资料，不再同步覆盖
 ├── prototypes/                       # 页面布局与流程参考
 │   ├── README.md                     # 原型导航、页面索引与使用边界
-│   └── assets/                       # 原始原型文件，完整保留内容
+│   ├── code_artifact.tsx             # 原始 TSX，作为界面对照基准
+│   ├── craftflow/                    # 按角色拆分的原型，入口为 App.tsx
+│   └── assets/                       # 第一版静态原型
 │       ├── 原型说明.md               # 视觉方向、页面联系与制作说明
 │       ├── 00_系统原型总览.png        # 所有页面与主要流程的总览
 │       ├── 01_首页与作品发现.png      # 搜索、品类和作品浏览
@@ -159,7 +161,7 @@ docs/
 补充说明：
 
 - `archive/` 中仅当前 V1.5 中文副本随 `requirements.md` 同步；V1.4、`_修订版.md` 及不带版本后缀的 Markdown 是历史资料，Word 是原始输入，均不随当前正文覆盖。
-- `prototypes/README.md` 是当前导航，`assets/原型说明.md` 是原始设计说明，两者职责接近；后续若精简，可以合并说明并减少一层目录，本轮未改写原始材料。
+- `prototypes/README.md` 记录当前 TSX 原型、角色页面索引和前端重做范围。`assets/原型说明.md` 为第一版静态原型说明。
 - 原 `design/database.md` 已删除，现有 [数据库表结构](design/数据库表结构.md)为按当前需求编写的新草稿，对应 SQL 位于后端 `src/main/resources/db/migration/`，V1 已执行且包含异常结构补偿；人工结构回退位于相邻 `rollback/`，未执行。
 - `decisions/` 中的 ADR-001 记录已选技术；选型和框架验证不代表全部业务已经实现，SMTP 公网实收补充验收已由用户于 2026-11-23 手动验证通过（依据用户反馈），OSS 实际结果见 T-003。
 - `TASK_TEMPLATE.md` 仅用于实际业务功能开发或业务缺陷修复；当前已有账号后端T-001、认证前端T-002、个人中心T-003、入驻审核T-004、作品链路T-005、作品互动T-006、定制需求/会话T-007、导航交互修复T-008、报价/待付款订单T-009、聊天优化T-010、模拟付款T-011、演示反馈修复T-012、定制履约T-013、普通售后T-014、模拟结算T-015、现货直购T-016、订单评价与口碑T-017、定制案例授权T-018、后台管理T-019及内容举报治理T-020。
@@ -175,6 +177,7 @@ docs/
 | 根目录 `手工定制作品分享与交易平台需求规格说明书.md` | [历史需求正文](requirements/archive/手工定制作品分享与交易平台需求规格说明书.md) | 旧版本追溯 |
 | 根目录 `手工定制作品分享与交易平台需求规格说明书.docx` | [原始 Word 文档](requirements/archive/手工定制作品分享与交易平台需求规格说明书.docx) | 原始材料保留 |
 | 根目录 `原型图/` | [prototypes/assets/](prototypes/assets/) | 11 张 PNG 和 1 份原始说明，内容不变 |
+| 根目录 `code_artifact.tsx` | [TSX 原型](prototypes/code_artifact.tsx) | PC Web 前端重做的界面依据 |
 
 `手工定制作品分享与交易平台需求规格说明书_精简版.md` 和 `需求精简与待完善问题清单.md` 已按用户要求删除，不再作为归档资料保留。
 
@@ -229,6 +232,8 @@ docs/
 
 ## 8. 下一阶段入口
 
-后续统一以[当前 V1.5 MVP 版需求](requirements/requirements.md)为依据，其中所列需求均须实现；[后续功能清单](requirements/archive/手工定制作品分享与交易平台后续功能清单.md)独立留存，供完成后选择补充。数据库设计及 SQL 待审核，原型待按当前范围调整。
+PC Web 前端整体重做待开发。界面以用户指定的 TSX 原型为准，范围与验收口径见 [原型索引](prototypes/README.md)。
+
+后续统一以[当前 V1.5 MVP 版需求](requirements/requirements.md)为依据，其中所列需求均须实现；[后续功能清单](requirements/archive/手工定制作品分享与交易平台后续功能清单.md)独立留存，供完成后选择补充。数据库设计及 SQL 待审核。
 
 后续从[当前需求](requirements/requirements.md)、[数据库表结构](design/数据库表结构.md)及 [ADR-001](design/decisions/ADR-001-technology-stack.md)继续。工程说明见[后端README](../backend/README.md)与[前端README](../frontend/README.md)。互动集成交接见[T-006](development/tasks/T-006-work-interactions.md)及其测试记录；QQ/163公网收件及找回密码补充验收已由用户于 2026-11-23 手动验证通过。定制履约及退款已由[T-013](development/tasks/T-013-order-fulfillment.md)完成，普通售后由[T-014](development/tasks/T-014-refund-adjudication.md)完成，模拟结算与收入记录由[T-015](development/tasks/T-015-settlement-income.md)完成，现货直购由[T-016](development/tasks/T-016-stock-order.md)完成；订单评价与口碑实现及验证见[T-017](development/tasks/T-017-order-reviews-reputation.md)；定制成品公开授权与案例发布见[T-018](development/tasks/T-018-custom-publication-consent.md)；后台看板、用户处置、综合订单及资金筛选见[T-019](development/tasks/T-019-admin-management.md)；内容治理举报扩展与处置通知见[T-020](development/tasks/T-020-content-report-governance.md)。T-017—T-020 的测试与浏览器 E2E 已于 2026-11-23 完成独立验收，均通过；QQ/163 公网收件及找回密码补充验收也已由用户于 2026-11-23 手动验证通过。至此当前需求范围内的任务均已完成验收。

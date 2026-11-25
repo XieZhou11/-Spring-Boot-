@@ -4,11 +4,13 @@
 
 ## 当前状态
 
+**PC Web 前端重做待开发。** 后续按用户提供的 TSX 原型整体重做并替换现有前端。原型已绘制页面以其布局、样式和交互为准。范围与验收口径见 [原型索引](docs/prototypes/README.md)。
+
 后端已实现账号注册、登录、找回密码、会话及真实 SMTP 发送逻辑，详见 [T-001](docs/development/tasks/T-001-backend-auth.md)。前端认证页面见 [T-002](docs/development/tasks/T-002-frontend-auth.md)；个人资料、头像及收货地址前后端见 [T-003](docs/development/tasks/T-003-personal-center.md)。本机 QQ SMTP 连接认证已通过，QQ/163 公网收件及找回密码补充验收已由用户于 2026-11-23 手动验证通过；头像已完成真实 OSS 上传、私有签名读取与替换联调。作品发布、管理员审核和首页/详情/创作者主页已完成，见 [T-005](docs/development/tasks/T-005-work-publication.md)及[测试记录](docs/testing/T-005-work-publication.md)；作品互动与个人收藏、关注见[T-006](docs/development/tasks/T-006-work-interactions.md)，定制需求与沟通见T-007，报价建单见T-009，模拟支付初始化见T-011，定制履约与未开工退款见T-013，普通售后与管理员裁定见[T-014](docs/development/tasks/T-014-refund-adjudication.md)。结算执行、现货建单和评价继续独立实施，当前不涉及部署。本地开发库已完成27表迁移；后续版本先在隔离库验证，开发库尚未执行的版本在下次启动新版后端时由Flyway追加，启动及验证入口见前后端README。
 
 [T-004](docs/development/tasks/T-004-creator-onboarding.md)增加创作者入驻与管理员审核：申请撤回及补正历史、私有材料图片、收款账号加密、两级品类、会话身份切换和持久化实时通知。前后端接口及浏览器联调结果见任务与[测试记录](docs/testing/T-004-creator-onboarding.md)。本地开发库已执行 V2 申请幂等键迁移。管理员先维护启用一级品类，再由普通买家填写申请；入驻作品不自动公开。
 
-用户已指定后续需求与开发统一以 [V1.5 MVP 版需求规格说明书](docs/requirements/requirements.md)为依据，正文文档状态保留“待审核”。[V1.5 中文文件名副本](docs/requirements/archive/手工定制作品分享与交易平台需求规格说明书_V1.5_MVP版.md)与当前正文逐字节一致，每次修改同步更新。[V1.4 MVP 版](docs/requirements/archive/手工定制作品分享与交易平台需求规格说明书_V1.4_MVP版.md)和[修订版归档](docs/requirements/archive/手工定制作品分享与交易平台需求规格说明书_修订版.md)保留为历史资料，展示版本更替，不再同步覆盖。新[数据库表结构](docs/design/数据库表结构.md)已按当前范围编写，待审核；原型基于 V1.3，待适配。独立的[后续功能清单](docs/requirements/archive/手工定制作品分享与交易平台后续功能清单.md)不属于当前验收范围。
+用户已指定后续需求与开发统一以 [V1.5 MVP 版需求规格说明书](docs/requirements/requirements.md)为依据，正文状态为“已确认”。[V1.5 中文文件名副本](docs/requirements/archive/手工定制作品分享与交易平台需求规格说明书_V1.5_MVP版.md)与当前正文逐字节一致，每次修改同步更新。[V1.4 MVP 版](docs/requirements/archive/手工定制作品分享与交易平台需求规格说明书_V1.4_MVP版.md)和[修订版归档](docs/requirements/archive/手工定制作品分享与交易平台需求规格说明书_修订版.md)保留为历史资料，展示版本更替，不再同步覆盖。新[数据库表结构](docs/design/数据库表结构.md)已按当前范围编写，待审核。独立的[后续功能清单](docs/requirements/archive/手工定制作品分享与交易平台后续功能清单.md)不属于当前验收范围。
 
 [T-007 定制需求与沟通](docs/development/tasks/T-007-custom-requests.md)已完成需求草稿/发布/关闭/复制、仅认证创作者可见的公开大厅、单人定向邀约、私有参考图及图文会话。作品和创作者主页提供定制入口，消息中心复用现有WebSocket连接。V4追加需求幂等键/版本/逻辑删除与会话冷却字段。该阶段后端verify 148项、0失败/错误、3项云端开关跳过；真实OSS另行2项通过，浏览器32/32及前端类型/lint/构建通过，见[测试记录](docs/testing/T-007-custom-requests.md)。T-006互动已接入当前业务分支，联合回归维护在其[测试记录](docs/testing/T-006-work-interactions.md)。
 
@@ -39,7 +41,7 @@
 ├── frontend/                  # Vue / TypeScript / Vite 目录、路由及请求封装
 └── docs/                      # 统一文档入口
     ├── requirements/          # 当前需求与历史归档
-    ├── prototypes/            # 原型说明和原始图片
+    ├── prototypes/            # 当前 TSX 原型与历史静态原型
     ├── design/                # 架构、领域、数据、UI 与重要决策
     ├── development/           # 任务、实施与交接记录
     └── testing/               # 任务或功能点的简短测试结果
