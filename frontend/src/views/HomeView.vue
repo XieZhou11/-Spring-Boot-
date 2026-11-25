@@ -112,7 +112,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <WorkLayout presentation="craftflow">
+  <WorkLayout>
     <div class="cf-works">
       <form
         class="cf-work-search"

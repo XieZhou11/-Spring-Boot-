@@ -180,7 +180,6 @@ onBeforeUnmount(() => { revision++; reviewsRevision++; reportRevision++; clearTi
 </script>
 <template>
   <WorkLayout
-    presentation="craftflow"
     class="cf-creator-public"
   >
     <nav aria-label="创作者主页导航">

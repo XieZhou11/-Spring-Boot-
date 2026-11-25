@@ -4,6 +4,26 @@ import { image, mutate, publishWork, register } from './interaction-helpers'
 
 test.use({ storageMode: 'receiver', databaseGroup: 'content-reports', actionTimeout: 15_000 })
 
+test('我的举报等待列表响应时显示加载反馈，响应后显示空状态', async ({ page, mailbox }) => {
+  await register(page, mailbox.codes, '举报列表访客')
+  let release = () => {}
+  const hold = new Promise<void>(resolve => { release = resolve })
+  // 仅延迟真实列表请求，等待结果和空列表都由实际页面呈现。
+  await page.route(url => url.pathname === '/api/me/reports', async route => {
+    await hold
+    await route.continue()
+  })
+  try {
+    await page.goto('/messages/notifications')
+    await page.getByRole('link', { name: '我的举报', exact: true }).click()
+    await expect(page.getByRole('status').filter({ hasText: '正在读取举报列表' })).toBeVisible()
+    await expect(page.getByText('还没有提交过举报。')).toHaveCount(0)
+  } finally {
+    release()
+  }
+  await expect(page.getByText('还没有提交过举报。')).toBeVisible()
+})
+
 /** 作品、评论与主页举报提交、我的举报列表及后台内容举报处置全链路。 */
 test('举报入口提交、我的举报列表与后台隐藏评论处置', async ({ page, browser, mailbox }) => {
   test.setTimeout(300_000)
@@ -53,11 +73,13 @@ test('举报入口提交、我的举报列表与后台隐藏评论处置', async
     // 我的举报列表展示全部类型举报并可进入详情补充材料。
     await page.goto('/me/reports')
     await expect(page.getByRole('heading', { name: '我的举报' })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
     await expect(page.getByText(/举报作品/).first()).toBeVisible()
     await expect(page.getByText(/举报评论/).first()).toBeVisible()
     await expect(page.getByText(/举报创作者主页/).first()).toBeVisible()
     await page.getByRole('link', { name: /查看详情/ }).first().click()
     await expect(page.getByRole('heading', { name: /举报 #\d+/ })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
     await expect(page.getByText('处理中', { exact: true })).toBeVisible()
 
     // 管理员可以从队列打开目标作品，核对原评论全文和通过举报范围签名的图片。
@@ -102,6 +124,7 @@ test('举报入口提交、我的举报列表与后台隐藏评论处置', async
     await pauseNotification.getByRole('button', { name: '查看举报', exact: true }).click()
     await expect(creator).toHaveURL(/\/reports\/\d+$/)
     await expect(creator.getByRole('button', { name: '对处置结论提出异议' })).toBeVisible()
+    await expect(creator.getByRole('navigation', { name: '主导航' })).toBeVisible()
     await page.goto(`/creators/${creatorId}`)
     await expect(page.getByText('创作者暂时停止承接新业务', { exact: true })).toBeVisible()
   } finally {

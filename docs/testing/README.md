@@ -1,5 +1,7 @@
 # 测试结果记录
 
+CraftFlow 第 7 批全站联验、新版切换、V1.5 UC-01 至 UC-40 证据及遗留项见 [T-027 测试记录](T-027-craftflow-cutover.md)。
+
 当前开发分支的正面业务主流程、演示结论及 [T-012](../development/tasks/T-012-demo-feedback.md) 反馈修复复测见 [主流程演示检查报告](demo-main-flow.md)（2026-11-19，跳过登录注册专项，保留演示数据）。
 
 本目录只保存实际业务功能开发或业务缺陷修复的简短测试结果：测了什么、通过还是失败、必要的问题说明。账号后端验证见 [T-001 测试记录](T-001-backend-auth.md)，认证页面联调见 [T-002 测试记录](T-002-frontend-auth.md)，个人资料、头像与地址联调见 [T-003 测试记录](T-003-personal-center.md)，创作者入驻、审核及通知见 [T-004 测试记录](T-004-creator-onboarding.md)，作品发布、审核及浏览见 [T-005 测试记录](T-005-work-publication.md)，定制需求、定向邀约及图文会话见 [T-007 测试记录](T-007-custom-requests.md)。

@@ -44,7 +44,7 @@ window.addEventListener('focus', load)
 onBeforeUnmount(() => { revision++; window.removeEventListener('focus', load) })
 </script>
 <template>
-  <WorkLayout presentation="craftflow">
+  <WorkLayout>
     <div class="cf-work-detail">
       <nav aria-label="作品详情导航">
         <RouterLink

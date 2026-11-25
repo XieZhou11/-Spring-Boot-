@@ -148,8 +148,6 @@
 }
 @media (max-width: 760px) {
   .session-tools { justify-content: flex-start; font-size: 10px; gap: 7px 12px; }
-  .site-header:has(.session-tools) { flex-wrap: wrap; gap: 18px; padding-block: 20px; }
-  .site-header .session-tools { order: 3; width: 100%; }
   .admin-shell { width: calc(100% - 36px); grid-template-columns: 1fr; }
   .admin-sidebar { padding: 20px; }
   .admin-sidebar > p, .admin-sidebar h2, .admin-seal { display: none; }

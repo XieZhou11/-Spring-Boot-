@@ -26,6 +26,10 @@ const linkedSource = computed(() => route.path === '/creator/works/new' ? route.
 const creatorId = computed(() => auth.session?.roles.includes('CREATOR') ? auth.session.userId : undefined)
 const sourceUnavailable = ref(false)
 const error = ref('')
+// 换号时旧凭证可能先失效，认证提示随恢复后的会话更新。
+const editorError = computed(() => auth.session && !creatorId.value
+  ? '当前账号需要通过创作者认证才能发布作品。'
+  : error.value)
 const notice = ref('')
 const fieldErrors = ref<Record<string, string>>({})
 const editorForm = ref<HTMLFormElement>()
@@ -48,7 +52,7 @@ let initialization = 0
 let editorRevision = 0
 
 /** 四段表单操作后将反馈带入视口，字段校验时优先定位可修正的位置。 */
-watch([error, notice, fieldErrors], ([failure, result]) => {
+watch([editorError, notice, fieldErrors], ([failure, result]) => {
   if (!failure && !result) return
   const invalidField = failure && !unresolved.value
     ? editorForm.value?.querySelector<HTMLElement>('[aria-invalid="true"]') || mainImageError.value
@@ -247,14 +251,13 @@ watch([creatorId, linkedSource], ([userId], [previousUser]) => {
   fieldErrors.value = {}
   unresolved.value = false
   if (userId) void initialize()
-  else if (auth.session) error.value = '当前账号需要通过创作者认证才能发布作品。'
 }, { flush: 'sync' })
 onMounted(() => { void initialize(); window.addEventListener('beforeunload', beforeUnload) })
 onBeforeUnmount(() => { initialization++; editorRevision++; window.removeEventListener('beforeunload', beforeUnload) })
 </script>
 
 <template>
-  <WorkLayout presentation="craftflow">
+  <WorkLayout>
     <section class="cf-publication cf-publication--editor">
       <nav
         class="cf-publication-breadcrumb"
@@ -275,13 +278,13 @@ onBeforeUnmount(() => { initialization++; editorRevision++; window.removeEventLi
         >{{ workStatusLabels[work.reviewStatus] }}</span>
       </header>
       <p
-        v-if="error"
+        v-if="editorError"
         ref="errorFeedback"
         class="form-alert"
         role="alert"
         tabindex="-1"
       >
-        {{ error }}
+        {{ editorError }}
         <RouterLink
           v-if="!creatorId"
           class="inline-button"

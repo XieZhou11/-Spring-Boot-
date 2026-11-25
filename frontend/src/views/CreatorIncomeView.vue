@@ -57,7 +57,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <CreatorLayout presentation="craftflow">
+  <CreatorLayout>
     <section class="cf-settlement">
       <header class="cf-settlement-heading">
         <h1>收入记录</h1>

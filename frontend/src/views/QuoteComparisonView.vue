@@ -112,7 +112,7 @@ onMounted(() => { window.addEventListener('quote-updated', refresh); window.addE
 onBeforeUnmount(() => { revision++; historyRevision++; addressRevision++; window.removeEventListener('quote-updated', refresh); window.removeEventListener('focus', refresh); window.removeEventListener('beforeunload', beforeUnload) })
 </script>
 <template>
-  <WorkLayout presentation="craftflow">
+  <WorkLayout>
     <div class="cf-quotes cf-quote-comparison">
       <nav
         class="work-breadcrumb"

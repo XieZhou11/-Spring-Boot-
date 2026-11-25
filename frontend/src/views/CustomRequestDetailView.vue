@@ -89,7 +89,6 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('custom-request-u
 <template>
   <component
     :is="creatorWorkspace ? CreatorLayout : WorkLayout"
-    presentation="craftflow"
   >
     <div :class="{ 'cf-request-workspace has-request': buyerWorkspace }">
       <RequestCollection

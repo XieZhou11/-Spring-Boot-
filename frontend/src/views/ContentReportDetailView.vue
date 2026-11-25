@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import WorkLayout from '@/layouts/WorkLayout.vue'
 import { useRoute } from 'vue-router'
 import ReportDialog from '@/components/ReportDialog.vue'
 import ReportMaterials from '@/components/ReportMaterials.vue'
@@ -84,77 +85,79 @@ onBeforeUnmount(() => { revision++ })
 </script>
 
 <template>
-  <div class="report-public-page">
-    <nav class="work-breadcrumb">
-      <RouterLink :to="back">我的举报</RouterLink><span>/</span><span>举报详情</span>
-    </nav>
-    <p
-      v-if="error"
-      class="form-alert"
-      role="alert"
-    >
-      {{ error }} <button
-        class="inline-button"
-        @click="load"
-      >
-        重新读取
-      </button>
-    </p>
-    <p
-      v-if="loading && !detail"
-      role="status"
-    >
-      正在读取举报详情…
-    </p>
-    <article v-if="detail && target">
-      <header class="report-heading">
-        <h1>举报 #{{ detail.report.id }} · 举报{{ target.title }}</h1>
-        <span
-          class="report-status"
-          :class="{ pending: detail.report.status === 'PENDING' }"
-        >{{ detail.report.status === 'PENDING' ? '处理中' : detail.report.latestResult === 'ACTION_TAKEN' ? '已处理：已处置' : '已处理：未成立' }}</span>
-      </header>
+  <WorkLayout>
+    <div class="report-public-page">
+      <nav class="work-breadcrumb">
+        <RouterLink :to="back">我的举报</RouterLink><span>/</span><span>举报详情</span>
+      </nav>
       <p
-        v-if="target.summary"
-        class="report-target"
+        v-if="error"
+        class="form-alert"
+        role="alert"
       >
-        {{ target.summary }}
+        {{ error }} <button
+          class="inline-button"
+          @click="load"
+        >
+          重新读取
+        </button>
       </p>
-      <dl class="report-facts">
-        <div><dt>提交时间</dt><dd>{{ formatTime(detail.report.createdAt) }}</dd></div>
-        <div v-if="target.processedAt">
-          <dt>最近处置</dt><dd>{{ formatTime(target.processedAt) }}</dd>
-        </div>
-      </dl>
-      <ReportMaterials
-        :report="detail.report"
-        :evidence="detail.evidence"
-        :history="detail.history"
-        :scope="review ? 'review' : 'report'"
-      />
       <p
-        v-if="message"
+        v-if="loading && !detail"
         role="status"
       >
-        {{ message }}
+        正在读取举报详情…
       </p>
-      <button
-        v-if="detail.canSupplement || detail.canObjection"
-        type="button"
-        class="button-secondary"
-        @click="formOpen = !formOpen; message = ''"
-      >
-        {{ detail.canSupplement ? '补充证据' : '对处置结论提出异议' }}
-      </button>
-      <ReportDialog
-        v-if="formOpen"
-        evidence
-        :submit-label="detail.canSupplement ? '提交补充证据' : '提交处置异议'"
-        :submit-report="submit"
-        :prepare-verification="prepareVerification"
-      />
-    </article>
-  </div>
+      <article v-if="detail && target">
+        <header class="report-heading">
+          <h1>举报 #{{ detail.report.id }} · 举报{{ target.title }}</h1>
+          <span
+            class="report-status"
+            :class="{ pending: detail.report.status === 'PENDING' }"
+          >{{ detail.report.status === 'PENDING' ? '处理中' : detail.report.latestResult === 'ACTION_TAKEN' ? '已处理：已处置' : '已处理：未成立' }}</span>
+        </header>
+        <p
+          v-if="target.summary"
+          class="report-target"
+        >
+          {{ target.summary }}
+        </p>
+        <dl class="report-facts">
+          <div><dt>提交时间</dt><dd>{{ formatTime(detail.report.createdAt) }}</dd></div>
+          <div v-if="target.processedAt">
+            <dt>最近处置</dt><dd>{{ formatTime(target.processedAt) }}</dd>
+          </div>
+        </dl>
+        <ReportMaterials
+          :report="detail.report"
+          :evidence="detail.evidence"
+          :history="detail.history"
+          :scope="review ? 'review' : 'report'"
+        />
+        <p
+          v-if="message"
+          role="status"
+        >
+          {{ message }}
+        </p>
+        <button
+          v-if="detail.canSupplement || detail.canObjection"
+          type="button"
+          class="button-secondary"
+          @click="formOpen = !formOpen; message = ''"
+        >
+          {{ detail.canSupplement ? '补充证据' : '对处置结论提出异议' }}
+        </button>
+        <ReportDialog
+          v-if="formOpen"
+          evidence
+          :submit-label="detail.canSupplement ? '提交补充证据' : '提交处置异议'"
+          :submit-report="submit"
+          :prepare-verification="prepareVerification"
+        />
+      </article>
+    </div>
+  </WorkLayout>
 </template>
 
 <style src="@/assets/styles/craftflow-reports.css"></style>

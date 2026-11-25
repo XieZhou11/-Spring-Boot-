@@ -112,6 +112,16 @@
   border-radius: 8px;
 }
 .craft-admin .review-queue .queue-toolbar { align-items: end; flex-wrap: wrap; }
+.craft-admin .review-queue .queue-toolbar .work-field {
+  margin: 0;
+  align-items: stretch;
+  color: var(--craft-muted);
+}
+.craft-admin .review-queue .queue-toolbar input[type='search'] {
+  min-height: 38px;
+  padding: 8px 12px;
+  line-height: 1.5;
+}
 .craft-admin :is(.review-queue, .review-detail) :is(.work-empty, .creator-empty) {
   background: var(--craft-bg);
   color: var(--craft-muted);

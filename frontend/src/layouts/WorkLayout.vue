@@ -2,15 +2,9 @@
 import BusinessHeader from '@/components/BusinessHeader.vue'
 import '@/assets/styles/account.css'
 import '@/assets/styles/work.css'
-
-/** 作品浏览使用新版版心，通用工作流沿用各自已验收的内容布局。 */
-defineProps<{ presentation?: 'craftflow' }>()
 </script>
 <template>
-  <div
-    class="member-page work-page"
-    :class="{ 'craft-work-shell': presentation === 'craftflow' }"
-  >
+  <div class="member-page craft-work-shell">
     <BusinessHeader />
     <main class="work-shell">
       <slot />
@@ -28,6 +22,8 @@ defineProps<{ presentation?: 'craftflow' }>()
   font-family: var(--craft-font);
 }
 .craft-work-shell .work-shell {
+  flex: 1;
+  min-width: 0;
   width: 100%;
   max-width: 1400px;
   margin: 0 auto;

@@ -1,10 +1,10 @@
 # 前端工程
 
-**PC Web 前端按业务链路分批重做。** 新版接入真实后端，界面参照 CraftFlow 原型。原型缺少的页面沿用同一风格补齐。开发顺序、接口入口和验收见 [前端重做开发指南](../docs/design/frontend-rebuild-guide.md)。
+**PC Web 使用匠心集 CraftFlow 界面。** 页面接入真实后端，未提供原型的页面沿用新版布局。全站联验及旧书签兼容见 [T-027](../docs/development/tasks/T-027-craftflow-cutover.md)。 [前端重做开发指南](../docs/design/frontend-rebuild-guide.md)
 
 以下为当前 Vue 前端的运行说明和已实现功能记录。
 
-Vue 3 + TypeScript + Vite 工程。登录注册、个人中心、创作者入驻、管理员审核、两级品类管理及系统通知已接入后端，沿用原型“拾作”的纸张底色、深绿主操作和手作插画。实施及验收见 [T-002](../docs/development/tasks/T-002-frontend-auth.md)、[T-003](../docs/development/tasks/T-003-personal-center.md)、[T-004](../docs/development/tasks/T-004-creator-onboarding.md)。作品发布、审核与浏览见 [T-005](../docs/development/tasks/T-005-work-publication.md)，点赞、收藏、评论及关注见[T-006](../docs/development/tasks/T-006-work-interactions.md)，报价、定标见 [T-009](../docs/development/tasks/T-009-quote-award.md)，模拟付款及待开工见[T-011](../docs/development/tasks/T-011-order-payment.md)；制作履约与未开工退款见[T-013](../docs/development/tasks/T-013-order-fulfillment.md)。
+Vue 3 + TypeScript + Vite 工程。前台提供作品发现、定制需求、订单、消息和个人中心，认证创作者可以进入工作台。后台提供审核、用户管理、内容治理、订单和资金查询。业务实现及历史验收从[项目文档中心](../docs/README.md)查阅。
 
 ## 环境与依赖
 
@@ -66,7 +66,7 @@ Axios 默认直连 `http://localhost:8080/api`，可复制 `.env.example` 为 `.
 
 接口使用 `@/utils/request`，业务调用放在 `api/`；响应为后端 `Result<T>`，失败统一转换为保留 HTTP 状态、业务码及字段错误的 `ApiError`，由页面呈现。封装启用 `withCredentials`；写请求先获取 `/api/csrf` 的当前令牌，不关闭 CSRF。登录后会话只缓存在内存，刷新及业务页导航向服务端重新核验；密码、验证码、会话凭证不写入本地存储。身份变更后忽略旧查询及旧请求 401，避免响应乱序覆盖新身份。
 
-先在 `backend/` 执行 `.\mvnw.cmd spring-boot:run` 启动后端。邮件注册与找回须按[后端说明](../backend/README.md#账号接口与邮件配置)在 `application.yml` 配置平台发件邮箱、SMTP 授权码和验证码密钥；缺少配置时页面显示后端返回的不可用原因，不伪装发送成功。注册后回登录页，登录后返回原站内目标页；普通用户访问 `/` 进入作品发现，管理员访问 `/` 默认进入 `/admin/works`。管理员从后台“查看前台作品”进入 `/discover`。
+先在 `backend/` 执行 `.\mvnw.cmd spring-boot:run` 启动后端。注册与找回密码使用后端配置的发件邮箱、SMTP 授权码和验证码密钥。注册后回登录页，登录后返回原站内目标页。普通用户访问 `/` 进入作品广场，管理员默认进入 `/admin/dashboard`，可从后台「查看前台作品」进入 `/discover`。 [后端邮件配置](../backend/README.md#账号接口与邮件配置)
 
 ## 导航与工作区（T-008）
 

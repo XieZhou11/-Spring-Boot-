@@ -289,7 +289,7 @@ onMounted(() => { window.addEventListener('order-updated', refresh); window.addE
 onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', visible) })
 </script>
 <template>
-  <WorkLayout presentation="craftflow">
+  <WorkLayout>
     <div class="craftflow-order-workspace craftflow-order-detail-workspace">
       <OrderCollection
         :selected-id="order?.id"

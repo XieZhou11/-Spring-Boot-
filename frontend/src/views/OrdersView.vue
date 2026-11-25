@@ -4,7 +4,7 @@ import WorkLayout from '@/layouts/WorkLayout.vue'
 </script>
 
 <template>
-  <WorkLayout presentation="craftflow">
+  <WorkLayout>
     <div class="craftflow-order-workspace">
       <OrderCollection />
       <div class="craftflow-order-empty-selection">

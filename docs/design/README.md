@@ -7,7 +7,7 @@
 | 文档 | 状态与用途 | 维护方式 |
 | --- | --- | --- |
 | [ADR-001 技术栈选型](decisions/ADR-001-technology-stack.md) | 已确认采用；说明 Spring Boot、Vue、MySQL、Session、WebSocket、OSS 等选择及理由 | 保留；版本以实际工程和锁文件为准，业务集成按当前需求验证 |
-| [PC Web 前端重做开发指南](frontend-rebuild-guide.md) | 新版前端待开发，记录页面改造顺序、真实后端接入及各批验收 | 业务变更时同步各批范围与验收入口 |
+| [PC Web 前端重做开发指南](frontend-rebuild-guide.md) | 记录 CraftFlow 页面改造、真实后端接入及第 7 批全站联验 | 业务变更时同步各批范围与验收入口 |
 | [数据库表结构](数据库表结构.md) | 设计草稿；27 张表的字段、索引、应用关联校验与事务回滚 | 与后端 Flyway 迁移对应维护；不使用外键；V1 已执行，后续结构变更追加版本 |
 
 ## 后续设计

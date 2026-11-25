@@ -31,7 +31,6 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('quote-updated', 
 <template>
   <component
     :is="canCreateQuote ? CreatorLayout : WorkLayout"
-    presentation="craftflow"
   >
     <div class="cf-quotes">
       <header class="work-section-heading">

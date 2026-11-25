@@ -13,7 +13,6 @@ const route = useRoute()
 <template>
   <WorkLayout
     v-if="scope === 'mine'"
-    presentation="craftflow"
   >
     <div class="cf-request-workspace">
       <RequestCollection
@@ -32,7 +31,6 @@ const route = useRoute()
   </WorkLayout>
   <CreatorLayout
     v-else
-    presentation="craftflow"
   >
     <RequestCollection
       :scope="scope"

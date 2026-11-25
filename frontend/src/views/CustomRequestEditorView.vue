@@ -149,7 +149,7 @@ onMounted(() => { void initialize(); window.addEventListener('beforeunload', bef
 onBeforeUnmount(() => { disposed = true; candidateRevision++; window.removeEventListener('beforeunload', beforeUnload) })
 </script>
 <template>
-  <WorkLayout presentation="craftflow">
+  <WorkLayout>
     <div class="cf-request-editor-page">
       <nav
         class="cf-request-breadcrumb"

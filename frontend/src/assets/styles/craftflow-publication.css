@@ -1,44 +1,4 @@
-/* 作品工作台与编辑器使用独立样式，审核和公开作品页沿用自身的页面样式。 */
-.cf-creator-workspace.creator-workspace {
-  grid-template-columns: 192px minmax(0, 1fr);
-  align-items: start;
-  gap: 24px;
-}
-
-.cf-creator-workspace .work-studio-sidebar {
-  padding: 16px 12px;
-  border: 1px solid var(--craft-border);
-  border-radius: 14px;
-  background: var(--craft-surface);
-}
-
-.cf-creator-workspace .work-studio-sidebar h2 {
-  margin: 0 8px 12px;
-  color: var(--craft-ink);
-  font: 650 15px/1.5 var(--craft-font);
-}
-
-.cf-creator-workspace .work-studio-sidebar nav {
-  gap: 3px;
-  margin: 0;
-  font-size: 13px;
-}
-
-.cf-creator-workspace .work-studio-sidebar nav a {
-  padding: 9px 10px;
-  border-radius: 8px;
-  color: var(--craft-muted);
-}
-
-.cf-creator-workspace .work-studio-sidebar nav a:hover {
-  background: #f4f4f5;
-  color: var(--craft-ink);
-}
-
-.cf-creator-workspace .work-studio-sidebar nav a.active {
-  background: var(--craft-primary);
-  color: var(--craft-surface);
-}
+/* 作品列表和编辑器的内容区样式。 */
 
 .cf-publication {
   min-width: 0;
@@ -104,8 +64,7 @@
 .cf-publication button:disabled { opacity: .58; cursor: not-allowed; }
 .cf-publication .button-primary .app-icon { width: 16px; height: 16px; }
 
-.cf-publication :is(a, button, input, select, textarea, [tabindex]):focus-visible,
-.cf-creator-workspace .work-studio-sidebar a:focus-visible {
+.cf-publication :is(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid #a15c08;
   outline-offset: 2px;
 }
@@ -398,11 +357,6 @@
 .cf-publication .work-history-row header strong,
 .cf-publication .work-history-row summary { color: var(--craft-ink); }
 .cf-publication .work-history-row :is(header span, time) { color: var(--craft-muted); }
-
-@media (max-width: 920px) {
-  .cf-creator-workspace.creator-workspace { grid-template-columns: 1fr; gap: 14px; }
-  .cf-creator-workspace .work-studio-sidebar nav { flex-direction: row; flex-wrap: wrap; }
-}
 
 @media (max-width: 600px) {
   .cf-publication > .cf-publication-heading,

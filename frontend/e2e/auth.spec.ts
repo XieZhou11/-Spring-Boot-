@@ -43,6 +43,32 @@ async function signIn(page: Page, email: string, value = password) {
   await page.getByRole('button', { name: '登录', exact: true }).click()
 }
 
+test('旧需求书签登录后保留筛选及锚点，旧消息书签刷新后仍可用', async ({ page, mailbox }) => {
+  const email = newEmail()
+  await registerAccount(page, email, mailbox.codes)
+
+  // 保护路由先转换旧书签，登录完成后继续访问同一筛选位置。
+  const requestTarget = '/my-requests?status=OPEN#saved'
+  await page.goto('/account/requests?status=OPEN#saved')
+  await expect(page).toHaveURL(url => url.pathname === '/login' && url.searchParams.get('redirect') === requestTarget)
+  await signIn(page, email)
+  await expect(page).toHaveURL(requestTarget)
+  await expect(page.getByLabel('需求状态')).toHaveValue('OPEN')
+  await expect(page.getByRole('navigation', { name: '主导航', exact: true })).toBeVisible()
+
+  const messageTarget = '/messages/conversations?from=bookmark#threads'
+  await page.goto('/account/conversations?from=bookmark#threads')
+  await expect(page).toHaveURL(messageTarget)
+  await expect(page.getByRole('heading', { name: '消息中心', exact: true })).toBeVisible()
+  await page.reload()
+  await expect(page).toHaveURL(messageTarget)
+  await expect(page.getByRole('heading', { name: '消息中心', exact: true })).toBeVisible()
+
+  await page.goto('/account/notifications?from=bookmark#updates')
+  await expect(page).toHaveURL('/messages/notifications?from=bookmark#updates')
+  await expect(page.getByRole('region', { name: '通知列表' })).toBeVisible()
+})
+
 test('三个认证页签可直接访问和互跳，并保留登录回跳地址', async ({ page }) => {
   const target = '/works/42?from=collection#materials'
   await page.goto(`/login?redirect=${encodeURIComponent(target)}`)

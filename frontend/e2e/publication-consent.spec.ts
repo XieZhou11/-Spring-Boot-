@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { test, expect } from './fixtures'
-import { image, mutate, origin, prepareCreator, register } from './custom-request-support'
+import { api, image, mutate, origin, prepareCreator, register } from './custom-request-support'
 import { refundOrder } from './refund-support'
 
 test.use({ storageMode: 'receiver', actionTimeout: 15_000 })
@@ -87,6 +87,12 @@ test('买家明确同意后可发布关联案例，审核通过才公开且只�
     await creator.goto(`/creator/works/new?sourceOrderId=${order.id}`)
     await expect(source).toHaveValue(order.id)
     await creator.getByLabel('作品标题', { exact: true }).fill('原账号未保存的案例')
+    // 明确经过旧会话失效的窗口，再恢复新账号，覆盖实时连接触发的会话复查顺序。
+    const csrf = (await (await creator.request.get(`${api}/csrf`)).json()).data
+    const signedOut = await creator.request.delete(`${api}/sessions/current`, { headers: { [csrf.headerName]: csrf.token } })
+    expect(signedOut.ok()).toBe(true)
+    await creator.evaluate(() => window.dispatchEvent(new Event('creator-certification-updated')))
+    await expect(creator.getByLabel('作品标题', { exact: true })).toHaveCount(0)
     expect((await mutate(creator, '/sessions', { email: buyerEmail, password: 'CraftTest123' })).status()).toBe(201)
     await creator.evaluate(() => window.dispatchEvent(new Event('focus')))
     await expect(creator.getByRole('alert')).toContainText('当前账号需要通过创作者认证')

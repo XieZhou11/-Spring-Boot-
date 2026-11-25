@@ -15,7 +15,6 @@ const isAdmin = computed(() => auth.session?.roles.includes('ADMIN') ?? false)
   <component
     :is="isAdmin ? AdminLayout : WorkLayout"
     :title="isAdmin ? '系统通知' : undefined"
-    presentation="craftflow"
   >
     <div class="craft-messages">
       <header

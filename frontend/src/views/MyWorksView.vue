@@ -62,7 +62,7 @@ function refresh() { void load() }
 onBeforeUnmount(() => { revision++; window.removeEventListener('work-updated', refresh) })
 </script>
 <template>
-  <CreatorLayout presentation="craftflow">
+  <CreatorLayout>
     <section class="cf-publication cf-publication-card">
       <header class="cf-publication-heading">
         <div>

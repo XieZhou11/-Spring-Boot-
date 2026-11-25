@@ -443,6 +443,70 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
   } finally { await adminContext.close(); await buyerContext.close() }
 })
 
+test('两位买家同时购买同一件现货，仅首个有效订单可支付', async ({ page: creator, browser, mailbox }) => {
+  test.setTimeout(180_000)
+  const contexts = await Promise.all(Array.from({ length: 3 }, () => browser.newContext({ baseURL: frontendOrigin })))
+  try {
+    const [admin, firstBuyer, secondBuyer] = await Promise.all(contexts.map(context => context.newPage()))
+    const { categoryId } = await prepareCreator(creator, admin, mailbox.codes, mailbox.promoteAdmin)
+    const title = '并发现货验收木杯垫'
+    const workId = await publishBrowseWork(creator, admin, {
+      title, categoryId, stockPrice: '100.00', customReferenceDays: null,
+      description: '圆形木制杯垫，保留原木纹理。边缘经过手工打磨并涂以透明木蜡油，可用于日常茶具。灵感来自自然原木。',
+    })
+    const buyers = await Promise.all([firstBuyer, secondBuyer].map(async (page, index) => {
+      await register(page, mailbox.codes, index === 0 ? '首位并发买家' : '次位并发买家')
+      const address = await mutate(page, '/me/addresses', 'post', {
+        recipientName: '现货收件人', phone: '13800138000', province: '北京市', city: '市辖区',
+        district: '东城区', detailAddress: '并发现货验收路一号', isDefault: true,
+      })
+      expect(address.status()).toBe(201)
+      const { id: addressId } = (await address.json()).data as { id: string }
+      const csrf = (await (await page.request.get(`${api}/csrf`)).json()).data
+      return { page, addressId, headers: { [csrf.headerName]: csrf.token } }
+    }))
+
+    // 两个独立登录会话先准备地址和 CSRF，再并行向真实后端提交同一件现货。
+    const orderPath = `/works/${workId}/orders`
+    const responses = await Promise.all(buyers.map(({ page, addressId, headers }) => page.request.post(`${api}${orderPath}`, {
+      data: { addressId, requestKey: randomUUID() }, headers,
+    })))
+    expect(responses.map(response => response.status()).sort()).toEqual([201, 409])
+    const winnerIndex = responses[0].status() === 201 ? 0 : 1
+    const winner = buyers[winnerIndex]
+    const loser = buyers[1 - winnerIndex]
+    const order = (await responses[winnerIndex].json()).data
+    expect(order).toMatchObject({ orderType: 'STOCK', status: 'PENDING_PAY', totalAmount: '100.00' })
+
+    const orders = await creator.request.get(`${api}/me/orders?side=CREATOR`)
+    expect(orders.status()).toBe(200)
+    expect((await orders.json()).data).toMatchObject({ total: 1, items: [{ id: order.id, status: 'PENDING_PAY' }] })
+    const payment = { termsConfirmed: true, termsVersion: order.paymentPreview.termsVersion }
+    expect((await mutate(loser.page, `/orders/${order.id}/payment`, 'put', payment)).status()).toBe(404)
+
+    await winner.page.goto(`/orders/${order.id}`)
+    await expect(winner.page.locator('.work-section-heading .work-status')).toHaveText('待付款')
+    await winner.page.getByRole('button', { name: '模拟支付', exact: true }).click()
+    await winner.page.getByLabel('我已阅读并同意现货支付条款', { exact: true }).check()
+    await winner.page.getByRole('button', { name: '确认模拟支付', exact: true }).click()
+    await expect(winner.page.locator('.work-section-heading .work-status')).toHaveText('待发货')
+    const paid = await winner.page.request.get(`${api}/orders/${order.id}`)
+    expect(paid.status()).toBe(200)
+    expect((await paid.json()).data).toMatchObject({ status: 'PENDING_SHIP', payment: { result: 'SUCCESS', amount: '100.00' } })
+
+    await loser.page.goto(`/works/${workId}`)
+    await expect(loser.page.getByRole('heading', { name: title, exact: true })).toBeVisible()
+    await expect(loser.page.getByText('现货已售出', { exact: true })).toBeVisible()
+    await expect(loser.page.getByRole('button', { name: '立即购买现货', exact: true })).toHaveCount(0)
+    expect((await mutate(loser.page, orderPath, 'post', { addressId: loser.addressId, requestKey: randomUUID() })).status()).toBe(409)
+    const rejectedBuyerOrders = await loser.page.request.get(`${api}/me/orders?side=BUYER`)
+    expect(rejectedBuyerOrders.status()).toBe(200)
+    expect((await rejectedBuyerOrders.json()).data.total).toBe(0)
+  } finally {
+    await Promise.all(contexts.map(context => context.close()))
+  }
+})
+
 test('取消现货订单后另一位买家可下单，订单列表保留承接筛选和页码', async ({ page, browser, mailbox }, testInfo) => {
   test.setTimeout(180_000)
   const contexts = await Promise.all(Array.from({ length: 3 }, () => browser.newContext({
