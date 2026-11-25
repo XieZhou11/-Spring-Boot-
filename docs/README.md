@@ -12,7 +12,8 @@
 | MVP 版中文文件名副本 | 与当前正文逐字节一致，同步维护 | [MVP 版需求规格说明书](requirements/archive/手工定制作品分享与交易平台需求规格说明书_V1.5_MVP版.md)，与正式入口为同一份需求内容 |
 | 后续功能清单 | 独立于 MVP 正文，完成后按剩余时间选择补充 | [后续功能清单](requirements/archive/手工定制作品分享与交易平台后续功能清单.md)，保存移出功能及补充规则线索 |
 | 需求历史资料 | V1.4 MVP 版、修订版、旧版 Markdown 和 Word 保留供追溯及展示版本更替 | [需求索引](requirements/README.md)，区分当前版本同步副本与历史资料 |
-| 页面原型 | 用户指定 TSX 为 PC Web 前端整体重做的界面依据，待开发 | [原型索引](prototypes/README.md)，含角色页面索引、TSX 原件及验收口径 |
+| 页面原型 | 用户指定 TSX 为新版 PC Web 界面参考 | [原型索引](prototypes/README.md)，含角色页面索引和 TSX 原件 |
+| PC Web 前端重做 | 待开发，按真实后端业务接入 | [前端重做开发指南](design/frontend-rebuild-guide.md)，含各批开发范围、依赖及验收 |
 | AI 协作约定 | 已建立 | [AGENTS.md](../AGENTS.md)，规定任务、实现与验证方式 |
 | 技术选型 | 用户已确认采用；账号本地业务集成已验证，QQ/163 公网收件及找回密码补充验收已由用户于 2026-11-23 手动验证通过（依据用户反馈），其他业务能力按任务验证 | [ADR-001](design/decisions/ADR-001-technology-stack.md) |
 | 数据库详细设计 | V1.5 设计草稿；27 表 Flyway SQL 已在本地执行，迁移及失败补偿在 MySQL 8.4 验证 | [数据库表结构](design/数据库表结构.md)，含字段、索引、应用关联与事务回滚 |
@@ -107,6 +108,7 @@ docs/
 │       └── 10_作品发布与交易设置.png  # 作品表单与交易开关
 ├── design/                           # 已选技术与设计材料约定
 │   ├── README.md                     # 现有文档状态与后续设计边界
+│   ├── frontend-rebuild-guide.md      # 前端重做顺序、范围和验收
 │   ├── 数据库表结构.md                # V1.5 草稿；字段、索引、关联及事务回滚
 │   └── decisions/                    # 重要方案的取舍记录
 │       └── ADR-001-technology-stack.md # 已选技术与兼容依据
@@ -232,7 +234,7 @@ docs/
 
 ## 8. 下一阶段入口
 
-PC Web 前端整体重做待开发。界面以用户指定的 TSX 原型为准，范围与验收口径见 [原型索引](prototypes/README.md)。
+PC Web 前端整体重做待开发。首批覆盖认证、公共布局和作品浏览，按真实后端业务联调。各批入口见 [前端重做开发指南](design/frontend-rebuild-guide.md)。
 
 后续统一以[当前 V1.5 MVP 版需求](requirements/requirements.md)为依据，其中所列需求均须实现；[后续功能清单](requirements/archive/手工定制作品分享与交易平台后续功能清单.md)独立留存，供完成后选择补充。数据库设计及 SQL 待审核。
 
