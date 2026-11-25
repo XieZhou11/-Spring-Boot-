@@ -7,7 +7,8 @@ import org.apache.ibatis.annotations.*;
 @Mapper
 public interface AdminRefundMapper {
     String FILTER="""
-        <where>o.order_type='CUSTOM'
+        <where>o.buyer_id=r.buyer_id
+          AND (o.order_type='CUSTOM' OR (o.order_type='STOCK' AND r.application_type='NORMAL'))
           <if test='q.status != null and q.status != "ALL"'>AND r.status=#{q.status}</if>
           <if test='q.applicationType != null and q.applicationType != "ALL"'>AND r.application_type=#{q.applicationType}</if>
           <if test='q.orderNo != null and q.orderNo != ""'>AND LOCATE(#{q.orderNo},o.order_no)>0</if>
@@ -40,7 +41,7 @@ public interface AdminRefundMapper {
           WHERE r.order_id=#{orderId} AND JSON_CONTAINS(e.image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))))
         OR EXISTS(SELECT 1 FROM chat_message m JOIN conversation c ON c.id=m.conversation_id
           JOIN trade_order o ON o.id=c.order_id WHERE o.id=#{orderId} AND c.buyer_id=o.buyer_id
-          AND c.creator_id=o.creator_id AND c.request_id=o.request_id
+          AND c.creator_id=o.creator_id AND c.request_id <=> o.request_id
           AND JSON_CONTAINS(m.image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))))
         """)
     boolean imageReferenced(@Param("orderId")Long orderId,@Param("fileId")Long fileId);

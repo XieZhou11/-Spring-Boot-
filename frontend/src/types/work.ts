@@ -68,6 +68,23 @@ export interface WorkVO extends WorkContent {
   customizable: boolean
   /** 列表封面短时签名。 */
   coverImage: ImageVO | null
+  /** 仅向作者返回的现货恢复资格，不能恢复时为空。 */
+  stockRecovery?: StockRecoveryVO | null
+}
+/** 现货恢复直购须重新核对原售出订单及实物条件。 */
+export interface StockRecoveryVO {
+  /** 已全额退款的原订单编号。 */
+  originalOrderId: string
+  /** 供作者核对的原订单号。 */
+  originalOrderNo: string
+  /** 作者需要确认的实物情况。 */
+  confirmation: 'NOT_SHIPPED' | 'RETURNED'
+}
+export interface StockRecoveryDTO extends Pick<StockRecoveryVO, 'originalOrderId' | 'confirmation'> {
+  /** 打开确认框时的作品版本。 */
+  version: string
+  /** 恢复后使用的现货售价，按十进制字符串提交。 */
+  stockPrice: string
 }
 /** 可供创作者手动关联案例的授权订单摘要，不含买家地址。 */
 export interface PublicationOrderOptionVO {

@@ -8,8 +8,27 @@ import org.apache.ibatis.annotations.*;
 /** 图片绑定和回收共享用户→需求→订单→文件锁序，历史引用不按订单当前状态过滤。 */
 @Mapper
 public interface OrderImageMapper {
+    /** 订单别名为 o，文件别名为 f。仅匹配快照根数组里的字符串编号。 */
+    String STOCK_SNAPSHOT_HAS_FILE = """
+        o.order_type='STOCK' AND o.creator_id=f.uploader_id AND (
+            (JSON_TYPE(JSON_EXTRACT(o.agreement_snapshot,'$.mainImageIds'))='ARRAY'
+              AND JSON_OVERLAPS(JSON_EXTRACT(o.agreement_snapshot,'$.mainImageIds'),JSON_ARRAY(CAST(f.id AS CHAR))))
+            OR (JSON_TYPE(JSON_EXTRACT(o.agreement_snapshot,'$.specificationImageIds'))='ARRAY'
+              AND JSON_OVERLAPS(JSON_EXTRACT(o.agreement_snapshot,'$.specificationImageIds'),JSON_ARRAY(CAST(f.id AS CHAR))))
+        )
+        """;
+
     @Select("SELECT * FROM trade_order WHERE id=#{id}")
     TradeOrder order(Long id);
+
+    /** 按成交快照查找本单创作者上传的可用作品图片。 */
+    @Select("""
+        SELECT f.* FROM trade_order o JOIN file_asset f ON f.id=#{fileId}
+        WHERE o.id=#{orderId} AND f.upload_status='AVAILABLE'
+          AND f.object_key LIKE CONCAT('works/',o.creator_id,'/%')
+          AND
+        """ + STOCK_SNAPSHOT_HAS_FILE)
+    FileAsset stockSnapshotImage(@Param("orderId") Long orderId,@Param("fileId") Long fileId);
 
     @Select("SELECT id FROM custom_request WHERE id=#{id} FOR UPDATE")
     Long lockRequest(Long id);

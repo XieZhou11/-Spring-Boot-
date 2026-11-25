@@ -2,7 +2,7 @@ import request from '@/utils/request'
 import type { ApiResult } from '@/types/api'
 import type { ImageVO, PageVO } from '@/types/creator'
 import type { OrderVO } from '@/types/quote'
-import type { CreatorPublicVO, PublicationOrderOptionVO, PublicationQuotaVO, WorkContent, WorkHistoryVO, WorkQuery, WorkVO } from '@/types/work'
+import type { CreatorPublicVO, PublicationOrderOptionVO, PublicationQuotaVO, StockRecoveryDTO, WorkContent, WorkHistoryVO, WorkQuery, WorkVO } from '@/types/work'
 
 /** 全部作品请求复用会话、CSRF 与统一错误处理。 */
 async function get<T>(path: string, params?: object) {
@@ -44,6 +44,10 @@ export async function deleteWork(id: string, version: string) {
 }
 export async function updateTrading(id: string, input: Pick<WorkVO, 'version' | 'saleEnabled' | 'customEnabled' | 'stockPrice' | 'customReferenceDays'>) {
   return (await request.patch<ApiResult<WorkVO>>(`/me/works/${id}/trading-settings`, input)).data.data
+}
+/** 恢复单件现货需提交作品版本、原售出订单和实物确认。 */
+export async function recoverStockAvailability(id: string, input: StockRecoveryDTO) {
+  return (await request.put<ApiResult<WorkVO>>(`/me/works/${id}/stock-availability`, input)).data.data
 }
 export async function offlineWork(id: string, version: string, admin = false, reason = '') {
   return (await request.put<ApiResult<WorkVO>>(`${scope(admin)}/${id}/publication`, { version, reason })).data.data

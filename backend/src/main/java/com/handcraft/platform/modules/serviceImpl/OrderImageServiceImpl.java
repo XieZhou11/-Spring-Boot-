@@ -89,6 +89,21 @@ public class OrderImageServiceImpl implements OrderImageService {
     });}
 
     @Override
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+    public ImageVO stockSnapshot(Long userId,Long orderId,Long fileId) {
+        return BusinessLog.run(LOGGER,"现货订单快照图片读取",userId,()->{
+            var order=references.order(orderId);
+            if(order==null||!"STOCK".equals(order.getOrderType())
+                    ||(!userId.equals(order.getBuyerId())&&!userId.equals(order.getCreatorId())))throw missing();
+            policy.user(userId);
+            var file=references.stockSnapshotImage(orderId,fileId);
+            if(file==null)throw missing();
+            LOGGER.info("现货快照图片引用校验完成：userId={}, orderId={}, fileId={}",userId,orderId,fileId);
+            return storage.signed(file);
+        });
+    }
+
+    @Override
     @Transactional(propagation=Propagation.MANDATORY,rollbackFor=Exception.class)
     public void validate(Long userId,Long orderId,String purpose,List<String> imageIds){
         BusinessLog.run(LOGGER,"订单图片绑定校验",userId,()->{
@@ -137,17 +152,15 @@ public class OrderImageServiceImpl implements OrderImageService {
 
     private void uploadAllowed(Long userId,TradeOrder order,String purpose){
         prefix(purpose);policy.user(userId);
-        if(order==null||!"CUSTOM".equals(order.getOrderType())||!userId.equals(order.getBuyerId())&&!userId.equals(order.getCreatorId()))throw missing();
+        if(!OrdinaryRefundPolicy.supports(order)||!userId.equals(order.getBuyerId())&&!userId.equals(order.getCreatorId()))throw missing();
         if("PROGRESS".equals(purpose)){
+            if(!"CUSTOM".equals(order.getOrderType()))throw missing();
             if(!userId.equals(order.getCreatorId()))throw new BusinessException(CommonErrorCode.FORBIDDEN,"仅本单创作者可上传制作进度图片");
             if(!Set.of("IN_PRODUCTION","PENDING_SHIP","SHIPPED").contains(order.getStatus()))throw conflict("当前订单阶段不可上传制作进度图片");
         }else{
             if("AFTER_SALE".equals(order.getStatus())&&references.normalRefundPending(order.getId()))return;
             if(!userId.equals(order.getBuyerId()))throw new BusinessException(CommonErrorCode.FORBIDDEN,"仅买家可上传初次退款凭证；双方可在处理中补证");
-            boolean eligible=Set.of("PAID","IN_PRODUCTION","PENDING_SHIP","SHIPPED").contains(order.getStatus())
-                    ||"COMPLETED".equals(order.getStatus())&&order.getOriginalCompletedAt()!=null
-                    &&policy.now().isBefore(order.getOriginalCompletedAt().plusDays(7));
-            if(!eligible)throw conflict("当前订单不在可申请普通售后的阶段或原七天窗口");
+            if(!OrdinaryRefundPolicy.eligible(order,policy.now()))throw conflict("当前订单不在可申请普通售后的阶段或原七天窗口");
         }
     }
     private static String prefix(String purpose){return switch(purpose){case "PROGRESS"->"order-progress/";case "REFUND"->"order-refunds/";default->throw invalid("订单图片用途无效");};}

@@ -9,7 +9,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-/** 履约图和退款凭证使用独立资源路径，实际归属和状态由服务层复核。 */
+/** 履约图、退款凭证与现货快照图按各自业务关系读取。 */
 @RestController
 @RequestMapping("/api")
 public class OrderImageController {
@@ -31,5 +31,11 @@ public class OrderImageController {
     @GetMapping("/order-refund-images/{fileId}")
     public Result<ImageVO> refund(@AuthenticationPrincipal AccountPrincipal principal,@PathVariable Long fileId){
         return Result.ok(images.image(principal.userId(),fileId,"REFUND"));
+    }
+
+    @GetMapping("/orders/{orderId}/stock-images/{fileId}")
+    public Result<ImageVO> stockSnapshot(@AuthenticationPrincipal AccountPrincipal principal,@PathVariable Long orderId,
+                                         @PathVariable Long fileId) {
+        return Result.ok(images.stockSnapshot(principal.userId(),orderId,fileId));
     }
 }

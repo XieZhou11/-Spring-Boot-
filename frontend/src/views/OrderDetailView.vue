@@ -580,6 +580,24 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
                 {{ order.agreementSnapshot.proposal }}
               </p>
             </template>
+            <template v-if="order.agreementSnapshot.mainImageIds?.length">
+              <h3>成交主图</h3>
+              <QuoteImages
+                :image-ids="order.agreementSnapshot.mainImageIds"
+                :order-id="order.id"
+                scope="stock"
+                label="成交主图"
+              />
+            </template>
+            <template v-if="order.agreementSnapshot.specificationImageIds?.length">
+              <h3>成交规格图</h3>
+              <QuoteImages
+                :image-ids="order.agreementSnapshot.specificationImageIds"
+                :order-id="order.id"
+                scope="stock"
+                label="成交规格图"
+              />
+            </template>
           </section>
           <section
             v-else
@@ -634,7 +652,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
             :order-status="order.status"
           />
           <OrderRefundPanel
-            v-if="order.orderType === 'CUSTOM'"
+            v-if="order.orderType === 'CUSTOM' || (order.orderType === 'STOCK' && order.paidAt)"
             :key="'refund-' + order.id"
             :order="order"
             :busy="baseBusy"

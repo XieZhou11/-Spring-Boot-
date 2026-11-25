@@ -1,11 +1,20 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { getPrivateImage } from '@/api/customRequest'
+import { getOrderStockImage } from '@/api/quote'
 import { getAdminRefundImage } from '@/api/refund'
-import { getReviewImage } from '@/api/review'
+import { getAdminReviewReportImage, getReviewImage } from '@/api/review'
 import { getReportImage, getReportedCommentImage } from '@/api/report'
 import { useAuthStore } from '@/stores/auth'
-const props = defineProps<{ imageId: string; scope: 'request' | 'chat' | 'quote' | 'progress' | 'refund' | 'review' | 'report'; label: string; adminApplicationId?: string; adminReportId?: string }>()
+const props = defineProps<{
+  imageId: string
+  scope: 'request' | 'chat' | 'quote' | 'progress' | 'refund' | 'review' | 'report' | 'stock'
+  label: string
+  orderId?: string
+  adminApplicationId?: string
+  adminReportId?: string
+  adminReviewReportId?: string
+}>()
 const auth = useAuthStore()
 const url = ref(''); const error = ref(''); const loading = ref(false)
 let revision = 0; let timer: ReturnType<typeof setTimeout> | undefined
@@ -21,13 +30,22 @@ async function load() {
   finally { if (current === revision) loading.value = false }
 }
 function read() {
+  if (props.adminReviewReportId) return getAdminReviewReportImage(props.adminReviewReportId, props.imageId)
   if (props.adminReportId) return getReportedCommentImage(props.adminReportId, props.imageId)
   if (props.scope === 'report') return getReportImage(props.imageId)
   if (props.scope === 'review') return getReviewImage(props.imageId)
   if (props.adminApplicationId) return getAdminRefundImage(props.adminApplicationId, props.imageId)
+  if (props.scope === 'stock') {
+    if (!props.orderId) throw new Error('缺少现货订单编号')
+    return getOrderStockImage(props.orderId, props.imageId)
+  }
   return getPrivateImage(props.imageId, props.scope)
 }
-watch([() => props.imageId, () => props.scope, () => props.adminApplicationId, () => props.adminReportId, () => auth.session?.userId, () => auth.session?.roles.includes('ADMIN')], () => { url.value = ''; void load() }, { immediate: true })
+watch([
+  () => props.imageId, () => props.scope, () => props.orderId, () => props.adminApplicationId,
+  () => props.adminReportId, () => props.adminReviewReportId, () => auth.session?.userId,
+  () => auth.session?.roles.includes('ADMIN'),
+], () => { url.value = ''; void load() }, { immediate: true })
 onBeforeUnmount(() => { revision++; clearTimeout(timer) })
 </script>
 <template>

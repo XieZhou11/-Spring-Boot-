@@ -1,6 +1,10 @@
 import type { WorkContent, WorkStatus } from '@/types/work'
 
 export const workStatusLabels: Record<WorkStatus, string> = { DRAFT: '草稿', PENDING: '待审核', ONLINE: '已上架', REJECTED: '已驳回', OFFLINE: '已下架' }
+/** 发布、交易设置和恢复直购使用相同的十进制售价校验。 */
+export function validStockPrice(value: string | null) {
+  return !!value && /^(?:[1-9]\d{0,4}|0)(?:\.\d{1,2})?$/.test(value) && Number(value) > 0 && Number(value) <= 99999
+}
 /** 不用浮点数处理金额，补齐小数以供展示。 */
 export function priceLabel(value: string | null) {
   if (!value) return '—'

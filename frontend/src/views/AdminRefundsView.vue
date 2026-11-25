@@ -224,7 +224,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
               <span
                 class="work-status refund-status"
                 :data-status="item.status"
-              >{{ refundStatuses[item.status] || item.status }}</span><h3>{{ item.title }}</h3><p>{{ item.orderNo }} · {{ item.applicationType === 'NORMAL' ? refundReasons[item.reasonCode] : '系统无责退款' }}</p><time>{{ formatTime(item.createdAt) }}</time>
+              >{{ refundStatuses[item.status] || item.status }}</span><h3>{{ item.title }}</h3><p>{{ item.orderNo }} · {{ item.orderType === 'STOCK' ? '现货直购' : '定制订单' }} · {{ item.applicationType === 'NORMAL' ? refundReasons[item.reasonCode] : '系统无责退款' }}</p><time>{{ formatTime(item.createdAt) }}</time>
             </div><div class="refund-queue-action">
               <strong>¥ {{ item.totalAmount }}</strong><RouterLink
                 class="text-link"

@@ -45,6 +45,7 @@ export interface ReviewReportDetailVO {
   buyerId: string
   creatorId: string
   evidence: ReportEvidenceVO[]
+  /** 兼容字段，管理员通过评价举报专用接口查阅会话。 */
   messages: { id: string; conversationId: string; seqNo: string; senderId: string; content: string | null; imageIds: string[]; createdAt: string; referencedNodeCode: string | null }[]
   history: ReviewReportHistoryEntry[]
   targetState: string

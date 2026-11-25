@@ -92,6 +92,6 @@
 
 ## 4. 已知业务差异
 
-截至 2026-11-25，静态核对发现 V1.5 §4.2.1 和 UC-19 要求现货全额退款后，创作者确认成品仍可出售时可手动恢复直购。当前普通退款接口只受理定制订单，现货释放逻辑覆盖未付款取消。T-016 也将现货退款和重新销售留待补齐。第 4、5 批依据接口展示现货的实际操作资格。现货退款和手动恢复销售单独补齐后再验收 UC-19 中的对应路径。 [V1.5 MVP 正文](../requirements/requirements.md) · [T-016 现货建单](../development/tasks/T-016-stock-order.md) · [退款资格源码](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/RefundApplicationServiceImpl.java) · [库存更新源码](../../backend/src/main/java/com/handcraft/platform/modules/mapper/WorkMapper.java)
+2026-11-25，T-028 已联验现货普通售后及手动恢复直购。退款成功后继续显示已售出，作者在作品列表确认原成品仍可售并设置售价后，可供下一位买家建单。 [T-028](../development/tasks/T-028-stock-refund-recovery.md) · [测试记录](../testing/T-028-stock-refund-recovery.md)
 
 V1.5 §4.9.1 要求处置更正记录依据并保留原结论。当前入驻和作品的审核接口对已有结论仅支持幂等重试，审核结论更正由独立业务任务补齐。 [V1.5 §4.9.1](../requirements/requirements.md#491-审核中心) · [入驻审核](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/CreatorApplicationServiceImpl.java) · [作品审核](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/WorkServiceImpl.java)

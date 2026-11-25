@@ -1,6 +1,7 @@
 import request from '@/utils/request'
 import type { ApiResult } from '@/types/api'
-import type { PageVO } from '@/types/creator'
+import type { ImageVO, PageVO } from '@/types/creator'
+import type { ChatMessageVO } from '@/types/customRequest'
 import type { CreatorReviewVO, OrderReviewVO, ReviewReportDetailVO, ReviewReportVO } from '@/types/review'
 import type { ReviewReportDecision } from '@/types/report'
 
@@ -23,6 +24,11 @@ export async function addReviewReportEvidence(id: string, input: { content: stri
 }
 export const getReviewReports = (status = 'PENDING', page = 1) => get<PageVO<ReviewReportVO>>('/admin/review-reports', { status, page })
 export const getReviewReport = (id: string) => get<ReviewReportDetailVO>(`/review-reports/${id}`)
+/** 管理员按当前评价举报查阅原订单会话，不更新已读游标。 */
+export const getAdminReviewReportMessages = (id: string, cursor: { before?: string; after?: string; size?: number } = {}) =>
+  get<{ items: ChatMessageVO[]; hasMore: boolean }>(`/admin/review-reports/${id}/messages`, cursor)
+/** 签发原订单会话实际发送的图片。 */
+export const getAdminReviewReportImage = (id: string, fileId: string) => get<ImageVO>(`/admin/review-reports/${id}/images/${fileId}`)
 export const getReviewImage = (id: string) => get<{ id: string; url: string; expiresAt: string }>(`/review-images/${id}`)
 export async function decideReviewReport(id: string, decision: ReviewReportDecision, reason: string, expectedHistoryId: string) {
   return (await request.put<ApiResult<ReviewReportVO>>(`/admin/review-reports/${id}/decision`, { decision, reason, expectedHistoryId })).data.data

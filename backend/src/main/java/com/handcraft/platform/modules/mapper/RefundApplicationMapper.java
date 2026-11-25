@@ -12,6 +12,21 @@ public interface RefundApplicationMapper {
     @Select("SELECT * FROM refund_application WHERE order_id=#{id} AND status='WAIT_ADMIN' FOR UPDATE") @Options(flushCache=Options.FlushCachePolicy.TRUE) RefundApplication pending(Long id);
     @Select("SELECT * FROM refund_application WHERE order_id=#{id} AND status='WAIT_ADMIN' ORDER BY id LIMIT 1") RefundApplication current(Long id);
     @Select("SELECT * FROM refund_application WHERE order_id=#{id} ORDER BY created_at,id LIMIT #{limit} OFFSET #{offset}") List<RefundApplication> history(@Param("id")Long id,@Param("limit")int limit,@Param("offset")long offset);
+    /** 与后台售后详情使用同一归属和类型口径。两条记录足以区分唯一申请与多条历史。 */
+    @Select("""
+        SELECT id,status FROM refund_application
+        WHERE order_id=#{id} AND buyer_id=#{buyerId}
+          AND (#{orderType}='CUSTOM' OR (#{orderType}='STOCK' AND application_type='NORMAL'))
+        ORDER BY CASE WHEN status='WAIT_ADMIN' THEN 0 ELSE 1 END,created_at,id
+        LIMIT 2
+        """)
+    List<AdminRefundLinkCandidate> adminLinkCandidates(TradeOrder order);
+
+    /** 后台订单定位售后查证页所需的最小投影。 */
+    record AdminRefundLinkCandidate(
+            /** 售后申请编号。 */ Long id,
+            /** 售后申请状态。 */ String status) {}
+
     @Select("SELECT COUNT(*) FROM refund_application WHERE order_id=#{id}") long count(Long id);
     @Insert("INSERT INTO refund_application(order_id,buyer_id,application_type,original_order_status,reason_code,description,image_ids,status,create_request_key,version,created_at,updated_at) VALUES(#{orderId},#{buyerId},#{applicationType},#{originalOrderStatus},#{reasonCode},#{description},#{imageIds},#{status},#{createRequestKey},0,#{createdAt},#{createdAt})") @Options(useGeneratedKeys=true,keyProperty="id") int insert(RefundApplication value);
     @Update("UPDATE refund_application SET status=#{status},finished_at=#{finishedAt},decision_reason=#{decisionReason},handler_id=#{handlerId},updated_at=#{finishedAt} WHERE id=#{id} AND status='WAIT_ADMIN'") int updateTerminal(RefundApplication value);

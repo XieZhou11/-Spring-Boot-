@@ -181,6 +181,9 @@ export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabl
             `--spring.mail.port=${smtpAddress.port}`,
             '--spring.mail.username=browser-test@qq.com',
             '--spring.mail.password=test-only',
+            // 本地接收器的邮件编号和 SMTP 问候使用固定主机名，避免系统反查拖慢注册夹具。
+            '--spring.mail.properties.mail.from=browser-test@localhost',
+            '--spring.mail.properties.mail.smtp.localhost=localhost',
             '--spring.mail.properties.mail.smtp.auth=false',
             '--spring.mail.properties.mail.smtp.ssl.enable=false',
             '--app.auth.verification-secret=browser-test-only-secret-at-least-32-bytes',

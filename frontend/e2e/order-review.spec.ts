@@ -171,6 +171,28 @@ test('混合举报队列分流评价裁定、恢复口碑并通知关联用户',
     await register(page, mailbox.codes, '评价处置买家')
     await register(visitor, mailbox.codes, '评价处置访客')
     const order = await completedStock(page, creator, admin, categoryId)
+    const conversation = `/conversations/${order.conversationId}`
+    const csrf = (await (await page.request.get(`${api}/csrf`)).json()).data
+    const attachment = await page.request.post(`${api}${conversation}/images`, {
+      headers: { [csrf.headerName]: csrf.token },
+      multipart: { file: { name: 'review-conversation.png', mimeType: 'image/png', buffer: image } },
+    })
+    expect(attachment.status()).toBe(201)
+    const fileId = (await attachment.json()).data.id
+    const firstMessage = '买家发送已经收货的原始照片，供核查杯垫状态。'
+    expect((await mutate(page, `${conversation}/messages`, {
+      clientMessageKey: randomUUID(), content: firstMessage, imageIds: [fileId],
+    })).status()).toBe(201)
+    // 按真实发送限制分配双方消息，保证有图片的最早消息在第二页。
+    for (let index = 1; index <= 20; index++) {
+      const sender = index % 2 ? creator : page
+      expect((await mutate(sender, `${conversation}/messages`, {
+        clientMessageKey: randomUUID(), content: `评价查证沟通 ${index}，确认杯垫实际情况。`, imageIds: [],
+      })).status()).toBe(201)
+    }
+    const cursors = async () => Promise.all([page, creator].map(async actor =>
+      (await (await actor.request.get(`${api}${conversation}`)).json()).data.readSeq))
+    const beforeRead = await cursors()
     const content = '杯垫整体符合约定，期待创作者继续推出更多花样。'
     const review = await mutate(page, `/orders/${order.id}/reviews`, { rating: 3, content, imageIds: [] })
     expect(review.status()).toBe(201)
@@ -203,6 +225,16 @@ test('混合举报队列分流评价裁定、恢复口碑并通知关联用户',
     await admin.getByRole('button', { name: /举报评价/ }).filter({ hasText: content }).click()
     await expect(admin).toHaveURL(new RegExp(`/admin/review-reports\\?.*reportId=${reportId}`))
     await expect(admin.getByRole('link', { name: order.orderNo })).toHaveAttribute('href', `/admin/orders?orderId=${order.id}`)
+    await admin.getByText('关联订单会话（只读）', { exact: true }).click()
+    await expect(admin.getByText('评价查证沟通 20，确认杯垫实际情况。', { exact: true })).toBeVisible()
+    await expect(admin.getByText(firstMessage, { exact: true })).toHaveCount(0)
+    await admin.getByRole('button', { name: '读取更早会话', exact: true }).click()
+    await expect(admin.getByText(firstMessage, { exact: true })).toBeVisible()
+    await expect(admin.getByText(firstMessage, { exact: true })).toHaveCount(1)
+    const chatImage = admin.getByRole('img', { name: '会话凭证 1', exact: true })
+    await expect.poll(() => chatImage.evaluate((node: HTMLImageElement) => node.naturalWidth)).toBeGreaterThan(0)
+    expect(await cursors()).toEqual(beforeRead)
+    expect((await visitor.request.get(`${api}/admin/review-reports/${reportId}/messages`)).status()).toBe(403)
     await expect(admin.getByRole('button', { name: '更正并恢复评价' })).toHaveCount(0)
     await admin.getByLabel('处理依据', { exact: true }).fill('核查发现评价与交易记录不符，暂予隐藏。')
     await admin.getByRole('button', { name: '隐藏评价', exact: true }).click()

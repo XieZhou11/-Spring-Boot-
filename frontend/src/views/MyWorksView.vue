@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import CreatorLayout from '@/layouts/CreatorLayout.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import WorkImage from '@/components/WorkImage.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
-import { deleteWork, getManagedWorks, getPublicationQuota, offlineWork, withdrawWork } from '@/api/work'
-import type { PublicationQuotaVO, WorkStatus, WorkVO } from '@/types/work'
-import { priceLabel, workStatusLabels } from '@/utils/work'
+import { deleteWork, getManagedWorks, getPublicationQuota, offlineWork, recoverStockAvailability, withdrawWork } from '@/api/work'
+import type { PublicationQuotaVO, StockRecoveryVO, WorkStatus, WorkVO } from '@/types/work'
+import { useAuthStore } from '@/stores/auth'
+import { ApiError } from '@/utils/request'
+import { priceLabel, validStockPrice, workStatusLabels } from '@/utils/work'
 import { formatTime } from '@/utils/creator'
 import '@/assets/styles/craftflow-publication.css'
+const auth = useAuthStore()
 const rows = ref<WorkVO[]>([])
 const quota = ref<PublicationQuotaVO>()
 const status = ref<WorkStatus | ''>('')
@@ -17,6 +20,10 @@ const total = ref(0)
 const loading = ref(false)
 const busy = ref('')
 const error = ref('')
+const notice = ref('')
+const recoveryDialog = ref<HTMLDialogElement>()
+const recovery = ref<{ work: WorkVO; source: StockRecoveryVO; price: string; confirmed: boolean }>()
+const recoveryError = ref('')
 let revision = 0
 async function load(next = page.value) {
   const current = ++revision; page.value = next; loading.value = true; error.value = ''
@@ -44,11 +51,60 @@ function stockLabel(work: WorkVO) {
   return '已开启'
 }
 
+/** 打开时锁定原售出订单与所见版本，避免刷新列表时变更确认对象。 */
+async function openRecovery(work: WorkVO) {
+  if (!work.stockRecovery || busy.value) return
+  recovery.value = { work, source: work.stockRecovery, price: work.stockPrice ?? '', confirmed: false }
+  recoveryError.value = ''
+  notice.value = ''
+  await nextTick()
+  if (recovery.value) recoveryDialog.value?.showModal()
+}
+
+/** 冲突或未知结果后重读库存，再由当前恢复资格决定能否重试。 */
+async function submitRecovery() {
+  const form = recovery.value
+  const userId = auth.session?.userId
+  if (!form || !form.confirmed || busy.value || !userId) return
+  const price = form.price.trim()
+  if (!validStockPrice(price)) {
+    recoveryError.value = '现货售价为 0.01—99999 元，最多两位小数'
+    return
+  }
+  const current = () => recovery.value === form && userId === auth.session?.userId
+  busy.value = form.work.id
+  recoveryError.value = ''
+  try {
+    await recoverStockAvailability(form.work.id, {
+      version: form.work.version,
+      originalOrderId: form.source.originalOrderId,
+      confirmation: form.source.confirmation,
+      stockPrice: price,
+    })
+    if (!current()) return
+    notice.value = '已恢复直购'
+    recoveryDialog.value?.close()
+    await load()
+  } catch (failure) {
+    if (!current()) return
+    const message = failure instanceof Error ? failure.message : '恢复结果暂未确认'
+    if (failure instanceof ApiError && failure.status === 400 && failure.fieldErrors.stockPrice) {
+      recoveryError.value = failure.fieldErrors.stockPrice
+    } else {
+      recoveryDialog.value?.close()
+      await load()
+      if (userId === auth.session?.userId && !error.value) error.value = message + '，请核对当前库存状态'
+    }
+  } finally {
+    if (userId === auth.session?.userId) busy.value = ''
+  }
+}
+
 /** 列表动作携带所见版本，失败时提供手动核验入口。 */
 async function action(work: WorkVO, type: 'delete' | 'withdraw' | 'offline') {
   if (busy.value) return
   if (!window.confirm(type === 'delete' ? '确定删除这份草稿？' : type === 'withdraw' ? '撤回后可继续修改，确定撤回？' : '下架后将停止公开展示，确定下架？')) return
-  busy.value = work.id; error.value = ''
+  busy.value = work.id; error.value = ''; notice.value = ''
   try {
     if (type === 'delete') await deleteWork(work.id, work.version)
     else if (type === 'withdraw') await withdrawWork(work.id, work.version)
@@ -59,6 +115,18 @@ async function action(work: WorkVO, type: 'delete' | 'withdraw' | 'offline') {
 }
 onMounted(() => { void load(); window.addEventListener('work-updated', refresh) })
 function refresh() { void load() }
+watch(() => auth.session?.userId, userId => {
+  revision++
+  rows.value = []
+  quota.value = undefined
+  notice.value = ''
+  loading.value = false
+  error.value = ''
+  busy.value = ''
+  recovery.value = undefined
+  recoveryDialog.value?.close()
+  if (userId) void load(1)
+})
 onBeforeUnmount(() => { revision++; window.removeEventListener('work-updated', refresh) })
 </script>
 <template>
@@ -118,6 +186,13 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('work-updated', r
         >
           刷新核验
         </button>
+      </p>
+      <p
+        v-if="notice"
+        class="form-success"
+        role="status"
+      >
+        {{ notice }}
       </p>
       <p
         v-if="loading"
@@ -225,6 +300,16 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('work-updated', r
                     查看公开页
                   </RouterLink>
                   <button
+                    v-if="work.stockRecovery"
+                    class="inline-button"
+                    type="button"
+                    aria-haspopup="dialog"
+                    :disabled="Boolean(busy)"
+                    @click="openRecovery(work)"
+                  >
+                    恢复直购
+                  </button>
+                  <button
                     v-if="work.reviewStatus === 'DRAFT'"
                     class="inline-button"
                     type="button"
@@ -263,6 +348,100 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('work-updated', r
         :loading="loading"
         @change="load"
       />
+      <dialog
+        ref="recoveryDialog"
+        class="stock-recovery-dialog"
+        aria-labelledby="stock-recovery-title"
+        @cancel="busy && $event.preventDefault()"
+        @close="recovery = undefined"
+      >
+        <form
+          v-if="recovery"
+          @submit.prevent="submitRecovery"
+        >
+          <header>
+            <h2 id="stock-recovery-title">
+              恢复直购
+            </h2>
+            <p>{{ recovery.work.title }} · 原售出订单 {{ recovery.source.originalOrderNo }}</p>
+          </header>
+          <label class="stock-recovery-price">
+            现货售价（元）
+            <input
+              v-model="recovery.price"
+              inputmode="decimal"
+              autocomplete="off"
+              :disabled="Boolean(busy)"
+            >
+          </label>
+          <label class="stock-recovery-confirmation">
+            <input
+              v-model="recovery.confirmed"
+              type="checkbox"
+              :disabled="Boolean(busy)"
+            >
+            {{ recovery.source.confirmation === 'RETURNED' ? '我确认原成品已退回且仍可销售' : '我确认原成品未发出且仍可销售' }}
+          </label>
+          <p
+            v-if="recoveryError"
+            class="form-alert"
+            role="alert"
+          >
+            {{ recoveryError }}
+          </p>
+          <footer>
+            <button
+              class="button-secondary"
+              type="button"
+              :disabled="Boolean(busy)"
+              @click="recoveryDialog?.close()"
+            >
+              取消
+            </button>
+            <button
+              class="button-primary"
+              type="submit"
+              :disabled="Boolean(busy) || !recovery.confirmed"
+            >
+              {{ busy ? '正在恢复直购…' : '确认恢复直购' }}
+            </button>
+          </footer>
+        </form>
+      </dialog>
     </section>
   </CreatorLayout>
 </template>
+
+<style scoped>
+.stock-recovery-dialog {
+  width: min(480px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  color: var(--craft-ink);
+  background: var(--craft-surface);
+  border: 1px solid var(--craft-border);
+  border-radius: 16px;
+  box-shadow: 0 18px 50px #18181b26;
+  font: 400 13px/1.6 var(--craft-font);
+}
+.stock-recovery-dialog::backdrop { background: #18181b60; }
+.stock-recovery-dialog form { display: grid; gap: 16px; padding: 22px; }
+.stock-recovery-dialog :is(h2, p) { margin: 0; }
+.stock-recovery-dialog h2 { font-size: 17px; font-weight: 650; }
+.stock-recovery-dialog header p { color: var(--craft-muted); overflow-wrap: anywhere; }
+.stock-recovery-price { display: grid; gap: 4px; font-weight: 600; }
+.stock-recovery-price input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  color: var(--craft-ink);
+  background: var(--craft-surface);
+  border: 1px solid var(--craft-border);
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 400;
+}
+.stock-recovery-confirmation { display: flex; align-items: baseline; gap: 8px; }
+.stock-recovery-confirmation input { margin: 0; accent-color: var(--craft-primary); }
+.stock-recovery-dialog footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+</style>

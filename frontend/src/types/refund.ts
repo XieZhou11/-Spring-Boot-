@@ -114,6 +114,8 @@ export interface AdminRefundQueueVO {
   orderNo: string
   /** 订单标题。 */
   title: string
+  /** 原订单的履约类型。 */
+  orderType: 'CUSTOM' | 'STOCK'
   /** 买家编号。 */
   buyerId: string
   /** 创作者编号。 */
@@ -136,6 +138,8 @@ export interface AdminRefundQueueVO {
   totalAmount: string
 }
 export interface AdminRefundOrderVO extends Pick<OrderVO, 'id' | 'orderNo' | 'title' | 'status' | 'buyerId' | 'buyerNickname' | 'creatorId' | 'creatorNickname' | 'requestId' | 'quoteId' | 'totalAmount' | 'addressSnapshot' | 'paidAt' | 'startedAt' | 'shipDeadlineAt' | 'trackingNo' | 'shippedAt' | 'autoConfirmAt' | 'originalCompletedAt' | 'conversationId'> {
+  /** 原订单的履约类型，现货没有需求、报价和制作节点。 */
+  orderType: 'CUSTOM' | 'STOCK'
   /** 不可修改的原订单约定。 */
   agreementSnapshot: AgreementSnapshot
   /** 只读支付摘要。 */

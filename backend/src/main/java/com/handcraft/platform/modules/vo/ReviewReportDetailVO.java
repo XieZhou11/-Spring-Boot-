@@ -12,7 +12,7 @@ public record ReviewReportDetailVO(
         /** 订单两方编号。 */ String buyerId,
         /** 创作者编号。 */ String creatorId,
         /** 历次补充证据和处置异议。 */ List<ReportEvidenceVO> evidence,
-        /** 管理员核查时读取的关联订单沟通记录。 */ List<ChatMessageVO> messages,
+        /** 兼容旧调用方的会话字段，固定为空数组。 */ List<ChatMessageVO> messages,
         /** 举报处理及更正历史。 */ List<ReviewReportHistoryVO> history,
         /** 评价的当前治理状态。 */ String targetState,
         /** 当前管理员可执行的处置或更正。 */ List<String> allowedDecisions,

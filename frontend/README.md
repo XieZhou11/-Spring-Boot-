@@ -10,6 +10,10 @@ Vue 3 + TypeScript + Vite 工程。前台提供作品发现、定制需求、订
 
 [T-014普通售后与管理员退款裁定](../docs/development/tasks/T-014-refund-adjudication.md)在`/orders/:id`提供售后申请、原窗口、申请历史、双方补证和撤回；后台`/admin/refunds`及`/admin/refunds/:id`提供筛选队列、订单证据/只读聊天和退回核验裁定。未知写入结果按账号和对象保留必要原始输入，刷新后精确核验；管理员新补证版本必须重新查阅确认。实际检查及浏览器验证见[测试记录](../docs/testing/T-014-refund-adjudication.md)。
 
+[T-028 现货普通售后与恢复直购](../docs/development/tasks/T-028-stock-refund-recovery.md) 在现货订单页接入普通售后，在后台售后详情展示成交作品、物流及证据。现货全额退款后，作品作者可以在 `/creator/works` 确认商品未寄出或已退回且可售，设置售价并恢复直购。
+
+现货订单和关联售后详情可以查看并放大成交主图与规格图。后台订单页展示会话摘要，并在能明确定位申请时直达售后详情。售后及评价举报页可分页查阅会话，附件使用对应查证入口取得短期签名。 [T-029 现货快照图片与后台查证](../docs/development/tasks/T-029-stock-snapshot-evidence.md)
+
 - Node.js 24.22.2、npm 11.19.1；`.node-version` 标记 Node 版本，`package.json` 限定 Node 24 和 npm 11。
 - Vue 3.5.45、TypeScript 5.9.3、Vite 8.3.7、Vue Router 4.6.4、Pinia 3.0.4、Axios 1.21.1、Element Plus 2.14.8。
 - Router、Pinia 已注册；Axios 已封装直连后端、Session Cookie 与 CSRF。Element Plus 的 Cascader 按需引入组件及样式，使用 `element-china-area-data` 6.1.0 的本地省市区数据。

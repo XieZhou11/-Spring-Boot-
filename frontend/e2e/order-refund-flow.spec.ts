@@ -161,7 +161,17 @@ test.describe('真实订单普通售后', () => {
       const chatImage = await uploadImage(page, `/conversations/${order.conversationId}/images`, 'chat-evidence.png')
       const message = await mutate(page, `/conversations/${order.conversationId}/messages`, { clientMessageKey: randomUUID(), content: '尚未开工，沟通中确认原方案的差异，请管理员只读查证。', imageIds: [chatImage] })
       expect(message.status()).toBe(201)
-      const beforeRead = (await (await creator.request.get(`${api}/conversations/${order.conversationId}`)).json()).data.readSeq
+      // 每位参与方只发送十余条消息，保持真实限流下的两页会话。
+      for (let index = 1; index <= 20; index++) {
+        const sender = index % 2 ? creator : page
+        const response = await mutate(sender, `/conversations/${order.conversationId}/messages`, {
+          clientMessageKey: randomUUID(), content: `售后沟通记录 ${index}，用于核对双方说明。`, imageIds: [],
+        })
+        expect(response.status()).toBe(201)
+      }
+      const cursors = async () => Promise.all([page, creator].map(async actor =>
+        (await (await actor.request.get(`${api}/conversations/${order.conversationId}`)).json()).data.readSeq))
+      const beforeRead = await cursors()
       const unreadBefore = (await (await creator.request.get(`${api}/me/conversations/unread-count`)).json()).data.count
       expect(unreadBefore).toBeGreaterThan(0)
       const temporary = await uploadImage(page, `/orders/${order.id}/refund-images`, 'not-submitted.png')
@@ -172,12 +182,15 @@ test.describe('真实订单普通售后', () => {
       await expect(admin.getByRole('region', { name: '双方补证' }).getByRole('img')).toHaveCount(4)
       await admin.getByText('原订单会话（只读）', { exact: true }).click()
       const chat = admin.locator('.refund-readonly-chat')
-      await expect(chat).toContainText('尚未开工，沟通中确认原方案的差异')
+      await expect(chat).toContainText('售后沟通记录 20')
+      await expect(chat).not.toContainText('尚未开工，沟通中确认原方案的差异')
+      await admin.getByRole('button', { name: '读取更早会话', exact: true }).click()
+      await expect(chat.getByText('尚未开工，沟通中确认原方案的差异，请管理员只读查证。', { exact: true })).toHaveCount(1)
       await expect(chat.getByRole('img', { name: '会话凭证 1', exact: true })).toBeVisible()
       await expect.poll(() => chat.getByRole('img', { name: '会话凭证 1', exact: true }).evaluate((node: HTMLImageElement) => node.naturalWidth)).toBeGreaterThan(0)
       await expect(admin.getByLabel('沟通内容', { exact: true })).toHaveCount(0)
       await expect(admin.getByRole('button', { name: '发送消息', exact: true })).toHaveCount(0)
-      expect((await (await creator.request.get(`${api}/conversations/${order.conversationId}`)).json()).data.readSeq).toBe(beforeRead)
+      expect(await cursors()).toEqual(beforeRead)
       expect((await (await creator.request.get(`${api}/me/conversations/unread-count`)).json()).data.count).toBe(unreadBefore)
       const signed = await admin.request.get(`${api}/admin/refund-applications/${current.id}/images/${chatImage}`)
       expect(signed.status()).toBe(200)

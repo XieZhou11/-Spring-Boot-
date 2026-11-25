@@ -14,6 +14,10 @@ public interface OrderReviewService {
     /** 查看本人举报记录。 */ PageVO<ReviewReportVO> myReports(Long userId,int page,int size);
     /** 查询本人举报或本人交易评价关联的举报记录。 */ java.util.List<ReviewReportVO> reviewReports(Long userId,Long reviewId);
     /** 管理员查询评价举报队列。 */ PageVO<ReviewReportVO> adminReports(Long adminId,String status,int page,int size);
+    /** 管理员按会话序号只读查证评价举报关联订单的沟通记录。 */
+    ChatMessagePageVO adminReportMessages(Long adminId,Long reportId,Long before,Long after,int size);
+    /** 管理员读取该评价举报所关联会话中实际引用的图片。 */
+    ImageVO adminReportImage(Long adminId,Long reportId,Long fileId);
     /** 管理员查阅并处理评价举报。 */ ReviewReportVO decide(Long adminId,Long reportId,AdminReviewReportDecisionDTO input);
     /** 评价图片能否公开读取或由本人读取。 */ ImageVO image(Long userId,Long fileId);
 }

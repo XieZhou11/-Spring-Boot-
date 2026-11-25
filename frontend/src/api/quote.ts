@@ -15,6 +15,8 @@ export const withdrawQuote = async (id: string) => (await request.put<ApiResult<
 export const awardQuote = async (id: string, data: AwardDTO) => (await request.put<ApiResult<OrderVO>>(`/custom-requests/${id}/award`, data)).data.data
 export const getOrders = (params: object) => get<PageVO<OrderVO>>('/me/orders', params)
 export const getOrder = (id: string) => get<OrderVO>(`/orders/${id}`)
+/** 按订单双方的权限签发成交时的现货图片。 */
+export const getOrderStockImage = (orderId: string, fileId: string) => get<ImageVO>(`/orders/${orderId}/stock-images/${fileId}`)
 export const cancelOrder = async (id: string) => (await request.put<ApiResult<OrderVO>>(`/orders/${id}/cancellation`)).data.data
 /** 创作者申请公开本次定制成品；服务端按订单状态和身份核验。 */
 export const requestPublicationConsent = async (id: string) => (await request.post<ApiResult<OrderVO>>(`/orders/${id}/publication-consent`)).data.data

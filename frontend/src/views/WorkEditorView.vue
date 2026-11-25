@@ -7,7 +7,7 @@ import WorkHistory from '@/components/WorkHistory.vue'
 import WorkMaterials from '@/components/WorkMaterials.vue'
 import { getCategories } from '@/api/creator'
 import { createWork, getApprovedPublicationOrders, getManagedWork, getPublicationQuota, saveWork, submitWork, updateTrading, withdrawWork } from '@/api/work'
-import { emptyWork, workContent, workStatusLabels } from '@/utils/work'
+import { emptyWork, validStockPrice, workContent, workStatusLabels } from '@/utils/work'
 import type { CategoryVO } from '@/types/creator'
 import type { PublicationOrderOptionVO, PublicationQuotaVO, WorkVO } from '@/types/work'
 import { ApiError } from '@/utils/request'
@@ -101,7 +101,7 @@ function validate() {
   if (!form.specification.trim()) errors.specification = '请填写尺寸规格'
   if (form.description.trim().length < 20 || form.description.length > 2000) errors.description = '作品描述需为 20—2000 字'
   if (form.processDescription.length > 1000) errors.processDescription = '制作过程不超过 1000 字'
-  if (form.saleEnabled && (!form.stockPrice || !/^(?:[1-9]\d{0,4}|0)(?:\.\d{1,2})?$/.test(form.stockPrice) || /^0(?:\.0{1,2})?$/.test(form.stockPrice) || Number(form.stockPrice) > 99999)) errors.stockPrice = '现货售价为 0.01—99999 元，最多两位小数'
+  if (form.saleEnabled && !validStockPrice(form.stockPrice)) errors.stockPrice = '现货售价为 0.01—99999 元，最多两位小数'
   if (form.customEnabled && (!Number.isInteger(form.customReferenceDays) || form.customReferenceDays! < 3 || form.customReferenceDays! > 180)) errors.customReferenceDays = '参考周期为 3—180 个自然日'
   fieldErrors.value = errors
   if (Object.keys(errors).length) {

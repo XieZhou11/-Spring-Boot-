@@ -27,6 +27,12 @@ public class WorkController {
     @PutMapping("/api/me/works/{id}/submission") public Result<WorkVO> submit(@AuthenticationPrincipal AccountPrincipal p,@PathVariable Long id,@Valid @RequestBody WorkSaveDTO input){return Result.ok(works.submit(p.userId(),id,input));}
     @PutMapping("/api/me/works/{id}/withdrawal") public Result<WorkVO> withdraw(@AuthenticationPrincipal AccountPrincipal p,@PathVariable Long id,@Valid @RequestBody WorkVersionDTO input){return Result.ok(works.withdraw(p.userId(),id,input));}
     @PatchMapping("/api/me/works/{id}/trading-settings") public Result<WorkVO> trading(@AuthenticationPrincipal AccountPrincipal p,@PathVariable Long id,@Valid @RequestBody WorkTradingDTO input){return Result.ok(works.trading(p.userId(),id,input));}
+    /** 作者依据已全额退款的原现货订单手动恢复直购。 */
+    @PutMapping("/api/me/works/{id}/stock-availability")
+    public Result<WorkVO> restoreStock(@AuthenticationPrincipal AccountPrincipal p,@PathVariable @Positive Long id,
+                                       @Valid @RequestBody StockAvailabilityDTO input){
+        return Result.ok(works.restoreStock(p.userId(),id,input));
+    }
     @PutMapping("/api/me/works/{id}/publication") public Result<WorkVO> offline(@AuthenticationPrincipal AccountPrincipal p,@PathVariable Long id,@Valid @RequestBody WorkVersionDTO input){return Result.ok(works.offline(p.userId(),id,input,null,false));}
     @GetMapping("/api/me/work-publication-quota") public Result<WorkPublicationQuotaVO> quota(@AuthenticationPrincipal AccountPrincipal p){return Result.ok(works.quota(p.userId()));}
     @GetMapping("/api/me/approved-publication-orders") public Result<java.util.List<PublicationOrderOptionVO>> approvedPublicationOrders(@AuthenticationPrincipal AccountPrincipal p){return Result.ok(works.approvedPublicationOrders(p.userId()));}

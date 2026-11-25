@@ -144,7 +144,7 @@ export interface AdminOrderFundFlowVO {
   occurredAt: string
 }
 
-/** 订单关联会话消息摘要，与后端 ChatMessageVO 对应。 */
+/** 后台订单详情内原有消息的兼容类型。 */
 export interface AdminOrderChatMessageVO {
   id: string
   senderId: string
@@ -153,12 +153,29 @@ export interface AdminOrderChatMessageVO {
   createdAt: string
 }
 
+/** 订单关联会话的活动摘要。 */
+export interface AdminOrderConversationSummaryVO {
+  /** 会话编号。 */
+  conversationId: string
+  /** 最近一条消息的序号，无消息时为 "0"。 */
+  lastMessageSeq: string
+  /** 最近一条消息时间，无消息时为空。 */
+  lastMessageAt: string | null
+  /** 归档时间，未归档时为空。 */
+  archivedAt: string | null
+}
+
 /** 管理员只读订单详情。 */
 export interface AdminOrderDetailVO {
   order: AdminRefundOrderVO
   fundFlows: AdminOrderFundFlowVO[]
+  /** 兼容字段，服务端返回空数组。 */
   messages: AdminOrderChatMessageVO[]
   orderType: 'CUSTOM' | 'STOCK'
+  /** 关联会话摘要，无会话时为空。 */
+  conversationSummary: AdminOrderConversationSummaryVO | null
+  /** 可直接定位的本单售后申请编号。 */
+  refundApplicationId: string | null
 }
 
 /** 账号两种暂停标记分别返回，操作其中一个不改变另一个。 */

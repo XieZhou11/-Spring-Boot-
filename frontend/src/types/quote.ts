@@ -120,6 +120,10 @@ export interface AgreementSnapshot {
   additionalAgreement: string | null
   /** 中标方案图片。 */
   imageIds: string[]
+  /** 现货成交时的作品主图，早期订单可能缺省。 */
+  mainImageIds?: string[]
+  /** 现货成交时的规格图，早期订单可能缺省。 */
+  specificationImageIds?: string[]
   /** 需求期望发货日期。 */
   expectedShipDate: string
   /** 定标确认的测算发货日期。 */

@@ -63,6 +63,12 @@ const refundLink = computed(() => ({
   name: 'admin-refunds',
   query: { status: 'ALL', applicationType: 'ALL', orderNo: detail.value?.order.orderNo },
 }))
+const refundDetailLink = computed(() => {
+  const applicationId = detail.value?.refundApplicationId
+  if (!applicationId) return undefined
+  // 从查证页返回时保留本单的售后队列筛选。
+  return { ...refundLink.value, name: 'admin-refund-detail', params: { id: applicationId } }
+})
 
 function listQuery(next = page.value, source = filters.value) {
   return {
@@ -420,27 +426,32 @@ watch([() => route.query, adminId], () => {
           </ul>
         </section>
         <section class="order-panel">
-          <header><h3>会话记录</h3><span v-if="detail.order.conversationId">最近 50 条 · 只读</span></header>
+          <header>
+            <h3>会话摘要</h3>
+            <RouterLink
+              v-if="refundDetailLink"
+              class="text-link"
+              :to="refundDetailLink"
+            >前往售后查证</RouterLink>
+          </header>
           <p
-            v-if="!detail.messages.length"
+            v-if="!detail.conversationSummary"
             class="order-muted"
           >
-            暂无关联会话消息
+            暂无关联会话
           </p>
-          <ol
+          <dl
             v-else
-            class="order-records"
+            class="order-facts"
           >
-            <li
-              v-for="message in detail.messages"
-              :key="message.id"
-            >
-              <div><strong>{{ message.senderId === detail.order.buyerId ? detail.order.buyerNickname : detail.order.creatorNickname }}</strong><small>{{ formatTime(message.createdAt) }}</small></div>
-              <p v-if="message.content">
-                {{ message.content }}
-              </p><small v-if="message.imageIds.length">附件图片 {{ message.imageIds.length }} 张</small>
-            </li>
-          </ol>
+            <div><dt>会话编号</dt><dd>{{ detail.conversationSummary.conversationId }}</dd></div>
+            <div>
+              <dt>最近消息</dt><dd>{{ detail.conversationSummary.lastMessageSeq === '0' ? '暂无消息' : formatTime(detail.conversationSummary.lastMessageAt) }}</dd>
+            </div>
+            <div>
+              <dt>归档状态</dt><dd>{{ detail.conversationSummary.archivedAt ? `已归档 · ${formatTime(detail.conversationSummary.archivedAt)}` : '未归档' }}</dd>
+            </div>
+          </dl>
         </section>
         <section
           v-if="detail.orderType === 'CUSTOM'"

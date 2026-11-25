@@ -6,6 +6,10 @@
 
 [T-014普通售后与管理员裁定](../docs/development/tasks/T-014-refund-adjudication.md)新增用户申请/补证/撤回和独立管理员查证接口，完整参数与状态约定见任务。普通批准和未开工无责退款共用MANDATORY退款执行层，原支付全额退回与取消待结算同事务；不执行结算。V7仅新增申请/补证请求键与补证版本，旧记录不回填；开发库未主动迁移，下次启动新版后端时Flyway追加尚未执行版本。实际验证见[测试记录](../docs/testing/T-014-refund-adjudication.md)。
 
+[T-028 现货普通售后与恢复直购](../docs/development/tasks/T-028-stock-refund-recovery.md) 将普通售后接口扩展到现货。作品作者通过 `PUT /api/me/works/{id}/stock-availability` 提交作品版本、原售出订单编号、实物可售确认和售价。成功返回作品最新状态，作品版本或库存关联变化时返回 `409`。恢复资格仅随作者列表和详情返回。
+
+现货订单双方可通过订单图片接口获取成交主图与规格图的短期签名。订单快照引用纳入作品图片回收校验。后台综合订单返回会话摘要，管理员在关联售后或评价举报内分页查阅正文和附件。 [T-029 现货快照图片与后台查证](../docs/development/tasks/T-029-stock-snapshot-evidence.md)
+
 - JDK 21；Maven Wrapper 固定 Maven 3.9.15，首次使用需联网下载。
 - Spring Boot 4.1.2，统一管理 Spring、Security、Jackson、数据库驱动及测试依赖。
 - MyBatis-Plus 3.5.18（Boot 4 starter 与分页 SQL 解析模块）、springdoc 3.2.0、阿里云 OSS SDK 3.18.5。

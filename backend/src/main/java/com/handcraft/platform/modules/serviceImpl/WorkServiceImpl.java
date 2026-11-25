@@ -8,9 +8,11 @@ import com.handcraft.platform.modules.mapper.*;
 import com.handcraft.platform.modules.service.*;
 import com.handcraft.platform.modules.vo.*;
 import java.time.*;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.slf4j.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.*;
@@ -28,7 +30,8 @@ public class WorkServiceImpl implements WorkService {
     private final WorkImageService images; private final AvatarService avatars; private final ObjectMapper json; private final Clock clock;
     private final CreatorReputationService reputations;
     private final TradeOrderMapper tradeOrders;
-    public WorkServiceImpl(WorkMapper works,UserAccountMapper users,CategoryMapper categories,FileAssetMapper files,CreatorApplicationMapper applications,OperationLogService logs,NotificationService notifications,WorkImageService images,AvatarService avatars,ObjectMapper json,Clock clock,CreatorReputationService reputations,TradeOrderMapper tradeOrders){this.works=works;this.users=users;this.categories=categories;this.files=files;this.applications=applications;this.logs=logs;this.notifications=notifications;this.images=images;this.avatars=avatars;this.json=json;this.clock=clock;this.reputations=reputations;this.tradeOrders=tradeOrders;}
+    private final CustomRequestPolicyService policy;
+    public WorkServiceImpl(WorkMapper works,UserAccountMapper users,CategoryMapper categories,FileAssetMapper files,CreatorApplicationMapper applications,OperationLogService logs,NotificationService notifications,WorkImageService images,AvatarService avatars,ObjectMapper json,Clock clock,CreatorReputationService reputations,TradeOrderMapper tradeOrders,CustomRequestPolicyService policy){this.works=works;this.users=users;this.categories=categories;this.files=files;this.applications=applications;this.logs=logs;this.notifications=notifications;this.images=images;this.avatars=avatars;this.json=json;this.clock=clock;this.reputations=reputations;this.tradeOrders=tradeOrders;this.policy=policy;}
     private <T>T run(String name,Long user,Supplier<T> action){return BusinessLog.run(LOGGER,name,user,action);}
 
     @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
@@ -76,6 +79,55 @@ public class WorkServiceImpl implements WorkService {
         w.setSaleEnabled(input.getSaleEnabled());w.setCustomEnabled(input.getCustomEnabled());w.setStockPrice(input.getStockPrice());w.setCustomReferenceDays(input.getCustomReferenceDays());tradingValues(w,true,!Boolean.TRUE.equals(before.get("saleEnabled"))&&w.isSaleEnabled());
         if(before.equals(snapshot(w)))return view(w,false);update(w);record(userId,false,w,"TRADING_SETTINGS","ONLINE",changes(before,w),null);return view(works.find(id),false);
     });}
+    @Override
+    @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
+    public WorkVO restoreStock(Long userId,Long id,StockAvailabilityDTO input){
+        return run("恢复现货直购",userId,()->{
+            Long originalOrderId=number(input.getOriginalOrderId());
+            LOGGER.info("恢复现货直购核验：userId={}, workId={}, originalOrderId={}",userId,id,originalOrderId);
+            Work initial=available(works.find(id));
+            if(!userId.equals(initial.getCreatorId()))throw missing();
+            version(initial,input.getVersion());
+            if(!stockRecoveryCandidate(initial)||!originalOrderId.equals(initial.getStockOrderId())){
+                throw conflict("作品已售出关联变化或不支持恢复直购，请刷新后重试");
+            }
+            TradeOrder initialOrder=tradeOrders.find(originalOrderId);
+            if(!stockOrderMatches(initial,initialOrder))throw conflict("作品与原售出订单关联不一致");
+
+            // 与现货建单、付款同序，原买家和创作者的账号锁也与退款裁定串行化。
+            policy.lockCategory(initial.getCategoryId());
+            policy.lockUsers(userId,initialOrder.getBuyerId());
+            Work work=own(userId,id);
+            version(work,input.getVersion());
+            if(!stockRecoveryCandidate(work)||!originalOrderId.equals(work.getStockOrderId())
+                    ||!Objects.equals(initial.getCategoryId(),work.getCategoryId())){
+                throw conflict("作品或原售出关联已变化，请刷新后重试");
+            }
+            String creatorReason=policy.creatorReason(users.findById(userId),work.getCategoryId());
+            if(creatorReason!=null)throw forbidden(creatorReason);
+            TradeOrder originalOrder=tradeOrders.lock(originalOrderId);
+            if(!stockOrderMatches(work,originalOrder)||!Objects.equals(initialOrder.getBuyerId(),originalOrder.getBuyerId())
+                    ||works.stockRecoveryOrders(List.of(id)).isEmpty()){
+                throw conflict("原售出订单须完成全额退款并取消待结算，才能恢复直购");
+            }
+            String confirmation=stockConfirmation(originalOrder);
+            if(!confirmation.equals(input.getConfirmation()))throw conflict("可售确认须与原订单发货记录一致");
+
+            var price=input.getStockPrice().setScale(2);
+            var currentTime=now().truncatedTo(ChronoUnit.MILLIS);
+            if(works.restoreStock(id,userId,work.getVersion(),originalOrderId,price,currentTime)!=1){
+                throw conflict("作品或原售出关联已变化，请刷新后重试");
+            }
+            String reason="NOT_SHIPPED".equals(confirmation)?"作者确认原成品未发出且仍可售":"作者确认原成品已经退回且仍可售";
+            logs.record(userId,false,"WORK",id,"STOCK_RESTORE","ONLINE","ONLINE",reason,Map.of(
+                    "originalOrderId",originalOrderId.toString(),"confirmation",confirmation,
+                    "stockStatusBefore","SOLD_OUT","stockStatusAfter","AVAILABLE","stockPrice",price.toPlainString(),
+                    "occurredAt",currentTime.toString()));
+            LOGGER.info("恢复现货直购状态已准备：userId={}, workId={}, originalOrderId={}, stockStatus=AVAILABLE",userId,id,originalOrderId);
+            return view(works.find(id),false);
+        });
+    }
+
     @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
     public WorkVO offline(Long userId,Long id,WorkVersionDTO input,String reason,boolean admin){
         return offline(userId,id,input,reason,admin,null);
@@ -136,19 +188,21 @@ public class WorkServiceImpl implements WorkService {
         record(userId,true,w,"REVIEW","PENDING",Map.of("snapshot",snapshot(w),"submittedVersion",submitted,"decision",input.getDecision(),"reason",reason),reason);
         notifications.workChanged(w.getCreatorId(),id,Long.valueOf(submitted),"WORK_REVIEWED",input.getDecision(),reason);return view(works.find(id),false);
     });}
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
     public WorkVO detail(Long userId,Long id,String mode){return run("作品详情查询",userId,()->{
-        requireUser(userId);
+        UserAccount actor=requireUser(userId);
         if("ADMIN".equals(mode)){
             requireAdmin(userId);
             return adminView(available(works.adminWork(id)));
         }
         Work work=available(works.find(id));
         if(("OWN".equals(mode)&&!userId.equals(work.getCreatorId()))||("PUBLIC".equals(mode)&&!"ONLINE".equals(work.getReviewStatus())))throw missing();
-        return view(work,"PUBLIC".equals(mode));
+        TradeOrder recovery="OWN".equals(mode)?stockRecoveryOrders(List.of(work),actor).get(work.getId()):null;
+        return view(work,"PUBLIC".equals(mode),recovery);
     });}
     @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
     public PageVO<WorkVO> list(Long userId,String mode,WorkQueryDTO q){return run("作品列表查询",userId,()->{
-        requireUser(userId);
+        UserAccount actor=requireUser(userId);
         if("ADMIN".equals(mode))requireAdmin(userId);
         if(q.getMinPrice()!=null&&q.getMaxPrice()!=null&&q.getMinPrice().compareTo(q.getMaxPrice())>0)throw invalid("最低价格不能高于最高价格");
         if("ADMIN".equals(mode)){
@@ -157,7 +211,11 @@ public class WorkServiceImpl implements WorkService {
                     works.adminCount(q),q.getPage(),q.getSize());
         }
         if("OWN".equals(mode)&&q.getStatus()==null)q.setStatus("ALL");
-        int size="PUBLIC".equals(mode)?20:q.getSize();return new PageVO<>(works.list(userId,mode,q,(q.getPage()-1)*size,size).stream().map(w->view(w,"PUBLIC".equals(mode))).toList(),works.count(userId,mode,q),q.getPage(),size);
+        int size="PUBLIC".equals(mode)?20:q.getSize();
+        List<Work> items=works.list(userId,mode,q,(q.getPage()-1)*size,size);
+        Map<Long,TradeOrder> recoveries="OWN".equals(mode)?stockRecoveryOrders(items,actor):Map.of();
+        return new PageVO<>(items.stream().map(w->view(w,"PUBLIC".equals(mode),recoveries.get(w.getId()))).toList(),
+                works.count(userId,mode,q),q.getPage(),size);
     });}
     @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
     public PageVO<WorkHistoryVO> history(Long userId,Long id,boolean admin,int page,int size){return run("作品历史查询",userId,()->{
@@ -212,9 +270,39 @@ public class WorkServiceImpl implements WorkService {
         work.setUpdatedAt(work.getAdminUpdatedAt());
         return view(work,false);
     }
-    private WorkVO view(Work w,boolean publicView){var u=users.findById(w.getCreatorId());var avatar=avatars.view(w.getCreatorId(),u.getAvatarFileId());List<String> main=ids(w.getMainImageIds());List<String> spec=ids(w.getSpecificationImageIds());var category=w.getCategoryId()==null?null:categories.find(w.getCategoryId());var path=new ArrayList<String>();if(category!=null){if(category.getParentId()!=null){var parent=categories.find(category.getParentId());if(parent!=null)path.add(parent.getName());}path.add(category.getName());}
+    /** 本人列表一次查询可恢复的订单，公开及后台作品视图不读取此摘要。 */
+    private Map<Long,TradeOrder> stockRecoveryOrders(List<Work> worksOnPage,UserAccount owner){
+        if(eligibilityReason(owner)!=null)return Map.of();
+        var candidates=worksOnPage.stream().filter(this::stockRecoveryCandidate).toList();
+        if(candidates.isEmpty())return Map.of();
+        Set<Long> parentIds=categories.all().stream().map(Category::getParentId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        var workIds=candidates.stream().filter(work->!parentIds.contains(work.getCategoryId()))
+                .filter(work->policy.creatorReason(owner,work.getCategoryId())==null).map(Work::getId).toList();
+        if(workIds.isEmpty())return Map.of();
+        return works.stockRecoveryOrders(workIds).stream().collect(Collectors.toMap(TradeOrder::getWorkId,order->order));
+    }
+
+    private boolean stockRecoveryCandidate(Work work){
+        return "ONLINE".equals(work.getReviewStatus())&&"SOLD_OUT".equals(work.getStockStatus())
+                &&work.getSourceOrderId()==null&&work.getStockOrderId()!=null&&work.getCategoryId()!=null;
+    }
+
+    private boolean stockOrderMatches(Work work,TradeOrder order){
+        return order!=null&&"STOCK".equals(order.getOrderType())&&work.getId().equals(order.getWorkId())
+                &&work.getCreatorId().equals(order.getCreatorId());
+    }
+
+    private String stockConfirmation(TradeOrder order){
+        return order.getShippedAt()==null?"NOT_SHIPPED":"RETURNED";
+    }
+
+    private WorkVO view(Work work,boolean publicView){return view(work,publicView,null);}
+    private WorkVO view(Work w,boolean publicView,TradeOrder recoveryOrder){var u=users.findById(w.getCreatorId());var avatar=avatars.view(w.getCreatorId(),u.getAvatarFileId());List<String> main=ids(w.getMainImageIds());List<String> spec=ids(w.getSpecificationImageIds());var category=w.getCategoryId()==null?null:categories.find(w.getCategoryId());var path=new ArrayList<String>();if(category!=null){if(category.getParentId()!=null){var parent=categories.find(category.getParentId());if(parent!=null)path.add(parent.getName());}path.add(category.getName());}
         boolean eligible=eligibilityReason(u)==null&&"ONLINE".equals(w.getReviewStatus());ImageVO cover=main.isEmpty()?null:images.view(w.getCreatorId(),Long.valueOf(main.getFirst()));
-        return new WorkVO(w.getId().toString(),w.getCreatorId().toString(),u.getNickname(),avatar==null?null:avatar.url(),avatar==null?null:avatar.expiresAt(),text(w.getCategoryId()),path,w.getTitle(),main,spec,w.getMaterial(),w.getSpecification(),w.getDescription(),w.getProcessDescription(),w.isSaleEnabled(),w.isCustomEnabled(),w.getStockPrice()==null?null:w.getStockPrice().setScale(2).toPlainString(),w.getCustomReferenceDays(),w.getReviewStatus(),w.getStockStatus(),w.getVersion().toString(),time(w.getFirstSubmittedAt()),time(w.getSubmittedAt()),time(w.getOnlineAt()),time(w.getCreatedAt()),time(w.getUpdatedAt()),publicView?null:works.reviewReason(w.getId()),eligible&&w.isSaleEnabled()&&"AVAILABLE".equals(w.getStockStatus())&&w.getSourceOrderId()==null,eligible&&w.isCustomEnabled(),cover,text(w.getSourceOrderId()));
+        StockRecoveryVO recovery=recoveryOrder==null?null:new StockRecoveryVO(text(recoveryOrder.getId()),
+                recoveryOrder.getOrderNo(),stockConfirmation(recoveryOrder));
+        return new WorkVO(w.getId().toString(),w.getCreatorId().toString(),u.getNickname(),avatar==null?null:avatar.url(),avatar==null?null:avatar.expiresAt(),text(w.getCategoryId()),path,w.getTitle(),main,spec,w.getMaterial(),w.getSpecification(),w.getDescription(),w.getProcessDescription(),w.isSaleEnabled(),w.isCustomEnabled(),w.getStockPrice()==null?null:w.getStockPrice().setScale(2).toPlainString(),w.getCustomReferenceDays(),w.getReviewStatus(),w.getStockStatus(),w.getVersion().toString(),time(w.getFirstSubmittedAt()),time(w.getSubmittedAt()),time(w.getOnlineAt()),time(w.getCreatedAt()),time(w.getUpdatedAt()),publicView?null:works.reviewReason(w.getId()),eligible&&w.isSaleEnabled()&&"AVAILABLE".equals(w.getStockStatus())&&w.getSourceOrderId()==null,eligible&&w.isCustomEnabled(),cover,text(w.getSourceOrderId()),recovery);
     }
     private void copy(Work w,WorkFieldsDTO in){w.setCategoryId(in.getCategoryId()==null?null:number(in.getCategoryId()));w.setTitle(trim(in.getTitle()));w.setMainImageIds(json.writeValueAsString(in.getMainImageIds()));w.setSpecificationImageIds(json.writeValueAsString(in.getSpecificationImageIds()));w.setMaterial(trim(in.getMaterial()));w.setSpecification(trim(in.getSpecification()));w.setDescription(trim(in.getDescription()));w.setProcessDescription(trim(in.getProcessDescription()));w.setSaleEnabled(Boolean.TRUE.equals(in.getSaleEnabled()));w.setCustomEnabled(Boolean.TRUE.equals(in.getCustomEnabled()));w.setStockPrice(in.getStockPrice());w.setCustomReferenceDays(in.getCustomReferenceDays());w.setSourceOrderId(in.getSourceOrderId()==null?null:number(in.getSourceOrderId()));}
     /** 案例来源只能在创建作品时选择一次，之后不可清除或换绑；授权依据始终从锁定订单读取。 */

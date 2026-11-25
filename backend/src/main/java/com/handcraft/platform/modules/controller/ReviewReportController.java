@@ -20,6 +20,16 @@ public class ReviewReportController {
     @PostMapping("/api/review-reports/{id}/evidence") public Result<ReviewReportDetailVO> evidence(@AuthenticationPrincipal AccountPrincipal p,@PathVariable Long id,@Valid @RequestBody ReviewReportEvidenceDTO input){return Result.ok(reviews.addEvidence(p.userId(),id,input));}
     @GetMapping("/api/me/review-reports") public Result<PageVO<ReviewReportVO>> mine(@AuthenticationPrincipal AccountPrincipal p,@RequestParam(defaultValue="1")int page,@RequestParam(defaultValue="20")int size){return Result.ok(reviews.myReports(p.userId(),page,size));}
     @GetMapping("/api/admin/review-reports") public Result<PageVO<ReviewReportVO>> admin(@AuthenticationPrincipal AccountPrincipal p,@RequestParam(defaultValue="PENDING")String status,@RequestParam(defaultValue="1")int page,@RequestParam(defaultValue="20")int size){return Result.ok(reviews.adminReports(p.userId(),status,page,size));}
+    @GetMapping("/api/admin/review-reports/{id}/messages")
+    public Result<ChatMessagePageVO> adminMessages(@AuthenticationPrincipal AccountPrincipal principal,@PathVariable Long id,
+            @RequestParam(required=false) Long before,@RequestParam(required=false) Long after,
+            @RequestParam(defaultValue="20") int size){
+        return Result.ok(reviews.adminReportMessages(principal.userId(),id,before,after,size));
+    }
+    @GetMapping("/api/admin/review-reports/{id}/images/{fileId}")
+    public Result<ImageVO> adminImage(@AuthenticationPrincipal AccountPrincipal principal,@PathVariable Long id,@PathVariable Long fileId){
+        return Result.ok(reviews.adminReportImage(principal.userId(),id,fileId));
+    }
     @PutMapping("/api/admin/review-reports/{id}/decision") public Result<ReviewReportVO> decision(@AuthenticationPrincipal AccountPrincipal p,@PathVariable Long id,@Valid @RequestBody AdminReviewReportDecisionDTO input){return Result.ok(reviews.decide(p.userId(),id,input));}
     @GetMapping("/api/review-images/{id}") public Result<ImageVO> image(@AuthenticationPrincipal AccountPrincipal p,@PathVariable Long id){return Result.ok(reviews.image(p.userId(),id));}
 }

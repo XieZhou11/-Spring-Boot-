@@ -1,4 +1,5 @@
 package com.handcraft.platform.modules.vo;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.OffsetDateTime;
 import java.util.List;
 /** 作品当前展示及管理视图；不含私密入驻资料。 */
@@ -64,4 +65,7 @@ public record WorkVO(
     /** 封面签名，无图为空。 */
     ImageVO coverImage,
     /** 授权成品案例来源定制订单，普通作品为空。 */
-    String sourceOrderId) {}
+    String sourceOrderId,
+    /** 仅本人可见且具备恢复条件时返回的原订单摘要。 */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    StockRecoveryVO stockRecovery) {}

@@ -68,7 +68,7 @@ public class WorkImageServiceImpl implements WorkImageService {
                 &&(!user.isAdmin()||works.countAdminImageReferences(file.getUploaderId(),fileId)==0))throw new BusinessException(CommonErrorCode.NOT_FOUND);
         return signed(file);
     });}
-    /** 清理失败资源和超过24小时的无引用临时图；被历史作品引用的图永远跳过。 */
+    /** 清理失败资源和超过24小时的无引用临时图，保留作品历史和现货订单快照引用。 */
     @Scheduled(fixedDelay=60000,initialDelay=60000)
     public void retryFailedUploads(){if(!properties.configured()||clients.getIfAvailable()==null)return;
         try{for(var file:files.findInterruptedWorks())if(!active.contains(file.getId()))cleanup(file,true);}

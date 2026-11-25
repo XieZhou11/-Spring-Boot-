@@ -20,22 +20,36 @@ public class OrderRefundExecutionServiceImpl implements OrderRefundExecutionServ
     @Transactional(propagation=Propagation.MANDATORY)
     public Context lockContext(TradeOrder order){
         var settlement=fulfillment.lockSettlement(order.getId());var payment=payments.payment(order.getId());validate(order,settlement,payment);
-        var nodes=fulfillment.lockNodes(order.getId());if(nodes.size()!=5)throw conflict("订单制作计划不完整");
-        var initial=chats.byRequest(order.getRequestId(),order.getCreatorId());if(initial==null)throw conflict("订单关联会话不存在");var chat=chats.lock(initial.getId());
-        if(!Objects.equals(chat.getOrderId(),order.getId())||!Objects.equals(chat.getBuyerId(),order.getBuyerId())||!Objects.equals(chat.getCreatorId(),order.getCreatorId()))throw conflict("订单会话关联不一致");return new Context(settlement,nodes,chat,payment);
+        boolean custom="CUSTOM".equals(order.getOrderType());
+        // 现货没有制作计划，仍沿用原订单会话核对双方关联。
+        var nodes=custom?fulfillment.lockNodes(order.getId()):List.<OrderProgressNode>of();
+        if(custom&&nodes.size()!=5)throw conflict("订单制作计划不完整");
+        var chat=chats.lockLinkedOrder(order);
+        if(chat==null)throw conflict("订单关联会话不存在或关联不一致");
+        return new Context(settlement,nodes,chat,payment);
     }
     @Transactional(propagation=Propagation.MANDATORY,rollbackFor=Exception.class)
     public void execute(Long actor,boolean admin,CustomRequest request,TradeOrder order,RefundApplication refund,Context context,LocalDateTime now,String action,Map<String,Object> audit){BusinessLog.run(LOGGER,"订单原子退款执行",actor,()->{
-        if(request==null||refund==null||context==null||!Objects.equals(order.getRequestId(),request.getId())||!Objects.equals(refund.getOrderId(),order.getId())||!Objects.equals(context.settlement().getOrderId(),order.getId())||!Objects.equals(context.payment().getOrderId(),order.getId())||!Objects.equals(context.conversation().getOrderId(),order.getId()))throw conflict("退款上下文关联异常");
+        if(!OrdinaryRefundPolicy.supports(order)||!OrdinaryRefundPolicy.matchesRequest(order,request)
+                ||refund==null||context==null||!Objects.equals(refund.getOrderId(),order.getId())
+                ||!Objects.equals(refund.getBuyerId(),order.getBuyerId())
+                ||!Objects.equals(context.settlement().getOrderId(),order.getId())
+                ||!Objects.equals(context.payment().getOrderId(),order.getId())
+                ||!Objects.equals(context.conversation().getOrderId(),order.getId()))throw conflict("退款上下文关联异常");
+        boolean custom="CUSTOM".equals(order.getOrderType());
+        boolean noStart=custom&&"NO_START_TIMEOUT".equals(refund.getApplicationType());
+        if(!"NORMAL".equals(refund.getApplicationType())&&!noStart)throw conflict("订单不适用该退款类型");
         validate(order,context.settlement(),context.payment());String before=order.getStatus();
         var flow=new FundFlow();flow.setOrderId(order.getId());flow.setFlowNo(UUID.randomUUID().toString().replace("-",""));flow.setAmount(context.payment().getAmount());flow.setOccurredAt(now);flow.setIdempotencyKey("REFUND:ORDER:"+order.getId());fulfillment.refundFlow(flow,refund.getId());
         if(fulfillment.cancelSettlement(order.getId(),now)!=1)throw conflict("结算状态已变化，退款回滚");
         if("WAIT_ADMIN".equals(refund.getStatus())){refund.setStatus("REFUNDED");refund.setFinishedAt(now);if(refunds.updateTerminal(refund)!=1)throw conflict("退款申请状态已变化");}
-        else if(!"NO_START_TIMEOUT".equals(refund.getApplicationType())||!"REFUNDED".equals(refund.getStatus()))throw conflict("退款申请状态异常");
-        order.setStatus("REFUNDED");order.setUpdatedAt(now);if(fulfillment.updateOrder(order)!=1)throw conflict("订单状态已变化");lifecycle.state(request,"CLOSED",actor);
+        else if(!noStart||!"REFUNDED".equals(refund.getStatus()))throw conflict("退款申请状态异常");
+        order.setStatus("REFUNDED");order.setUpdatedAt(now);if(fulfillment.updateOrder(order)!=1)throw conflict("订单状态已变化");
+        // 现货继续保持售出及原订单关联，作品恢复销售由创作者单独确认。
+        if(custom)lifecycle.state(request,"CLOSED",actor);
         var detail=new LinkedHashMap<String,Object>();if(audit!=null)detail.putAll(audit);detail.put("occurredAt",now.toString());detail.put("refundId",refund.getId().toString());detail.put("paymentFlowNo",context.payment().getFlowNo());detail.put("refundFlowNo",flow.getFlowNo());
         logs.record(actor,admin,"ORDER",order.getId(),action,before,"REFUNDED",refund.getDecisionReason(),detail);
-        if("NO_START_TIMEOUT".equals(refund.getApplicationType())){notifications.fulfillmentChanged(order.getBuyerId(),"ORDER_NO_START_REFUNDED",refund.getId(),order.getId(),order.getRequestId());notifications.fulfillmentChanged(order.getCreatorId(),"ORDER_NO_START_REFUNDED",refund.getId(),order.getId(),order.getRequestId());}
+        if(noStart){notifications.fulfillmentChanged(order.getBuyerId(),"ORDER_NO_START_REFUNDED",refund.getId(),order.getId(),order.getRequestId());notifications.fulfillmentChanged(order.getCreatorId(),"ORDER_NO_START_REFUNDED",refund.getId(),order.getId(),order.getRequestId());}
         else {notifications.refundChanged(order.getBuyerId(),"REFUND_APPROVED",refund.getId(),order.getId(),order.getRequestId());notifications.refundChanged(order.getCreatorId(),"REFUND_APPROVED",refund.getId(),order.getId(),order.getRequestId());}
         notifications.refundChanged(order.getCreatorId(),"SETTLEMENT_CANCELLED",refund.getId(),order.getId(),order.getRequestId());conversations.orderChanged(order);
         LOGGER.info("订单全额退款结果已准备：orderId={}, refundId={}, stage=资金及状态同事务",order.getId(),refund.getId());return null;

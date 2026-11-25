@@ -248,6 +248,8 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
     const { categoryId } = await prepareCreator(page, admin, mailbox.codes, mailbox.promoteAdmin)
     await page.goto('/creator/works/new')
     await fillWork(page, categoryId)
+    await page.getByLabel('尺寸图', { exact: true }).setInputFiles({ name: 'stock-specification.png', mimeType: 'image/png', buffer: image })
+    await expect(page.getByRole('img', { name: '尺寸图 1', exact: true })).toBeVisible()
     for (const width of [1366, 1440, 1920, 390]) {
       await page.setViewportSize({ width, height: 1000 })
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -420,6 +422,11 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
     await expect(buyer.getByText('手作测试', { exact: true })).toHaveCount(0)
     await page.goto(`/creator/works/${workId}/edit`)
     await page.getByLabel('作品标题', { exact: true }).fill('原木手工圆杯垫')
+    const originalMain = paidStock.agreementSnapshot.mainImageIds[0]
+    const originalSpec = paidStock.agreementSnapshot.specificationImageIds[0]
+    await page.getByLabel('作品主图', { exact: true }).setInputFiles({ name: 'replacement.png', mimeType: 'image/png', buffer: image })
+    await expect(page.getByRole('img', { name: '作品主图 2', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: '删除作品主图第1张', exact: true }).click()
     // 请求未到服务器：旧 ONLINE 记录不能被误认成本次修改成功。
     await page.route(`**/api/me/works/${workId}/submission`, route => route.abort('failed'))
     await page.getByRole('button', { name: '提交修改并重新审核', exact: true }).click()
@@ -432,10 +439,26 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
     await admin.reload()
     await admin.getByRole('button', { name: '审核通过并上架', exact: true }).click()
     await expect(admin.getByRole('status')).toContainText('作品已上架')
+    const publicWork = (await (await buyer.request.get(`${api}/works/${workId}`)).json()).data
+    expect(publicWork.mainImageIds).toHaveLength(1)
+    expect(publicWork.mainImageIds).not.toContain(originalMain)
     await admin.getByLabel('审核意见', { exact: true }).fill('管理员验收下架，停止公开展示。')
     await admin.getByRole('button', { name: '下架作品', exact: true }).click()
     await expect(admin.getByRole('status')).toContainText('已下架')
     expect((await buyer.request.get(`${api}/works/${workId}`)).status()).toBe(404)
+    // 成交图仍由原订单签发，并在买入与承接详情加载真实图片。
+    for (const actor of [buyer, page]) {
+      await actor.goto(`/orders/${stockOrderId}`)
+      for (const [fileId, label] of [[originalMain, '成交主图 1'], [originalSpec, '成交规格图 1']]) {
+        const signed = await actor.request.get(`${api}/orders/${stockOrderId}/stock-images/${fileId}`)
+        expect(signed.status()).toBe(200)
+        const signedImage = (await signed.json()).data
+        const displayed = actor.getByRole('img', { name: label, exact: true })
+        await expect.poll(() => displayed.evaluate((node: HTMLImageElement) => node.naturalWidth)).toBeGreaterThan(0)
+        expect(new URL((await displayed.getAttribute('src'))!).pathname).toBe(new URL(signedImage.url).pathname)
+      }
+      expect((await actor.request.get(`${api}/orders/${stockOrderId}/stock-images/${publicWork.mainImageIds[0]}`)).status()).toBe(404)
+    }
     await buyer.goto('/?keyword=原木手工圆杯垫')
     await expect(buyer.getByText('还没有符合条件的作品')).toBeVisible()
     await page.goto('/messages/notifications')

@@ -63,7 +63,11 @@ public interface FileAssetMapper {
                     '$.after.mainImageIds[*]','$.after.specificationImageIds[*]') IS NOT NULL
                 )
             )
-        ) ORDER BY updated_at,id LIMIT 100
+        )
+        AND NOT EXISTS (SELECT 1 FROM trade_order o WHERE
+        """ + OrderImageMapper.STOCK_SNAPSHOT_HAS_FILE + """
+        )
+        ORDER BY updated_at,id LIMIT 100
         """)
     List<FileAsset> findInterruptedWorks();
 

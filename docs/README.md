@@ -15,6 +15,7 @@
 | 页面原型 | 用户指定 TSX 为新版 PC Web 界面参考 | [原型索引](prototypes/README.md)，含角色页面索引和 TSX 原件 |
 | PC Web 前端重做 | CraftFlow 已完成全站联验和新版切换，前后台保留既有书签入口 | [前端重做开发指南](design/frontend-rebuild-guide.md) · [T-027](development/tasks/T-027-craftflow-cutover.md) · [联验记录](testing/T-027-craftflow-cutover.md) |
 | AI 协作约定 | 已建立 | [AGENTS.md](../AGENTS.md)，规定任务、实现与验证方式 |
+| 后端专项审查修复 | 前两批已通过验收，第三批存量品类与定标截止待开始 | [实施计划](development/backend-audit-implementation-plan.md) · [T-028](development/tasks/T-028-stock-refund-recovery.md) · [T-029](development/tasks/T-029-stock-snapshot-evidence.md) · [暂缓的举报问题](development/tasks/T-020-content-report-governance.md#待理解和解决的举报问题) |
 | 技术选型 | 用户已确认采用；账号本地业务集成已验证，QQ/163 公网收件及找回密码补充验收已由用户于 2026-11-23 手动验证通过（依据用户反馈），其他业务能力按任务验证 | [ADR-001](design/decisions/ADR-001-technology-stack.md) |
 | 数据库详细设计 | V1.5 设计草稿；27 表 Flyway SQL 已在本地执行，迁移及失败补偿在 MySQL 8.4 验证 | [数据库表结构](design/数据库表结构.md)，含字段、索引、应用关联与事务回滚 |
 | 架构、领域与 UI 详细设计 | 尚未编写 | [设计约定](design/README.md)，在相关任务中逐步形成 |
@@ -246,7 +247,7 @@ docs/
 
 ## 8. 下一阶段入口
 
-新版页面按业务链路实施。各批实现见[前端重做开发指南](design/frontend-rebuild-guide.md)，全站联验、新版切换和 V1.5 验收证据见 [T-027](development/tasks/T-027-craftflow-cutover.md)。现货全额退款后手动恢复销售、入驻与作品审核结论更正由独立业务任务补齐。 [已知业务差异](design/frontend-rebuild-guide.md#4-已知业务差异)
+新版页面按业务链路实施。各批实现见[前端重做开发指南](design/frontend-rebuild-guide.md)，全站联验、新版切换和 V1.5 验收证据见 [T-027](development/tasks/T-027-craftflow-cutover.md)。现货全额退款后手动恢复销售见 [T-028](development/tasks/T-028-stock-refund-recovery.md)，入驻与作品审核结论更正仍由独立任务承接。 [已知业务差异](design/frontend-rebuild-guide.md#4-已知业务差异)
 
 后续统一以[当前 V1.5 MVP 版需求](requirements/requirements.md)为依据，其中所列需求均须实现；[后续功能清单](requirements/archive/手工定制作品分享与交易平台后续功能清单.md)独立留存，供完成后选择补充。数据库设计及 SQL 待审核。
 

@@ -69,6 +69,16 @@
 - 通用处置端点对已处理举报允许再次执行动作（与评价举报更正能力一致），已由集成测试覆盖状态守卫。
 - 运行 E2E 产生的 `frontend/test-results-*` 临时目录因 IDE 批量删除保护未能自动清理，已被 .gitignore 排除，可手动删除。
 
+### 待理解和解决的举报问题
+
+以下场景来自 2026-11-25 后端静态审查，留作隔离环境复核项。使用专用测试库、独立的买家、创作者、举报人和管理员会话，以及自有测试图片。使用项目测试夹具准备存量状态。 [后端专项审查修复实施计划](../backend-audit-implementation-plan.md)
+
+1. **第三方评价举报详情与非公开评价资格**（V1.5 §4.7.3、§5.2）。准备一笔已完成测试订单及买家发表的公开评价，由无交易关系的普通测试账号举报，再从“我的举报”打开详情，检查详情接口的响应。另准备已隐藏、已删除和全额退款后退出公开口碑的评价，在服务层用测试夹具核对第三方新举报资格。静态预期是第三方详情包含订单号、订单 ID、会话 ID 和交易双方账号 ID，新举报入口也没有检查评价公开状态或订单退款状态。后续验收应确认举报人仅取得处理结果及有权查看的举报材料，管理员仍可查证，非公开评价拒绝第三方新举报，既有举报历史仍按授权保留。 [评价与举报服务](../../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/OrderReviewServiceImpl.java)
+2. **作品举报与被举报版本的绑定**（V1.5 §4.2.5、§4.9.2）。创作者发布测试作品 A 版，管理员审核通过后由另一账号举报。创作者修改标题或主图形成 B 版，再经管理员审核上架。管理员从原举报详情执行下架，并检查公开作品与原举报的材料。静态预期是举报读取当前作品材料，并可按当前版本下架 B，历史举报缺少 A 版公开材料的绑定。后续验收应确认管理员能查阅 A 版材料及其图片，处置时识别当前版本变化，只有针对新版本核实后的决定才可影响 B。 [内容举报服务](../../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/ContentReportServiceImpl.java)
+3. **处置异议进入待复核**（V1.5 §4.2.5、§4.9.2）。准备一项已处理的评论举报和一项已处理的评价举报，被处理人分别通过其举报详情补充异议材料，再由管理员查看默认举报队列与看板待办。静态预期是异议进入证据历史，举报仍为 `PROCESSED`，而默认队列和看板只统计 `PENDING`。后续验收应确认新异议出现在可追踪的复核待办中，复核期间原处置继续生效，处理时保留原结论、补充材料和最终结论。 [内容举报服务](../../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/ContentReportServiceImpl.java) · [评价与举报服务](../../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/OrderReviewServiceImpl.java) · [后台看板查询](../../../backend/src/main/java/com/handcraft/platform/modules/mapper/AdminDashboardMapper.java)
+4. **改判结果与实际处罚的一致性**（V1.5 §4.2.5、§4.9.2）。由管理员对测试举报作出下架或隐藏等有效处置，收到异议后将原举报改判为“不成立”，核对举报结论、通知及内容可见性。另准备有其他独立处置的对象，并为暂停场景准备创作者本人暂停的测试状态。静态预期是改判只更新结论和通知，原处罚仍可继续生效。后续验收应确认更正与撤销本举报的有效处置在同一事务完成，或由明确的更正流程约束其先后顺序，其他独立处置及创作者本人暂停继续生效，留痕和通知与实际结果一致。 [内容举报服务](../../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/ContentReportServiceImpl.java) · [评价与举报服务](../../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/OrderReviewServiceImpl.java)
+5. **私聊图片缺少关联原消息的举报入口**（V1.5 §4.8.4）。用买家和符合资格的创作者建立一条尚未成单的定制需求会话。一方发送一张普通自有测试图片，另一方从这条消息查找举报操作，再用管理员账号核对是否能定位到原消息和附件。静态预期是站内举报目标覆盖作品、评论、评价和创作者主页，需求会话中的原消息及图片缺少对应的举报对象和后台查证入口。后续验收应确认会话参与者可提交关联到原消息的举报，管理员在该举报内能读取有关图片，其他用户仍按会话归属鉴权。 [会话图片服务](../../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/CustomRequestImageServiceImpl.java) · [举报目标约束](../../../backend/src/main/resources/db/migration/V1__create_mvp_tables.sql)
+
 ## 交接
 
 MVP 范围内 4.2.4/4.2.5/4.8.1 举报与账号处置通知已补齐，T-017—T-020 测试与浏览器验收均已完成。后续入口：[docs/README.md](../../README.md) 索引；QQ/163 公网收件补充验收暂缓事项不变。

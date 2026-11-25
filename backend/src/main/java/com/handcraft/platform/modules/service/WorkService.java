@@ -15,6 +15,8 @@ public interface WorkService {
     void delete(Long userId,Long id,Long version);
     /** 已上架交易设置即时生效且不能重置已锁定、已售出状态。 */
     WorkVO trading(Long userId,Long id,WorkTradingDTO input);
+    /** 原现货订单全额退款后，认证作者确认同一件成品仍可售并恢复直购。 */
+    WorkVO restoreStock(Long userId,Long id,StockAvailabilityDTO input);
     /** 作者或管理员下架，管理员原因必填并发送通知。 */
     WorkVO offline(Long userId,Long id,WorkVersionDTO input,String reason,boolean admin);
     /** 举报处置下架，通知关联本次举报详情。 */

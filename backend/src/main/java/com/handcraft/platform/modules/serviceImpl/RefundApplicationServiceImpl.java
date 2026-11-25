@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.*;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
-/** 售后按账号→需求→订单→申请→会话→文件锁序，与履约及裁定互斥；新补证仅追加。 */
+/** 售后按账号→定制需求→订单→申请→结算→会话→文件锁序，与履约及裁定互斥；新补证仅追加。 */
 @Service
 public class RefundApplicationServiceImpl implements RefundApplicationService {
     private static final Logger LOGGER=LoggerFactory.getLogger(RefundApplicationServiceImpl.class);
@@ -25,8 +25,8 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
     public RefundApplicationServiceImpl(RefundApplicationMapper refunds,TradeOrderMapper orders,CustomRequestMapper requests,CustomRequestPolicyService policy,OrderImageService images,OrderFulfillmentMapper fulfillment,OrderPaymentMapper payments,ConversationMapper chats,ConversationService conversations,NotificationService notifications,OperationLogService logs,ObjectMapper json){this.refunds=refunds;this.orders=orders;this.requests=requests;this.policy=policy;this.images=images;this.fulfillment=fulfillment;this.payments=payments;this.chats=chats;this.conversations=conversations;this.notifications=notifications;this.logs=logs;this.json=json;}
     @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
     public Creation create(Long actor,Long orderId,RefundApplicationDTO input){return BusinessLog.run(LOGGER,"普通售后申请",actor,()->{
-        var initial=participant(actor,orders.find(orderId));buyer(actor,initial);policy.lockUsers(initial.getBuyerId(),initial.getCreatorId());
-        var request=requests.lock(initial.getRequestId());var order=participant(actor,orders.lock(orderId));buyer(actor,order);policy.user(actor);
+        var initial=participant(actor,orders.find(orderId));buyer(actor,initial);
+        var order=lockOrder(actor,initial);buyer(actor,order);
         var prior=refunds.byCreateKey(actor,input.getRequestKey());
         if(prior!=null){if(!Objects.equals(prior.getOrderId(),orderId)||!Objects.equals(prior.getReasonCode(),input.getReasonCode())||!Objects.equals(prior.getDescription(),input.getDescription())||!ids(prior.getImageIds()).equals(input.getImageIds()))throw conflict("同一请求键不能更改订单或申请内容");return new Creation(prior.getId(),false);}
         var pending=refunds.pending(orderId);
@@ -34,7 +34,6 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         if(settlement==null||payment==null||!"PENDING".equals(settlement.getStatus())||fulfillment.refundFlowForOrder(orderId)!=null)throw conflict("原支付或待结算状态异常，不能受理售后");
         if(payment.getAmount().compareTo(order.getTotalAmount())!=0||payment.getAmount().compareTo(settlement.getPaidAmount())!=0)throw conflict("订单成交、原成功支付与待结算金额不一致");
         var now=policy.now().truncatedTo(ChronoUnit.MILLIS);
-        if(request==null||!Objects.equals(request.getBuyerId(),order.getBuyerId()))throw conflict("订单与需求关联异常");
         if(pending!=null||!eligible(order,now))throw conflict("当前订单状态或原七天售后窗口不允许申请");
         if(input.getDescription().strip().length()<20)throw invalid("退款说明至少20字");
         lockConversation(order);images.validate(actor,orderId,"REFUND",input.getImageIds());
@@ -52,7 +51,7 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
     });}
     @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
     public Creation supplement(Long actor,Long id,RefundEvidenceDTO input){return BusinessLog.run(LOGGER,"售后补充证据",actor,()->{
-        var initial=required(id);var order=lockOrder(actor,initial);var value=refunds.lock(id);var prior=refunds.evidenceByKey(actor,input.getRequestKey());
+        var initial=required(id);var order=lockOrder(actor,participant(actor,orders.find(initial.getOrderId())));var value=refunds.lock(id);var prior=refunds.evidenceByKey(actor,input.getRequestKey());
         if(prior!=null){if(!Objects.equals(prior.getRefundApplicationId(),id)||!Objects.equals(prior.getContent(),input.getContent())||!ids(prior.getImageIds()).equals(input.getImageIds()))throw conflict("同一请求键不能更改申请或补证内容");return new Creation(id,false);}
         waiting(value,order);if(input.getContent().isBlank()&&input.getImageIds().isEmpty())throw invalid("说明或图片至少填写一项");var now=policy.now().truncatedTo(ChronoUnit.MILLIS);
         lockConversation(order);images.validate(actor,order.getId(),"REFUND",input.getImageIds());var evidence=new RefundEvidence();evidence.setRefundApplicationId(id);evidence.setSubmitterId(actor);evidence.setRequestKey(input.getRequestKey());evidence.setContent(input.getContent());evidence.setImageIds(json.writeValueAsString(input.getImageIds()));evidence.setCreatedAt(now);refunds.insertEvidence(evidence);if(refunds.incrementVersion(id,now)!=1)throw conflict("售后状态已变化");
@@ -66,24 +65,34 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
     });}
     @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
     public void withdraw(Long actor,Long id){BusinessLog.run(LOGGER,"买家撤回售后",actor,()->{
-        var initial=required(id);var order=lockOrder(actor,initial);buyer(actor,order);var value=refunds.lock(id);if("WITHDRAWN".equals(value.getStatus()))return null;waiting(value,order);
+        var initial=required(id);var order=lockOrder(actor,participant(actor,orders.find(initial.getOrderId())));buyer(actor,order);var value=refunds.lock(id);if("WITHDRAWN".equals(value.getStatus()))return null;waiting(value,order);
         var now=policy.now().truncatedTo(ChronoUnit.MILLIS);lockConversation(order);value.setStatus("WITHDRAWN");value.setDecisionReason("买家主动撤回普通售后申请");value.setFinishedAt(now);if(refunds.updateTerminal(value)!=1)throw conflict("售后状态已变化");restore(order,value,now);
         logs.record(actor,false,"ORDER",order.getId(),"REFUND_WITHDRAW","AFTER_SALE",order.getStatus(),value.getDecisionReason(),Map.of("refundId",id.toString(),"occurredAt",now.toString()));notifyBoth(order,"REFUND_WITHDRAWN",id);conversations.orderChanged(order);LOGGER.info("售后撤回恢复已准备：orderId={}, refundId={}, restoredStatus={}",order.getId(),id,order.getStatus());return null;
     });}
     @Transactional(propagation=Propagation.MANDATORY)
     public void restore(TradeOrder order,RefundApplication refund,LocalDateTime now){
         if(!"AFTER_SALE".equals(order.getStatus())||!Objects.equals(order.getId(),refund.getOrderId()))throw conflict("订单售后状态或关联异常，无法恢复");
-        if(!Set.of("PAID","IN_PRODUCTION","PENDING_SHIP","SHIPPED","COMPLETED").contains(refund.getOriginalOrderStatus()))throw conflict("售后前状态异常");
+        if(!OrdinaryRefundPolicy.allowsOriginalStatus(order,refund.getOriginalOrderStatus()))throw conflict("售后前状态异常");
         if("SHIPPED".equals(refund.getOriginalOrderStatus())){if(order.getAutoConfirmAt()==null||refund.getCreatedAt()==null||now.isBefore(refund.getCreatedAt()))throw conflict("原收货时间或售后时长异常");order.setAutoConfirmAt(order.getAutoConfirmAt().plus(Duration.between(refund.getCreatedAt(),now)));}
         order.setStatus(refund.getOriginalOrderStatus());order.setUpdatedAt(now);if(fulfillment.updateOrder(order)!=1)throw conflict("订单状态恢复失败");
     }
-    public boolean eligible(TradeOrder order,LocalDateTime now){return order!=null&&"CUSTOM".equals(order.getOrderType())&&(Set.of("PAID","IN_PRODUCTION","PENDING_SHIP","SHIPPED").contains(order.getStatus())||"COMPLETED".equals(order.getStatus())&&order.getOriginalCompletedAt()!=null&&now.isBefore(order.getOriginalCompletedAt().plusDays(7)));}
-    public RefundApplicationVO view(RefundApplication r,TradeOrder o,Long actor){var payment=payments.payment(o.getId());var chat=chats.byRequest(o.getRequestId(),o.getCreatorId());boolean active="NORMAL".equals(r.getApplicationType())&&"WAIT_ADMIN".equals(r.getStatus())&&"AFTER_SALE".equals(o.getStatus());return new RefundApplicationVO(text(r.getId()),text(o.getId()),o.getOrderNo(),text(o.getBuyerId()),text(o.getCreatorId()),r.getApplicationType(),r.getOriginalOrderStatus(),r.getReasonCode(),r.getDescription(),ids(r.getImageIds()),r.getStatus(),r.getCreateRequestKey(),r.getVersion()==null?0:r.getVersion(),time(r.getCreatedAt()),time(r.getFinishedAt()),text(r.getHandlerId()),r.getDecisionReason(),r.getReturnRequired(),r.getReturnTrackingNo(),time(r.getReturnConfirmedAt()),text(r.getReturnConfirmedBy()),r.getNoReturnBasis(),active&&(Objects.equals(actor,o.getBuyerId())||Objects.equals(actor,o.getCreatorId())),active&&Objects.equals(actor,o.getBuyerId()),payment==null?null:payment.getAmount().setScale(2).toPlainString(),chat==null?null:text(chat.getId()));}
-    private TradeOrder lockOrder(Long actor,RefundApplication value){var initial=participant(actor,orders.find(value.getOrderId()));policy.lockUsers(initial.getBuyerId(),initial.getCreatorId());var request=requests.lock(initial.getRequestId());var order=participant(actor,orders.lock(initial.getId()));policy.user(actor);if(request==null||!Objects.equals(request.getBuyerId(),order.getBuyerId()))throw conflict("订单与原需求关联不一致");return order;}
-    private void lockConversation(TradeOrder order){var first=chats.byRequest(order.getRequestId(),order.getCreatorId());if(first==null)throw conflict("订单关联会话不存在");var chat=chats.lock(first.getId());if(!Objects.equals(chat.getOrderId(),order.getId()))throw conflict("订单会话关联不一致");}
+    public boolean eligible(TradeOrder order,LocalDateTime now){return OrdinaryRefundPolicy.eligible(order,now);}
+    public RefundApplicationVO view(RefundApplication r,TradeOrder o,Long actor){var payment=payments.payment(o.getId());var chat=chats.linkedOrder(o);boolean active="NORMAL".equals(r.getApplicationType())&&"WAIT_ADMIN".equals(r.getStatus())&&"AFTER_SALE".equals(o.getStatus());return new RefundApplicationVO(text(r.getId()),text(o.getId()),o.getOrderNo(),text(o.getBuyerId()),text(o.getCreatorId()),r.getApplicationType(),r.getOriginalOrderStatus(),r.getReasonCode(),r.getDescription(),ids(r.getImageIds()),r.getStatus(),r.getCreateRequestKey(),r.getVersion()==null?0:r.getVersion(),time(r.getCreatedAt()),time(r.getFinishedAt()),text(r.getHandlerId()),r.getDecisionReason(),r.getReturnRequired(),r.getReturnTrackingNo(),time(r.getReturnConfirmedAt()),text(r.getReturnConfirmedBy()),r.getNoReturnBasis(),active&&(Objects.equals(actor,o.getBuyerId())||Objects.equals(actor,o.getCreatorId())),active&&Objects.equals(actor,o.getBuyerId()),payment==null?null:payment.getAmount().setScale(2).toPlainString(),chat==null?null:text(chat.getId()));}
+    /** 现货直接按订单锁定履约，定制先锁并校验原需求。 */
+    private TradeOrder lockOrder(Long actor,TradeOrder initial){
+        policy.lockUsers(initial.getBuyerId(),initial.getCreatorId());
+        var request=initial.getRequestId()==null?null:requests.lock(initial.getRequestId());
+        var order=participant(actor,orders.lock(initial.getId()));
+        policy.user(actor);
+        if(!OrdinaryRefundPolicy.matchesRequest(order,request))throw conflict("订单与原需求关联不一致");
+        return order;
+    }
+    private void lockConversation(TradeOrder order){
+        if(chats.lockLinkedOrder(order)==null)throw conflict("订单关联会话不存在或关联不一致");
+    }
     private void waiting(RefundApplication value,TradeOrder order){if(value==null||!"NORMAL".equals(value.getApplicationType())||!"WAIT_ADMIN".equals(value.getStatus())||!"AFTER_SALE".equals(order.getStatus()))throw conflict("售后申请已结束或订单状态已变化");}
     private RefundApplication required(Long id){var r=refunds.find(id);if(r==null)throw missing();return r;}
-    private TradeOrder participant(Long actor,TradeOrder o){if(o==null||!"CUSTOM".equals(o.getOrderType())||!Objects.equals(actor,o.getBuyerId())&&!Objects.equals(actor,o.getCreatorId()))throw missing();return o;}
+    private TradeOrder participant(Long actor,TradeOrder o){if(!OrdinaryRefundPolicy.supports(o)||!Objects.equals(actor,o.getBuyerId())&&!Objects.equals(actor,o.getCreatorId()))throw missing();return o;}
     private void buyer(Long actor,TradeOrder o){if(!Objects.equals(actor,o.getBuyerId()))throw new BusinessException(CommonErrorCode.FORBIDDEN,"仅订单买家可申请或撤回售后");}
     private void notifyBoth(TradeOrder order,String event,Long id){notifications.refundChanged(order.getBuyerId(),event,id,order.getId(),order.getRequestId());notifications.refundChanged(order.getCreatorId(),event,id,order.getId(),order.getRequestId());}
     private RefundEvidenceVO evidenceView(RefundEvidence e){return new RefundEvidenceVO(text(e.getId()),text(e.getRefundApplicationId()),text(e.getSubmitterId()),e.getContent(),ids(e.getImageIds()),e.getRequestKey(),time(e.getCreatedAt()));}

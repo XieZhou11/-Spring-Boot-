@@ -29,6 +29,15 @@
 .report-status { padding: 3px 8px; border-radius: 999px; background: #f4f4f5; color: var(--craft-muted); font-size: 12px; font-weight: 600; }
 .report-status.pending { background: #fef3c7; color: #92400e; }
 .report-history-link { margin-bottom: 14px; }
+/* 查证区和裁定表单分隔，会话按顺序展示正文及关联凭证。 */
+.report-conversation { margin: 16px 0; padding: 12px; border: 1px solid var(--craft-border); border-radius: 8px; }
+.report-conversation > summary { cursor: pointer; font-weight: 600; }
+.report-conversation > button { margin-top: 8px; }
+.report-chat-messages { margin: 0; padding: 0; list-style: none; }
+.report-chat-messages > li { padding: 12px 0; }
+.report-chat-messages > li + li { border-top: 1px solid var(--craft-border); }
+.report-chat-messages header { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.report-chat-messages time { color: var(--craft-muted); }
 .report-review-images { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
 .report-review-images .work-image { width: min(120px, 100%); aspect-ratio: 1; overflow: hidden; border-radius: 8px; }
 @media (max-width: 930px) { .report-admin-grid { grid-template-columns: 1fr; } }

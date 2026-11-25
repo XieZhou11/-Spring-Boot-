@@ -53,7 +53,6 @@ public interface OrderReviewMapper {
             /** 操作前的评价状态。 */ String beforeStatus,
             /** 操作后的评价状态。 */ String afterStatus) {}
     @Select("SELECT id FROM operation_log WHERE target_type='REVIEW_REPORT' AND target_id=#{id} AND action IN ('DECIDE','CORRECT') ORDER BY id DESC LIMIT 1") Long decisionEventId(Long id);
-    @Select("SELECT o.*,c.id AS conversation_id FROM order_review r JOIN trade_order o ON o.id=r.order_id LEFT JOIN conversation c ON c.order_id=o.id WHERE r.id=#{reviewId}") java.util.Map<String,Object> orderAndConversation(Long reviewId);
     @Select("SELECT COUNT(*) FROM report r JOIN order_review rv ON rv.id=r.target_id WHERE r.target_type='REVIEW' AND (JSON_CONTAINS(r.image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))) OR EXISTS(SELECT 1 FROM report_evidence e WHERE e.report_id=r.id AND JSON_CONTAINS(e.image_ids,JSON_QUOTE(CAST(#{fileId} AS CHAR))))) AND (#{admin}=1 OR r.reporter_id=#{userId} OR rv.buyer_id=#{userId} OR rv.creator_id=#{userId})") int canReadReportImage(@Param("userId")Long userId,@Param("fileId")Long fileId,@Param("admin")boolean admin);
     @Select("SELECT COUNT(*) FROM order_review WHERE JSON_CONTAINS(image_ids,JSON_QUOTE(CAST(#{id} AS CHAR)))") int imageReferences(Long id);
     @Select("SELECT COUNT(*) FROM order_review r JOIN trade_order o ON o.id=r.order_id WHERE r.moderation_status='VISIBLE' AND o.status<>'REFUNDED' AND JSON_CONTAINS(r.image_ids,JSON_QUOTE(CAST(#{id} AS CHAR)))") int publicImageReferences(Long id);

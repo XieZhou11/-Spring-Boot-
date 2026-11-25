@@ -26,8 +26,16 @@ public class OrderReviewServiceImpl implements OrderReviewService {
     private final OrderReviewMapper reviews; private final TradeOrderMapper orders; private final UserAccountMapper users;
     private final FileAssetMapper files; private final WorkCommentImageService images; private final CreatorReputationService reputations;
     private final ConversationMapper conversations;
+    private final PrivateImageStorage storage;
     private final NotificationService notifications; private final OperationLogService logs; private final ObjectMapper json; private final Clock clock;
-    public OrderReviewServiceImpl(OrderReviewMapper reviews,TradeOrderMapper orders,UserAccountMapper users,FileAssetMapper files,WorkCommentImageService images,CreatorReputationService reputations,ConversationMapper conversations,NotificationService notifications,OperationLogService logs,ObjectMapper json,Clock clock){this.reviews=reviews;this.orders=orders;this.users=users;this.files=files;this.images=images;this.reputations=reputations;this.conversations=conversations;this.notifications=notifications;this.logs=logs;this.json=json;this.clock=clock;}
+    public OrderReviewServiceImpl(OrderReviewMapper reviews,TradeOrderMapper orders,UserAccountMapper users,
+                                  FileAssetMapper files,WorkCommentImageService images,CreatorReputationService reputations,
+                                  ConversationMapper conversations,PrivateImageStorage storage,NotificationService notifications,
+                                  OperationLogService logs,ObjectMapper json,Clock clock){
+        this.reviews=reviews;this.orders=orders;this.users=users;this.files=files;this.images=images;
+        this.reputations=reputations;this.conversations=conversations;this.storage=storage;
+        this.notifications=notifications;this.logs=logs;this.json=json;this.clock=clock;
+    }
 
     @Override @Transactional(readOnly=true)
     public OrderReviewVO orderReview(Long userId,Long orderId){return BusinessLog.run(LOG,"订单评价及资格查询",userId,()->{
@@ -78,16 +86,15 @@ public class OrderReviewServiceImpl implements OrderReviewService {
 
     @Override @Transactional(readOnly=true)
     public ReviewReportDetailVO reportDetail(Long userId,Long reportId){return BusinessLog.run(LOG,"评价举报核查详情",userId,()->{
-        var report=reviews.report(reportId);if(report==null||!"REVIEW".equals(report.getTargetType()))throw missing();var review=reviews.find(report.getTargetId());if(review==null)throw missing();var order=orders.find(review.getOrderId());
+        var report=reviews.report(reportId);if(report==null||!"REVIEW".equals(report.getTargetType()))throw missing();var review=reviews.find(report.getTargetId());if(review==null)throw missing();var order=orders.find(review.getOrderId());if(order==null)throw missing();
         var actor=account(userId);if(!actor.isAdmin()&&!userId.equals(report.getReporterId())&&!userId.equals(review.getBuyerId())&&!userId.equals(review.getCreatorId()))throw missing();
-        var ref=reviews.orderAndConversation(review.getId());Object convo=ref==null?null:ref.get("conversation_id");
+        var chat=conversations.linkedOrder(order);
         var evidence=reviews.evidence(reportId).stream().map(e->new ReportEvidenceVO(e.getId().toString(),e.getSubmitterId().toString(),e.getEvidenceType(),e.getContent(),ids(e.getImageIds()),time(e.getCreatedAt()))).toList();
-        boolean isAdmin=actor.isAdmin();var messages=new ArrayList<ChatMessageVO>();if(isAdmin&&convo!=null){Long conversationId=((Number)convo).longValue();for(var m:conversations.messages(conversationId,null,0L,100))messages.add(new ChatMessageVO(m.getId().toString(),conversationId.toString(),m.getSeqNo().toString(),m.getSenderId().toString(),m.getClientMessageKey(),m.getContent(),ids(m.getImageIds()),time(m.getCreatedAt()),m.getReferencedNodeId()==null?null:m.getReferencedNodeId().toString(),m.getReferencedNodeCode()));}
         var history=reviews.reportHistory(reportId).stream().map(h->new ReviewReportHistoryVO(h.getId().toString(),text(h.getOperatorId()),h.getAction(),h.getBeforeStatus(),h.getAfterStatus(),h.getReason(),map(h.getDetail()),time(h.getCreatedAt()))).toList();
         boolean canSupplement=userId.equals(report.getReporterId())&&"PENDING".equals(report.getStatus());
         boolean canObjection="PROCESSED".equals(report.getStatus())&&(userId.equals(review.getBuyerId())||userId.equals(review.getCreatorId()));
-        var decisions=isAdmin?allowedDecisions(review.getModerationStatus(),restorationStatus(report,review)):List.<String>of();
-        return new ReviewReportDetailVO(reportView(report),view(review,order,userId),order.getId().toString(),order.getOrderNo(),convo==null?null:convo.toString(),order.getBuyerId().toString(),order.getCreatorId().toString(),evidence,messages,history,review.getModerationStatus(),decisions,canSupplement,canObjection);
+        var decisions=actor.isAdmin()?allowedDecisions(review.getModerationStatus(),restorationStatus(report,review)):List.<String>of();
+        return new ReviewReportDetailVO(reportView(report),view(review,order,userId),order.getId().toString(),order.getOrderNo(),chat==null?null:text(chat.getId()),order.getBuyerId().toString(),order.getCreatorId().toString(),evidence,List.of(),history,review.getModerationStatus(),decisions,canSupplement,canObjection);
     });}
 
     @Override @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
@@ -113,6 +120,56 @@ public class OrderReviewServiceImpl implements OrderReviewService {
         return reviews.reviewReports(reviewId).stream().filter(r->related||userId.equals(r.getReporterId())).map(this::reportView).toList();
     });}
     @Override public PageVO<ReviewReportVO> adminReports(Long adminId,String status,int page,int size){return BusinessLog.run(LOG,"管理员评价举报队列查询",adminId,()->{admin(adminId);page(page,size);if(!Set.of("PENDING","PROCESSED","ALL").contains(status))throw invalid("举报状态无效");var list=reviews.adminReports(status,(page-1)*size,size).stream().map(this::reportView).toList();return new PageVO<>(list,reviews.adminReportCount(status),page,size);});}
+
+    @Override
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+    public ChatMessagePageVO adminReportMessages(Long adminId,Long reportId,Long before,Long after,int size){
+        return BusinessLog.run(LOG,"管理员评价举报会话查证（举报编号="+reportId+"）",adminId,()->{
+            admin(adminId);
+            var chat=reportConversation(reportId);
+            if(size<1||size>50||before!=null&&before<=0||after!=null&&after<0||before!=null&&after!=null){
+                throw invalid("会话分页参数无效，前后游标不能同时提供，每页须为1至50条");
+            }
+            // 向前查较早消息时 SQL 按降序截取，返回前恢复为会话内的时间顺序。
+            var selected=conversations.messages(chat.getId(),before,after,size+1);
+            var messages=selected.stream().limit(size).sorted(Comparator.comparing(ChatMessage::getSeqNo))
+                    .map(m->new ChatMessageVO(text(m.getId()),text(m.getConversationId()),text(m.getSeqNo()),
+                            text(m.getSenderId()),m.getClientMessageKey(),m.getContent(),ids(m.getImageIds()),
+                            time(m.getCreatedAt()),text(m.getReferencedNodeId()),m.getReferencedNodeCode()))
+                    .toList();
+            return new ChatMessagePageVO(messages,selected.size()>size);
+        });
+    }
+
+    @Override
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+    public ImageVO adminReportImage(Long adminId,Long reportId,Long fileId){
+        return BusinessLog.run(LOG,"管理员评价举报会话图片查证（举报编号="+reportId+"，图片编号="+fileId+"）",adminId,()->{
+            admin(adminId);
+            var chat=reportConversation(reportId);
+            var file=files.findById(fileId);
+            if(file==null||!"AVAILABLE".equals(file.getUploadStatus())
+                    ||!file.getObjectKey().startsWith("conversations/"+chat.getId()+"/")
+                    ||conversations.conversationImageReferences(chat.getId(),fileId)==0){
+                throw missing();
+            }
+            return storage.signed(file);
+        });
+    }
+
+    /** 管理员查证时沿举报、评价、订单逐级校验，复用售后订单会话的归属口径。 */
+    private Conversation reportConversation(Long reportId){
+        var report=reviews.report(reportId);
+        if(report==null||!"REVIEW".equals(report.getTargetType()))throw missing();
+        var review=reviews.find(report.getTargetId());
+        if(review==null)throw missing();
+        var order=orders.find(review.getOrderId());
+        if(order==null||!Objects.equals(review.getBuyerId(),order.getBuyerId())
+                ||!Objects.equals(review.getCreatorId(),order.getCreatorId()))throw missing();
+        var chat=conversations.linkedOrder(order);
+        if(chat==null)throw missing();
+        return chat;
+    }
 
     @Override @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
     public ReviewReportVO decide(Long adminId,Long reportId,AdminReviewReportDecisionDTO input){return BusinessLog.run(LOG,"管理员评价举报处置",adminId,()->{

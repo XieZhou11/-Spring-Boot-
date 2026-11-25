@@ -181,7 +181,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
           >{{ refundStatuses[detail.application.status] }}</span>
         </div>
         <p class="refund-summary-ids">
-          订单 {{ detail.order.orderNo }} · 申请 {{ detail.application.id }} · 材料版本 {{ detail.application.version }}
+          {{ detail.order.orderType === 'STOCK' ? '现货直购' : '定制订单' }} {{ detail.order.orderNo }} · 申请 {{ detail.application.id }} · 材料版本 {{ detail.application.version }}
         </p>
         <dl class="refund-summary-facts">
           <div>
@@ -247,22 +247,62 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
         class="refund-detail-section"
         open
       >
-        <summary>订单约定与付款</summary><h3>{{ detail.order.agreementSnapshot.request.title }}</h3><p class="request-description">
-          {{ detail.order.agreementSnapshot.request.description }}
-        </p><p>{{ detail.order.agreementSnapshot.request.materialPreference }} · {{ detail.order.agreementSnapshot.request.specification }}</p><QuoteImages
-          :image-ids="detail.order.agreementSnapshot.request.referenceImageIds"
-          :admin-application-id="detail.application.id"
-          scope="request"
-          label="原需求参考图"
-        /><p class="request-description">
-          {{ detail.order.agreementSnapshot.proposal }}
-        </p><p class="request-description">
-          {{ detail.order.agreementSnapshot.additionalAgreement }}
-        </p><QuoteImages
-          :image-ids="detail.order.agreementSnapshot.imageIds"
-          :admin-application-id="detail.application.id"
-          label="原方案图片"
-        /><dl class="work-specifications">
+        <summary>订单约定与付款</summary>
+        <!-- 现货显示成交时的作品材料，定制显示原需求和中标方案。 -->
+        <template v-if="detail.order.orderType === 'STOCK'">
+          <h3>现货作品快照</h3>
+          <dl class="work-specifications">
+            <div><dt>作品</dt><dd>{{ detail.order.agreementSnapshot.request.title }}</dd></div>
+            <div><dt>材质</dt><dd>{{ detail.order.agreementSnapshot.request.materialPreference }}</dd></div>
+            <div><dt>尺寸规格</dt><dd>{{ detail.order.agreementSnapshot.request.specification }}</dd></div>
+          </dl>
+          <p class="request-description">
+            {{ detail.order.agreementSnapshot.request.description }}
+          </p>
+          <p
+            v-if="detail.order.agreementSnapshot.proposal"
+            class="request-description"
+          >
+            {{ detail.order.agreementSnapshot.proposal }}
+          </p>
+          <template v-if="detail.order.agreementSnapshot.mainImageIds?.length">
+            <h4>成交主图</h4>
+            <QuoteImages
+              :image-ids="detail.order.agreementSnapshot.mainImageIds"
+              :admin-application-id="detail.application.id"
+              scope="stock"
+              label="成交主图"
+            />
+          </template>
+          <template v-if="detail.order.agreementSnapshot.specificationImageIds?.length">
+            <h4>成交规格图</h4>
+            <QuoteImages
+              :image-ids="detail.order.agreementSnapshot.specificationImageIds"
+              :admin-application-id="detail.application.id"
+              scope="stock"
+              label="成交规格图"
+            />
+          </template>
+        </template>
+        <template v-else>
+          <h3>{{ detail.order.agreementSnapshot.request.title }}</h3><p class="request-description">
+            {{ detail.order.agreementSnapshot.request.description }}
+          </p><p>{{ detail.order.agreementSnapshot.request.materialPreference }} · {{ detail.order.agreementSnapshot.request.specification }}</p><QuoteImages
+            :image-ids="detail.order.agreementSnapshot.request.referenceImageIds"
+            :admin-application-id="detail.application.id"
+            scope="request"
+            label="原需求参考图"
+          /><p class="request-description">
+            {{ detail.order.agreementSnapshot.proposal }}
+          </p><p class="request-description">
+            {{ detail.order.agreementSnapshot.additionalAgreement }}
+          </p><QuoteImages
+            :image-ids="detail.order.agreementSnapshot.imageIds"
+            :admin-application-id="detail.application.id"
+            label="原方案图片"
+          />
+        </template>
+        <dl class="work-specifications">
           <div><dt>原成交金额</dt><dd>¥ {{ detail.order.totalAmount }}</dd></div><div v-if="detail.order.payment">
             <dt>成功实付</dt><dd>¥ {{ detail.order.payment.amount }} · {{ detail.order.payment.flowNo }}<br>{{ formatTime(detail.order.payment.occurredAt) }}</dd>
           </div><div v-if="detail.order.settlement">
@@ -283,7 +323,10 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
           {{ detail.order.addressSnapshot.recipientName }} · {{ detail.order.addressSnapshot.phone }}<br>{{ detail.order.addressSnapshot.province }} {{ detail.order.addressSnapshot.city }} {{ detail.order.addressSnapshot.district }} {{ detail.order.addressSnapshot.detailAddress }}
         </address>
       </details>
-      <details class="refund-detail-section">
+      <details
+        v-if="detail.order.orderType !== 'STOCK'"
+        class="refund-detail-section"
+      >
         <summary>制作节点与追加记录</summary><article
           v-for="node in detail.order.progressNodes"
           :key="node.id"

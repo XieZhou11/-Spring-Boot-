@@ -4,6 +4,10 @@
 
 ## 当前记录
 
+[T-028 现货普通售后与恢复直购](tasks/T-028-stock-refund-recovery.md) 对应后端专项审查第一批。
+
+[T-029 现货快照图片与后台查证](tasks/T-029-stock-snapshot-evidence.md) 对应后端专项审查第二批。
+
 [T-027 CraftFlow 第 7 批](tasks/T-027-craftflow-cutover.md)覆盖全站联验、新版切换和旧书签兼容。 [测试记录](../testing/T-027-craftflow-cutover.md)
 
 [T-025 CraftFlow 第 5 批](tasks/T-025-craftflow-after-sale-reviews-consent.md)覆盖定制普通售后、模拟结算查询、订单评价和定制成品案例。 [测试记录](../testing/T-025-craftflow-after-sale-reviews-consent.md)

@@ -38,7 +38,7 @@ public class NotificationServiceImpl implements NotificationService {
             };
             var notice=new SystemNotification();notice.setRecipientId(recipientId);notice.setEventType(eventType);notice.setEventKey(key);
             notice.setTitle(title);notice.setContent(title+"，请查看订单详情。");
-            notice.setBusinessReference(json.writeValueAsString(Map.of("type","ORDER","id",orderId.toString(),"requestId",requestId.toString())));
+            notice.setBusinessReference(orderReference(orderId,requestId));
             notices.insert(notice);afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(notice.getId()))));publishUnread(recipientId);});return null;
         });
     }
@@ -59,10 +59,17 @@ public class NotificationServiceImpl implements NotificationService {
             };
             var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType(eventType);n.setEventKey(key);n.setTitle(title);
             n.setContent(title+"，请查看订单详情。");
-            var reference=new LinkedHashMap<String,String>();reference.put("type","ORDER");reference.put("id",orderId.toString());if(requestId!=null)reference.put("requestId",requestId.toString());
-            n.setBusinessReference(json.writeValueAsString(reference));
+            n.setBusinessReference(orderReference(orderId,requestId));
             notices.insert(n);afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(n.getId()))));publishUnread(recipientId);});return null;
         });
+    }
+    /** 现货与定制均使用订单入口，定制通知额外携带需求编号。 */
+    private String orderReference(Long orderId,Long requestId){
+        var reference=new LinkedHashMap<String,String>();
+        reference.put("type","ORDER");
+        reference.put("id",orderId.toString());
+        if(requestId!=null)reference.put("requestId",requestId.toString());
+        return json.writeValueAsString(reference);
     }
     @Transactional(propagation=Propagation.MANDATORY)
     public void tradeChanged(Long recipientId,String eventType,String businessType,Long businessId,Long requestId){

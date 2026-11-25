@@ -3,21 +3,26 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import PrivateImage from '@/components/PrivateImage.vue'
+import QuoteImages from '@/components/QuoteImages.vue'
 import ReportDecisionForm from '@/components/ReportDecisionForm.vue'
 import ReportMaterials from '@/components/ReportMaterials.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
-import { decideReviewReport, getReviewReport, getReviewReports } from '@/api/review'
+import { decideReviewReport, getAdminReviewReportMessages, getReviewReport, getReviewReports } from '@/api/review'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/creator'
+import { progressNodeName } from '@/utils/quote'
 import { ApiError } from '@/utils/request'
 import { reportReasons } from '@/utils/report'
 import type { ReviewReportDecision } from '@/types/report'
+import type { ChatMessageVO } from '@/types/customRequest'
 import type { ReviewReportDetailVO, ReviewReportVO } from '@/types/review'
 import '@/assets/styles/craftflow-reports.css'
+import '@/assets/styles/quote.css'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const adminId = computed(() => auth.session?.roles.includes('ADMIN') ? auth.session.userId : undefined)
 const status = computed(() => ['PENDING', 'PROCESSED', 'ALL'].includes(String(route.query.status)) ? String(route.query.status) : 'PENDING')
 const page = computed(() => Math.min(1_000_000, Math.max(1, Math.floor(Number(route.query.page)) || 1)))
 const selected = computed(() => typeof route.query.reportId === 'string' && /^\d+$/.test(route.query.reportId) ? route.query.reportId : '')
@@ -30,8 +35,13 @@ const loadingDetail = ref(false)
 const queueError = ref('')
 const detailError = ref('')
 const notice = ref('')
+const messages = ref<ChatMessageVO[]>([])
+const moreMessagesAvailable = ref(false)
+const loadingMessages = ref(false)
+const messageError = ref('')
 let queueRevision = 0
 let detailRevision = 0
+let messageRevision = 0
 const labels: Record<ReviewReportDecision, string> = {
   NOT_UPHELD: '举报不成立', HIDE: '隐藏评价', DELETE: '删除评价', RESTORE: '更正并恢复评价',
 }
@@ -64,13 +74,49 @@ async function loadDetail() {
   const id = selected.value
   const current = ++detailRevision
   detailError.value = ''
-  if (!id) return
+  if (!id || !adminId.value) return
   loadingDetail.value = true
   try {
     const result = await getReviewReport(id)
     if (current === detailRevision) detail.value = result
-  } catch (failure) { if (current === detailRevision) detailError.value = failure instanceof Error ? failure.message : '评价举报详情读取失败' }
+  } catch (failure) {
+    if (current !== detailRevision) return
+    if (failure instanceof ApiError && [401, 403, 404].includes(failure.status)) detail.value = undefined
+    detailError.value = failure instanceof Error ? failure.message : '评价举报详情读取失败'
+  }
   finally { if (current === detailRevision) loadingDetail.value = false }
+}
+
+/** 在当前举报的权限上下文中读取一页会话，序号使用字符串去重。 */
+async function loadMessages(before?: string) {
+  const reportId = selected.value
+  if (!reportId || !adminId.value || !detail.value?.conversationId || loadingMessages.value) return
+  const current = ++messageRevision
+  loadingMessages.value = true
+  messageError.value = ''
+  try {
+    const page = await getAdminReviewReportMessages(reportId, { before, size: 20 })
+    if (current !== messageRevision) return
+    const bySeq = new Map<string, ChatMessageVO>()
+    for (const message of [...(before ? messages.value : []), ...page.items]) {
+      bySeq.set(message.seqNo, message)
+    }
+    messages.value = [...bySeq.values()].sort((a, b) => BigInt(a.seqNo) < BigInt(b.seqNo) ? -1 : 1)
+    moreMessagesAvailable.value = page.hasMore
+  } catch (failure) {
+    if (current !== messageRevision) return
+    if (failure instanceof ApiError && [401, 403, 404].includes(failure.status)) {
+      messages.value = []
+      moreMessagesAvailable.value = false
+    }
+    messageError.value = failure instanceof Error ? failure.message : '关联会话读取失败'
+  } finally {
+    if (current === messageRevision) loadingMessages.value = false
+  }
+}
+
+function loadOlderMessages() {
+  void loadMessages(messages.value[0]?.seqNo)
 }
 
 async function decide(decision: ReviewReportDecision, reason: string, expectedHistoryId: string) {
@@ -103,11 +149,20 @@ async function verify(decision: ReviewReportDecision, reason: string, previousId
 }
 
 watch([status, page, () => auth.session?.userId, () => auth.session?.roles.includes('ADMIN')], () => { rows.value = []; total.value = 0; void loadQueue() }, { immediate: true })
-watch([selected, () => auth.session?.userId, () => auth.session?.roles.includes('ADMIN')], () => {
+watch([selected, adminId], () => {
   detail.value = undefined; notice.value = ''; loadingDetail.value = false
   void loadDetail()
-}, { immediate: true })
-onBeforeUnmount(() => { queueRevision++; detailRevision++ })
+}, { immediate: true, flush: 'sync' })
+// 举报、账号或会话切换时撤下上一上下文的消息，并丢弃已经发出的请求结果。
+watch(() => detail.value?.conversationId, conversationId => {
+  messageRevision++
+  messages.value = []
+  moreMessagesAvailable.value = false
+  loadingMessages.value = false
+  messageError.value = ''
+  if (conversationId) void loadMessages()
+}, { flush: 'sync' })
+onBeforeUnmount(() => { queueRevision++; detailRevision++; messageRevision++ })
 </script>
 
 <template>
@@ -243,19 +298,72 @@ onBeforeUnmount(() => { queueRevision++; detailRevision++ })
             admin
           />
           <details
-            v-if="detail.messages.length"
-            class="report-history-link"
+            :key="detail.report.id"
+            class="report-conversation"
           >
-            <summary>关联订单会话（{{ detail.messages.length }} 条）</summary>
-            <ul>
-              <li
-                v-for="message in detail.messages"
-                :key="message.id"
+            <summary>关联订单会话（只读）</summary>
+            <p
+              v-if="loadingMessages"
+              class="muted"
+              role="status"
+            >
+              正在读取会话…
+            </p>
+            <p
+              v-else-if="messageError"
+              class="form-alert"
+              role="alert"
+            >
+              {{ messageError }}
+              <button
+                type="button"
+                class="inline-button"
+                @click="loadOlderMessages"
               >
-                <time>{{ formatTime(message.createdAt) }}</time> · 用户 {{ message.senderId }} · {{ message.content || '图片或节点引用' }}
-                <span v-if="message.imageIds.length"> · {{ message.imageIds.length }} 张证据图片</span>
+                重试读取会话
+              </button>
+            </p>
+            <button
+              v-else-if="moreMessagesAvailable"
+              type="button"
+              class="inline-button"
+              @click="loadOlderMessages"
+            >
+              读取更早会话
+            </button>
+            <p
+              v-else-if="!messages.length"
+              class="muted"
+            >
+              {{ detail.conversationId ? '当前无会话消息' : '暂无关联会话' }}
+            </p>
+            <ol class="report-chat-messages">
+              <li
+                v-for="message in messages"
+                :key="message.seqNo"
+              >
+                <header>
+                  <strong>{{ message.senderId === detail.buyerId ? '买家' : '创作者' }}</strong>
+                  <time>{{ formatTime(message.createdAt) }}</time>
+                </header>
+                <p v-if="message.referencedNodeCode">
+                  引用进度：{{ progressNodeName[message.referencedNodeCode] }}
+                </p>
+                <p
+                  v-if="message.content"
+                  class="report-target"
+                >
+                  {{ message.content }}
+                </p>
+                <QuoteImages
+                  v-if="message.imageIds.length"
+                  :image-ids="message.imageIds"
+                  :admin-review-report-id="detail.report.id"
+                  scope="chat"
+                  label="会话凭证"
+                />
               </li>
-            </ul>
+            </ol>
           </details>
           <p
             v-if="notice"
