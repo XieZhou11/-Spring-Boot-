@@ -51,7 +51,7 @@ onBeforeUnmount(() => revision++)
 <template>
   <AdminLayout
     title="创作者入驻审核"
-    subtitle="从成品到制作过程，认真了解每一位创作者。"
+    presentation="craftflow"
   >
     <div
       class="admin-review-grid"
@@ -60,6 +60,7 @@ onBeforeUnmount(() => revision++)
       <section
         class="review-queue"
         aria-label="入驻审核队列"
+        :aria-busy="loading"
       >
         <header class="review-queue-heading">
           <h2>入驻申请</h2><span>{{ total }} 份申请</span>
@@ -80,7 +81,6 @@ onBeforeUnmount(() => revision++)
         <p
           v-if="loading"
           class="account-loading"
-          role="status"
         >
           正在读取审核队列…
         </p><p
@@ -95,7 +95,7 @@ onBeforeUnmount(() => revision++)
             v-if="!rows.length"
             class="creator-empty"
           >
-            <span aria-hidden="true">✓</span><h2>这里暂时没有申请</h2><p>可切换状态查看历史审核记录。</p>
+            <h3>当前状态暂无申请</h3><p>切换状态可查看历史审核记录。</p>
           </div><div
             v-else
             class="review-table-wrap"
@@ -127,6 +127,7 @@ onBeforeUnmount(() => revision++)
                   </td><td>
                     <RouterLink
                       class="text-link"
+                      :aria-current="route.params.id === row.id ? 'true' : undefined"
                       :to="{ path: `/admin/creator-applications/${row.id}`, query: route.query }"
                     >查看材料 ↗</RouterLink>
                   </td>

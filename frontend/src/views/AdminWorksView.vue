@@ -48,7 +48,7 @@ onBeforeUnmount(() => revision++)
 <template>
   <AdminLayout
     title="作品审核"
-    subtitle="看见手艺，也守护每一份原创。"
+    presentation="craftflow"
   >
     <div
       class="admin-review-grid"
@@ -57,6 +57,7 @@ onBeforeUnmount(() => revision++)
       <section
         class="review-queue"
         aria-label="作品审核队列"
+        :aria-busy="loading"
       >
         <header class="review-queue-heading">
           <h2>作品队列</h2><span>{{ total }} 件作品</span>
@@ -67,6 +68,7 @@ onBeforeUnmount(() => revision++)
         >
           <button
             :class="{ active: !status }"
+            :aria-pressed="!status"
             @click="status = ''; filter(1)"
           >
             全部作品
@@ -74,6 +76,7 @@ onBeforeUnmount(() => revision++)
             v-for="key in (['PENDING', 'ONLINE', 'REJECTED', 'OFFLINE'] as const)"
             :key="key"
             :class="{ active: status === key }"
+            :aria-pressed="status === key"
             @click="status = key; filter(1)"
           >
             {{ workStatusLabels[key] }}
@@ -113,7 +116,7 @@ onBeforeUnmount(() => revision++)
           v-else-if="!rows.length && !error"
           class="work-empty"
         >
-          <span aria-hidden="true">✓</span><h3>当前队列已处理完毕</h3>
+          <h3>当前筛选条件下暂无作品</h3>
         </div><div
           v-else
           class="managed-work-list"
@@ -132,8 +135,9 @@ onBeforeUnmount(() => revision++)
             /><div
               v-else
               class="managed-work-empty-image"
+              aria-hidden="true"
             >
-              拾
+              <AppIcon name="image" />
             </div><div class="managed-work-copy">
               <span
                 class="work-status"

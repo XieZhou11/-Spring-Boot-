@@ -4,8 +4,9 @@ import AdminLayout from './AdminLayout.vue'
 import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/account.css'
 import '@/assets/styles/work.css'
+import '@/assets/styles/craftflow-account.css'
 
-defineProps<{ title: string; subtitle: string; number: string }>()
+defineProps<{ title: string; subtitle?: string; number?: string }>()
 const auth = useAuthStore()
 </script>
 
@@ -14,11 +15,13 @@ const auth = useAuthStore()
     v-if="auth.session?.roles.includes('ADMIN')"
     :title="title"
   >
-    <slot />
+    <div class="craft-account-panel">
+      <slot />
+    </div>
   </AdminLayout>
   <div
     v-else
-    class="member-page account-page"
+    class="member-page account-page craft-account"
   >
     <BusinessHeader />
     <main class="account-shell">
@@ -28,34 +31,32 @@ const auth = useAuthStore()
           <RouterLink
             to="/account/profile"
             active-class="active"
-          ><span>01</span> 个人资料 <i aria-hidden="true">↗</i></RouterLink>
+          >个人资料</RouterLink>
           <RouterLink
-            v-if="!auth.session?.roles.includes('ADMIN')"
             to="/account/addresses"
             active-class="active"
-          ><span>02</span> 收货地址 <i aria-hidden="true">↗</i></RouterLink>
+          >收货地址</RouterLink>
           <RouterLink
-            v-if="!auth.session?.roles.includes('ADMIN')"
             to="/account/creator-certification"
             active-class="active"
-          ><span>03</span> 创作者入驻 <i aria-hidden="true">↗</i></RouterLink>
+          >创作者入驻</RouterLink>
           <RouterLink
             to="/account/favorites"
             active-class="active"
-          ><span>04</span> 收藏作品 <i aria-hidden="true">↗</i></RouterLink>
+          >收藏作品</RouterLink>
           <RouterLink
             to="/account/following"
             active-class="active"
-          ><span>05</span> 关注创作者 <i aria-hidden="true">↗</i></RouterLink>
+          >关注创作者</RouterLink>
         </nav>
       </aside>
       <section class="account-content">
-        <div class="account-heading">
-          <div>
-            <h1>{{ title }}</h1>
-          </div>
+        <header class="account-heading">
+          <h1>{{ title }}</h1>
+        </header>
+        <div class="craft-account-panel">
+          <slot />
         </div>
-        <slot />
       </section>
     </main>
     <footer class="site-footer">

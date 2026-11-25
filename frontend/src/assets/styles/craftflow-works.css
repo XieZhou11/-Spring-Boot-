@@ -1,32 +1,32 @@
-/* 广场与公开详情采用匠心集样式，选择器限定在新版页面的内容区。 */
-:where(.cf-works, .cf-work-detail) :is(a, button, input, select, textarea):focus-visible {
+/* 广场、公开详情与创作者主页采用匠心集样式，选择器限定在新版页面的内容区。 */
+:where(.cf-works, .cf-work-detail, .cf-creator-public .work-shell) :is(a, button, input, select, textarea):focus-visible {
   outline: 2px solid var(--craft-primary);
   outline-offset: 2px;
 }
 
-:is(.cf-works, .cf-work-detail) :is(.button-primary, .button-secondary) {
+:is(.cf-works, .cf-work-detail, .cf-creator-public :where(.work-shell)) :is(.button-primary, .button-secondary) {
   border-radius: 8px;
   min-height: 36px;
   padding: 8px 14px;
   font: 600 13px var(--craft-font);
 }
 
-:is(.cf-works, .cf-work-detail) .button-primary {
+:is(.cf-works, .cf-work-detail, .cf-creator-public :where(.work-shell)) .button-primary {
   border: 1px solid var(--craft-primary);
   color: white;
   background: var(--craft-primary);
 }
 
-:is(.cf-works, .cf-work-detail) .button-primary:hover:not(:disabled) { background: #3f3f46; }
+:is(.cf-works, .cf-work-detail, .cf-creator-public :where(.work-shell)) .button-primary:hover:not(:disabled) { background: #3f3f46; }
 
-:is(.cf-works, .cf-work-detail) .button-secondary {
+:is(.cf-works, .cf-work-detail, .cf-creator-public :where(.work-shell)) .button-secondary {
   border: 1px solid var(--craft-border);
   color: var(--craft-ink);
   background: var(--craft-surface);
 }
 
-:is(.cf-works, .cf-work-detail) .button-secondary:hover:not(:disabled) { background: #f4f4f5; }
-:is(.cf-works, .cf-work-detail) .inline-button { color: #854d0e; font-size: inherit; }
+:is(.cf-works, .cf-work-detail, .cf-creator-public :where(.work-shell)) .button-secondary:hover:not(:disabled) { background: #f4f4f5; }
+:is(.cf-works, .cf-work-detail, .cf-creator-public :where(.work-shell)) .inline-button { color: #854d0e; font-size: inherit; }
 
 .cf-work-search { display: grid; gap: 14px; }
 
@@ -245,11 +245,52 @@
   color: var(--craft-ink);
 }
 
+/* 主页复用广场作品卡和详情的作者操作，口碑、作品与评价各有可读区域。 */
+.cf-creator-public .creator-public-header {
+  grid-template-columns: 84px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 18px;
+  margin: 0 0 22px;
+  padding: 24px;
+  border: 1px solid var(--craft-border);
+  border-radius: 16px;
+  background: var(--craft-surface);
+}
+.cf-creator-public .creator-public-header > :is(img, .creator-public-avatar) { width: 84px; height: 84px; }
+.cf-creator-public .creator-public-avatar { background: #fef3c7; color: #78350f; font: 650 28px var(--craft-font); }
+.cf-creator-public .creator-public-header h1 { margin: 0 0 8px; font: 650 26px/1.35 var(--craft-font); overflow-wrap: anywhere; }
+.cf-creator-public .creator-public-header p:not(.eyebrow) { margin: 8px 0 0; color: var(--craft-muted); font-size: 13px; }
+.cf-creator-public .creator-public-header p.field-error { color: #92400e; }
+.cf-creator-public .creator-public-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin-top: 14px; }
+.cf-creator-public .profile-report-toggle { min-height: 36px; padding-inline: 6px; color: var(--craft-muted); }
+.cf-creator-public .creator-public-stats { grid-column: auto; flex-wrap: wrap; gap: 8px; margin: 0; }
+.cf-creator-public .creator-public-stats > div { min-width: 72px; padding: 10px; border-radius: 8px; background: var(--craft-bg); }
+.cf-creator-public .creator-public-stats dt { color: var(--craft-muted); font-size: 12px; }
+.cf-creator-public .creator-public-stats dd { margin: 6px 0 0; color: var(--craft-ink); font: 650 15px var(--craft-font); font-variant-numeric: tabular-nums; }
+.cf-creator-public .work-section-heading { margin-block: 18px 10px; }
+.cf-creator-public .work-section-heading h2 { color: var(--craft-ink); font: 650 17px var(--craft-font); }
+.cf-creator-public .work-grid { gap: 16px; }
+.cf-creator-public :is(.work-empty, .creator-reviews) { padding: 20px; border: 1px solid var(--craft-border); border-radius: 16px; background: var(--craft-surface); }
+.cf-creator-public .work-empty p { margin: 0; color: var(--craft-muted); }
+.cf-creator-public .creator-reviews { margin-top: 24px; }
+.cf-creator-public .creator-reviews > header { margin-top: 0; }
+.cf-creator-public .creator-review-card { padding-block: 14px; border-top: 1px solid var(--craft-border); overflow-wrap: anywhere; }
+.cf-creator-public .creator-review-card > time { display: block; color: var(--craft-muted); font-size: 12px; }
+.cf-creator-public .review-images { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.cf-creator-public .review-images img { width: 100px; height: 100px; border-radius: 6px; object-fit: contain; }
+.cf-creator-public :is(.report-dialog, .review-report-form, .review-report-followup) { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--craft-border); border-radius: 8px; background: var(--craft-bg); }
+.cf-creator-public :is(.review-report-form, .review-report-followup) label { display: grid; gap: 5px; }
+.cf-creator-public :is(.review-report-form, .review-report-followup) :is(input, select, textarea) { max-width: 100%; }
+.cf-creator-public :is(.review-report-form, .review-report-followup) .button-primary { justify-self: start; }
+
 @media (max-width: 900px) {
-  .cf-works .work-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  :is(.cf-works, .cf-creator-public) .work-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .cf-work-detail-content { display: flex; flex-direction: column; align-items: stretch; }
   .cf-work-detail .work-detail-info { padding: 16px; }
   .cf-work-detail :is(.work-prose, .work-interactions) { padding: 16px; }
+  .cf-creator-public .creator-public-header { grid-template-columns: 58px minmax(0, 1fr); padding: 16px; }
+  .cf-creator-public .creator-public-header > :is(img, .creator-public-avatar) { width: 58px; height: 58px; }
+  .cf-creator-public .creator-public-stats { grid-column: 1 / -1; }
 }
 
 @media (max-width: 500px) {

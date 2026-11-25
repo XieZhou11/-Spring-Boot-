@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import WorkLayout from './WorkLayout.vue'
+
+/** 已完成重做的工作台页面启用 CraftFlow 版心。 */
+defineProps<{ presentation?: 'craftflow' }>()
 </script>
 
 <template>
-  <WorkLayout>
-    <div class="creator-workspace">
+  <WorkLayout :presentation="presentation">
+    <div
+      class="creator-workspace"
+      :class="{ 'cf-creator-workspace': presentation === 'craftflow' }"
+    >
       <aside class="work-studio-sidebar">
         <h2>创作者工作台</h2>
         <nav aria-label="创作者工作台">

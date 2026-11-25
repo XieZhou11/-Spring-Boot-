@@ -39,6 +39,7 @@ let baselineApplicationId: string | null = null
 const mayApply = computed(() => certification.value && !auth.session?.roles.includes('ADMIN') && !['PENDING', 'APPROVED'].includes(certification.value.certificationStatus))
 const isCurrentPending = computed(() => selected.value?.status === 'PENDING' && selected.value.id === certification.value?.currentApplicationId)
 const primaryCategories = computed(() => categories.value.filter(c => c.enabled && !c.parentId))
+const certificationStatus = computed(() => certification.value?.certificationStatus ?? 'NONE')
 
 function emptyForm(): CreatorApplicationDTO {
   return { requestKey: crypto.randomUUID(), realName: '', contactPhone: '', province: '', city: '', district: '', categoryIds: [], experienceYears: 0, introduction: '', originalWorks: Array.from({ length: 3 }, () => ({ finishedImageIds: [], processImageIds: [] })), alipayAccount: '', payeeName: '', supportingDescription: '' }
@@ -202,11 +203,7 @@ onBeforeUnmount(() => { disposed = true; loadRevision++; window.removeEventListe
 </script>
 
 <template>
-  <AccountLayout
-    title="创作者入驻"
-    subtitle="让认真做好的作品，有机会被更多人看见。"
-    number="03"
-  >
+  <AccountLayout title="创作者入驻">
     <p
       v-if="loading && !editing"
       class="account-loading"
@@ -214,7 +211,10 @@ onBeforeUnmount(() => { disposed = true; loadRevision++; window.removeEventListe
     >
       正在读取入驻资料…
     </p>
-    <div v-else-if="loadError && !editing">
+    <div
+      v-else-if="loadError && !editing"
+      class="account-load-error"
+    >
       <p
         class="form-alert"
         role="alert"
@@ -233,40 +233,38 @@ onBeforeUnmount(() => { disposed = true; loadRevision++; window.removeEventListe
         class="success-note"
         role="status"
       >
-        ✓ {{ notice }}
+        {{ notice }}
       </p>
       <section
         v-if="!editing"
         class="certification-overview"
       >
         <div>
-          <p class="eyebrow">
-            A PLACE FOR YOUR CRAFT
-          </p><h2>{{ certification?.certificationStatus === 'APPROVED' ? '好手艺，从这里被看见。' : '把你的手艺，介绍给拾作。' }}</h2><p>准备 3—5 件原创作品、成品与制作过程图，以及收款资料。材料仅本人及必要审核管理员可见，入驻作品不会自动公开。</p>
+          <h2>认证状态</h2>
+          <p v-if="auth.session?.roles.includes('ADMIN')">
+            管理员可从后台审核入驻材料。
+          </p>
+          <p v-else-if="certificationStatus === 'APPROVED'">
+            姓名及收款资料仅供查看，可在页首切换为创作者身份。
+          </p>
+          <p v-else-if="certificationStatus === 'PENDING'">
+            申请已提交，可查看材料和审核进度。
+          </p>
+          <p v-else>
+            请准备 3—5 件原创作品的成品图、制作过程图和收款资料。审核材料仅本人及有权审核的管理员可见。
+          </p>
         </div>
         <span
           class="status-pill"
-          :data-status="certification?.certificationStatus"
-        >{{ applicationStatusLabels[certification?.certificationStatus || 'NONE'] }}</span>
+          :data-status="certificationStatus"
+        >{{ applicationStatusLabels[certificationStatus] }}</span>
         <button
           v-if="mayApply"
           class="button-primary"
           @click="startApplication"
         >
-          {{ selected && ['REJECTED', 'WITHDRAWN'].includes(selected.status) ? '补正并重新申请' : '开始申请' }} <span aria-hidden="true">↗</span>
+          {{ selected && ['REJECTED', 'WITHDRAWN'].includes(selected.status) ? '补正并重新申请' : '开始申请' }}
         </button>
-        <p
-          v-if="auth.session?.roles.includes('ADMIN')"
-          class="field-help"
-        >
-          管理员使用后台审核入口；申请创作者资格请使用普通买家账号。
-        </p>
-        <p
-          v-if="certification?.certificationStatus === 'APPROVED'"
-          class="field-help"
-        >
-          认证已通过，姓名及收款资料仅供查看。可在页首切换为创作者身份。
-        </p>
       </section>
       <form
         v-if="editing"
@@ -276,147 +274,166 @@ onBeforeUnmount(() => { disposed = true; loadRevision++; window.removeEventListe
         :aria-busy="submitting || uploads > 0"
         @submit.prevent="submit"
       >
-        <div class="section-caption">
-          <span>01 / 关于你的手艺</span><small>YOUR CRAFT STORY</small>
-        </div>
-        <div class="form-columns">
-          <AccountField
-            v-model="form.realName"
-            label="申请人姓名"
-            hint="2—20 字，与收款人姓名一致"
-            :error="errors.realName"
-            :disabled="submitting"
-          /><AccountField
-            v-model="form.contactPhone"
-            label="联系电话"
-            inputmode="tel"
-            :error="errors.contactPhone"
+        <section
+          class="certification-form-section"
+          aria-labelledby="application-info-title"
+        >
+          <h2 id="application-info-title">
+            申请资料
+          </h2>
+          <div class="form-columns">
+            <AccountField
+              v-model="form.realName"
+              label="申请人姓名"
+              hint="2—20 字，与收款人姓名一致"
+              :error="errors.realName"
+              :disabled="submitting"
+            /><AccountField
+              v-model="form.contactPhone"
+              label="联系电话"
+              inputmode="tel"
+              :error="errors.contactPhone"
+              :disabled="submitting"
+            />
+          </div>
+          <AddressRegion
+            v-model:province="form.province"
+            v-model:city="form.city"
+            v-model:district="form.district"
+            :errors="errors"
             :disabled="submitting"
           />
-        </div>
-        <AddressRegion
-          v-model:province="form.province"
-          v-model:city="form.city"
-          v-model:district="form.district"
-          :errors="errors"
-          :disabled="submitting"
-        />
-        <fieldset
-          class="category-picker"
-          :disabled="submitting"
+          <fieldset
+            class="category-picker"
+            :disabled="submitting"
+          >
+            <legend>一级主品类 · 选择 1—3 个</legend><div>
+              <label
+                v-for="category in primaryCategories"
+                :key="category.id"
+                class="category-choice"
+              ><input
+                v-model="form.categoryIds"
+                type="checkbox"
+                :value="category.id"
+                :disabled="!form.categoryIds.includes(category.id) && form.categoryIds.length >= 3"
+              >{{ category.name }}</label>
+            </div><p
+              v-if="!primaryCategories.length"
+              class="field-help"
+            >
+              暂时没有可选择的品类，请联系平台或稍后重试。
+            </p><p
+              v-if="errors.categoryIds"
+              class="field-error"
+            >
+              {{ errors.categoryIds }}
+            </p>
+          </fieldset>
+          <AccountField
+            v-model="years"
+            label="从业年限"
+            hint="0—70 年，请填写整数"
+            :error="errors.experienceYears"
+            :disabled="submitting"
+          />
+          <AccountField
+            v-model="form.introduction"
+            label="手艺与个人介绍"
+            multiline
+            :hint="`${Array.from(form.introduction).length} / 50—500 字，分享你的手艺经历和创作方向`"
+            :error="errors.introduction"
+            :disabled="submitting"
+          />
+        </section>
+        <section
+          class="certification-form-section"
+          aria-labelledby="application-work-title"
         >
-          <legend>一级主品类 · 选择 1—3 个</legend><div>
-            <label
-              v-for="category in primaryCategories"
-              :key="category.id"
-              class="category-choice"
-            ><input
-              v-model="form.categoryIds"
-              type="checkbox"
-              :value="category.id"
-              :disabled="!form.categoryIds.includes(category.id) && form.categoryIds.length >= 3"
-            >{{ category.name }}</label>
-          </div><p
-            v-if="!primaryCategories.length"
-            class="field-help"
-          >
-            暂时没有可选择的品类，请联系平台或稍后重试。
-          </p><p
-            v-if="errors.categoryIds"
-            class="field-error"
-          >
-            {{ errors.categoryIds }}
+          <h2 id="application-work-title">
+            原创作品
+          </h2>
+          <p class="field-help">
+            3—5 件，每件至少一张成品图和一张过程图。支持 JPEG / PNG / WebP，单张不超过 5 MiB。
           </p>
-        </fieldset>
-        <AccountField
-          v-model="years"
-          label="从业年限"
-          hint="0—70 年，请填写整数"
-          :error="errors.experienceYears"
-          :disabled="submitting"
-        />
-        <AccountField
-          v-model="form.introduction"
-          label="手艺与个人介绍"
-          multiline
-          :hint="`${Array.from(form.introduction).length} / 50—500 字，分享你的手艺经历和创作方向`"
-          :error="errors.introduction"
-          :disabled="submitting"
-        />
-        <div class="section-caption">
-          <span>02 / 原创作品集</span><small>MADE BY YOUR HANDS</small>
-        </div>
-        <p class="field-help">
-          3—5 件，每件至少一张成品图和一张过程图。支持 JPEG / PNG / WebP，单张不超过 5 MiB。
-        </p>
-        <fieldset
-          v-for="(work, index) in form.originalWorks"
-          :key="index"
-          class="work-editor"
-        >
-          <legend>原创作品 {{ String(index + 1).padStart(2, '0') }}</legend><ApplicationImagePicker
-            v-model="work.finishedImageIds"
-            :label="`作品${index + 1}成品图`"
-            :disabled="submitting || uploads > 0"
-            :error="errors[`originalWorks[${index}].finishedImageIds`]"
-            @busy="uploads += $event ? 1 : -1"
-          /><ApplicationImagePicker
-            v-model="work.processImageIds"
-            :label="`作品${index + 1}过程图`"
-            :disabled="submitting || uploads > 0"
-            :error="errors[`originalWorks[${index}].processImageIds`]"
-            @busy="uploads += $event ? 1 : -1"
-          /><button
-            v-if="form.originalWorks.length > 3"
-            class="inline-button delete-button"
+          <fieldset
+            v-for="(work, index) in form.originalWorks"
+            :key="index"
+            class="work-editor"
+          >
+            <legend>原创作品 {{ String(index + 1).padStart(2, '0') }}</legend><ApplicationImagePicker
+              v-model="work.finishedImageIds"
+              :label="`作品${index + 1}成品图`"
+              :disabled="submitting || uploads > 0"
+              :error="errors[`originalWorks[${index}].finishedImageIds`]"
+              @busy="uploads += $event ? 1 : -1"
+            /><ApplicationImagePicker
+              v-model="work.processImageIds"
+              :label="`作品${index + 1}过程图`"
+              :disabled="submitting || uploads > 0"
+              :error="errors[`originalWorks[${index}].processImageIds`]"
+              @busy="uploads += $event ? 1 : -1"
+            /><button
+              v-if="form.originalWorks.length > 3"
+              class="inline-button delete-button"
+              type="button"
+              :disabled="submitting || uploads > 0"
+              @click="form.originalWorks.splice(index, 1)"
+            >
+              移除此件作品
+            </button>
+          </fieldset>
+          <button
+            v-if="form.originalWorks.length < 5"
+            class="button-secondary add-work"
             type="button"
             :disabled="submitting || uploads > 0"
-            @click="form.originalWorks.splice(index, 1)"
+            @click="form.originalWorks.push({ finishedImageIds: [], processImageIds: [] })"
           >
-            移除此件作品
+            ＋ 添加一件原创作品（{{ form.originalWorks.length }} / 5）
           </button>
-        </fieldset>
-        <button
-          v-if="form.originalWorks.length < 5"
-          class="button-secondary add-work"
-          type="button"
-          :disabled="submitting || uploads > 0"
-          @click="form.originalWorks.push({ finishedImageIds: [], processImageIds: [] })"
+          <p
+            v-if="errors.originalWorks"
+            class="field-error"
+          >
+            {{ errors.originalWorks }}
+          </p>
+        </section>
+        <section
+          class="certification-form-section"
+          aria-labelledby="application-payment-title"
         >
-          ＋ 添加一件原创作品（{{ form.originalWorks.length }} / 5）
-        </button>
-        <p
-          v-if="errors.originalWorks"
-          class="field-error"
-        >
-          {{ errors.originalWorks }}
-        </p>
-        <div class="section-caption">
-          <span>03 / 收款认证</span><small>PAYMENT DETAILS</small>
-        </div>
-        <p class="privacy-note">
-          请填写真实支付宝资料，管理员将随入驻材料一同核对。认证通过后姓名及收款账户只读。平台结算为模拟记录，不实际打款，也不宣称完成权威实名认证。
-        </p>
-        <AccountField
-          v-model="form.alipayAccount"
-          label="支付宝账号"
-          hint="支付宝绑定的手机号或邮箱"
-          :error="errors.alipayAccount"
-          :disabled="submitting"
-        /><AccountField
-          v-model="form.payeeName"
-          label="收款人姓名"
-          hint="须与申请人姓名完全一致"
-          :error="errors.payeeName"
-          :disabled="submitting"
-        /><AccountField
-          v-model="form.supportingDescription"
-          label="补充证明说明（选填）"
-          multiline
-          hint="可说明从业或原创情况，无需身份证号及证件照片"
-          :error="errors.supportingDescription"
-          :disabled="submitting"
-        />
+          <h2 id="application-payment-title">
+            收款资料
+          </h2>
+          <p class="privacy-note">
+            管理员会核对真实支付宝资料。认证通过后，姓名及收款账户只读。平台以模拟方式记录结算。
+          </p>
+          <div class="form-columns">
+            <AccountField
+              v-model="form.alipayAccount"
+              label="支付宝账号"
+              hint="支付宝绑定的手机号或邮箱"
+              :error="errors.alipayAccount"
+              :disabled="submitting"
+            />
+            <AccountField
+              v-model="form.payeeName"
+              label="收款人姓名"
+              hint="须与申请人姓名完全一致"
+              :error="errors.payeeName"
+              :disabled="submitting"
+            />
+          </div>
+          <AccountField
+            v-model="form.supportingDescription"
+            label="补充证明说明（选填）"
+            multiline
+            hint="可说明从业或原创情况，无需身份证号及证件照片"
+            :error="errors.supportingDescription"
+            :disabled="submitting"
+          />
+        </section>
         <p
           v-if="message"
           class="form-alert"
@@ -453,9 +470,9 @@ onBeforeUnmount(() => { disposed = true; loadRevision++; window.removeEventListe
           v-if="selected"
           class="current-application"
         >
-          <div class="section-caption">
-            <span>申请材料与结论</span><small>APPLICATION RECORD</small>
-          </div><ApplicationMaterials :application="selected" /><button
+          <h2>申请材料与结论</h2>
+          <ApplicationMaterials :application="selected" />
+          <button
             v-if="isCurrentPending"
             class="button-secondary"
             :disabled="withdrawing"
@@ -472,18 +489,18 @@ onBeforeUnmount(() => { disposed = true; loadRevision++; window.removeEventListe
           {{ message }}
         </p>
         <section class="application-history">
-          <div class="section-caption">
-            <span>历次申请</span><small>EVERY STEP COUNTS</small>
-          </div><p
+          <h2>历次申请</h2>
+          <p
             v-if="!history.length"
             class="field-help"
           >
-            还没有申请记录。准备好作品，就从第一份申请开始。
+            暂无申请记录
           </p><button
             v-for="record in history"
             :key="record.id"
             class="history-row"
             :class="{ selected: selected?.id === record.id }"
+            :aria-current="selected?.id === record.id ? 'true' : undefined"
             @click="viewHistory(record.id)"
           >
             <span>#{{ record.id }}<small>{{ formatTime(record.submittedAt) }}</small></span><span
@@ -517,9 +534,7 @@ onBeforeUnmount(() => { disposed = true; loadRevision++; window.removeEventListe
       aria-labelledby="withdraw-title"
       @cancel="withdrawing && $event.preventDefault()"
     >
-      <p class="eyebrow">
-        APPLICATION WITHDRAWAL
-      </p><h2 id="withdraw-title">
+      <h2 id="withdraw-title">
         确认撤回这次申请？
       </h2><p>撤回后停止本次审核，材料和历史记录仍会保留。你可以补正后重新提交。</p><p
         v-if="message"

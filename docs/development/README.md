@@ -4,6 +4,7 @@
 
 ## 当前记录
 
+[T-022 CraftFlow 第 2 批](tasks/T-022-craftflow-account-works.md)覆盖个人中心、创作者入驻、品类与审核、作品管理和互动。 [测试记录](../testing/T-022-craftflow-account-works.md)
 [T-021 CraftFlow 第 1 批](tasks/T-021-craftflow-auth-discovery.md)覆盖认证、公共导航、作品广场及详情，复用现有会话、作品和交易接口。 [测试记录](../testing/T-021-craftflow-auth-discovery.md)
 
 已有 [T-001 后端账号注册、登录与找回密码](tasks/T-001-backend-auth.md)及 [T-002 认证页面联调](tasks/T-002-frontend-auth.md)，覆盖真实接口、会话与登录/注册/找回页面；QQ/163 公网收件及找回密码补充验收已由用户于 2026-11-23 手动验证通过，保留原实现与回归。后续业务功能按[任务模板](tasks/TASK_TEMPLATE.md)创建独立验收任务。

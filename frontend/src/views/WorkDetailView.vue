@@ -17,6 +17,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const work = ref<WorkVO>()
 const error = ref('')
+const interactionActions = ref<HTMLElement | null>(null)
 let revision = 0
 
 /** 保留导航来源的已应用条件，独立链接使用当前身份的广场入口。 */
@@ -77,11 +78,17 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('focus', load) })
           <template #trade-actions>
             <StockPurchase :work="work" />
           </template>
+          <template #interaction-actions>
+            <div ref="interactionActions" />
+          </template>
           <template #creator-actions>
             <CreatorFollow :creator-id="work.creatorId" />
           </template>
         </WorkMaterials>
-        <WorkInteractions :work-id="work.id" />
+        <WorkInteractions
+          :work-id="work.id"
+          :actions-target="interactionActions"
+        />
       </div>
       <p
         v-else

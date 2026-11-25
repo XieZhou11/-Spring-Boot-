@@ -184,9 +184,7 @@ onBeforeUnmount(() => revision++)
       aria-labelledby="review-confirm-title"
       @cancel="submitting && $event.preventDefault()"
     >
-      <p class="eyebrow">
-        CONFIRM YOUR REVIEW
-      </p><h2 id="review-confirm-title">
+      <h2 id="review-confirm-title">
         {{ decision === 'APPROVED' ? '确认通过这份申请？' : '确认驳回这份申请？' }}
       </h2><p>{{ decision === 'APPROVED' ? '通过后账号取得创作者资格，姓名与收款账户只读，并通知申请人。' : '将保留本次结论并通知申请人补正，历史材料不会覆盖。' }}</p><p
         v-if="reason"

@@ -1,6 +1,6 @@
 # PC Web 前端重做开发指南
 
-更新于 2026-11-25。新版前端按业务链路实施，第 1 批已完成真实后端联调及浏览器验收。 [T-021](../development/tasks/T-021-craftflow-auth-discovery.md)
+更新于 2026-11-25。新版前端按业务链路实施，第 1、2 批已完成真实后端联调及浏览器验收。 [T-021](../development/tasks/T-021-craftflow-auth-discovery.md) · [T-022](../development/tasks/T-022-craftflow-account-works.md)
 
 ## 1. 实现依据
 
@@ -36,6 +36,8 @@
 - 用受保护的作品链接走一遍登录、回跳、刷新和继续浏览。校验注册后回登录、验证码发送失败与结果未知的反馈，并核对管理员默认跳转到 `/admin/dashboard`。复测 `auth.spec.ts`、`navigation-layout.spec.ts` 和 `work-publication.spec.ts` 的相关用例。 [认证原型](../prototypes/craftflow/AuthView.tsx) · [作品原型](../prototypes/craftflow/BuyerWorks.tsx) · [认证接口](../../frontend/src/api/auth.ts) · [作品广场](../../frontend/src/views/HomeView.vue)
 
 ### 第 2 批 · 个人中心、创作者入驻、作品与互动
+
+已完成。浏览器回归和验证范围见 [T-022 测试记录](../testing/T-022-craftflow-account-works.md)。
 
 - 补齐资料、头像、地址、收藏和关注列表。入驻保留材料上传、提交、撤回和补正，并同步接通后台品类与入驻审核入口。按会话资格显示买家和创作者切换，按访问权限展示收款资料。
 - 重做作品管理、编辑及后台作品审核，保留草稿、审核历史、下架、两类交易设置及真实图片上传。作品详情和创作者主页继续支持点赞、收藏、关注和图文评论。管理员完成入驻与作品审核所需的页面随这批联调。
@@ -83,3 +85,8 @@
 ## 4. 已知业务差异
 
 截至 2026-11-25，静态核对发现 V1.5 §4.2.1 和 UC-19 要求现货全额退款后，创作者确认成品仍可出售时可手动恢复直购。当前普通退款接口只受理定制订单，现货释放逻辑覆盖未付款取消。T-016 也将现货退款和重新销售留待补齐。第 4、5 批依据接口展示现货的实际操作资格。现货退款和手动恢复销售单独补齐后再验收 UC-19 中的对应路径。 [V1.5 MVP 正文](../requirements/requirements.md) · [T-016 现货建单](../development/tasks/T-016-stock-order.md) · [退款资格源码](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/RefundApplicationServiceImpl.java) · [库存更新源码](../../backend/src/main/java/com/handcraft/platform/modules/mapper/WorkMapper.java)
+
+第 2 批核对了两项后台审核接口差异。
+
+- V1.5 §4.2.2 规定未提交草稿仅作者可见。当前管理员作品查询的「全部作品」与作品详情接口仍可读取草稿，需由后端落实相同的访问限制。 [V1.5 §4.2.2](../requirements/requirements.md#422-上架审核) · [作品查询](../../backend/src/main/java/com/handcraft/platform/modules/mapper/WorkMapper.java) · [作品详情](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/WorkServiceImpl.java)
+- V1.5 §4.9.1 要求处置更正记录依据并保留原结论。当前入驻和作品的审核接口对已有结论仅支持幂等重试，尚无更正操作。 [V1.5 §4.9.1](../requirements/requirements.md#491-审核中心) · [入驻审核](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/CreatorApplicationServiceImpl.java) · [作品审核](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/WorkServiceImpl.java)

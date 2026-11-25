@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import WorkLayout from '@/layouts/WorkLayout.vue'
 import CreatorFollow from '@/components/CreatorFollow.vue'
@@ -12,10 +12,17 @@ import type { ReportInput } from '@/types/report'
 import ReportDialog from '@/components/ReportDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { CreatorPublicVO, WorkVO } from '@/types/work'
-import type { CreatorReviewVO } from '@/types/review'
+import type { CreatorReviewVO, ReviewReportVO } from '@/types/review'
+import '@/assets/styles/craftflow-works.css'
 const route = useRoute()
 const auth = useAuthStore()
 const creator = ref<CreatorPublicVO>()
+const creatorLocation = computed(() => {
+  if (!creator.value) return ''
+  const { province, city, categories } = creator.value
+  const district = [province, city].filter(Boolean).join(' ')
+  return [district, categories.map(category => category.name).join(' / ')].filter(Boolean).join(' · ')
+})
 const works = ref<WorkVO[]>([])
 const reviews = ref<CreatorReviewVO[]>([])
 const reviewError = ref('')
@@ -23,7 +30,7 @@ const reportingId = ref('')
 const reportReason = ref('OTHER')
 const reportDescription = ref('')
 const reportImages = ref<{id:string;url:string}[]>([])
-const relatedReports = ref<Record<string, {id:string;status:string;reporterId:string;reasonCode:string;decisionReason:string|null}[]>>({})
+const relatedReports = ref<Record<string, ReviewReportVO[]>>({})
 const evidenceText = ref<Record<string,string>>({})
 const evidenceImages = ref<Record<string,{id:string;url:string}[]>>({})
 const reportStatus = ref<Record<string,string>>({})
@@ -32,6 +39,7 @@ const total = ref(0)
 const error = ref('')
 const loading = ref(false)
 let revision = 0
+let reportRevision = 0
 let timer: ReturnType<typeof setTimeout> | undefined
 /** 公开资料及作品独立查询，头像到期前重新从资料接口核验签名。 */
 async function load(next = page.value) {
@@ -50,33 +58,118 @@ async function load(next = page.value) {
 }
 async function flagReview(review: CreatorReviewVO) {
   if (!window.confirm('确认提交评价举报？')) return
-  try { await reportReview(review.id, { reasonCode: reportReason.value, description: reportDescription.value.trim(), imageIds: reportImages.value.map(x => x.id) }); reviewError.value = '举报已提交；若已有待处理举报，会追加到原记录。'; reportingId.value = ''; reportDescription.value = ''; reportImages.value = [] }
-  catch (failure) { reviewError.value = failure instanceof Error ? failure.message : '举报提交失败' }
+  const current = reportRevision
+  try {
+    await reportReview(review.id, { reasonCode: reportReason.value, description: reportDescription.value.trim(), imageIds: reportImages.value.map(x => x.id) })
+    if (current !== reportRevision) return
+    reviewError.value = '举报已提交；若已有待处理举报，会追加到原记录。'
+    reportingId.value = ''
+    reportDescription.value = ''
+    reportImages.value = []
+  } catch (failure) {
+    if (current === reportRevision) reviewError.value = failure instanceof Error ? failure.message : '举报提交失败'
+  }
 }
-async function uploadReportImage(event: Event) { const file=(event.target as HTMLInputElement).files?.[0]; if(!file||reportImages.value.length>=6)return; try{reportImages.value.push(await uploadReviewImage(file))}catch(failure){reviewError.value=failure instanceof Error?failure.message:'证据图片上传失败'}finally{(event.target as HTMLInputElement).value=''} }
-async function loadRelatedReports(reviewId:string) { try { relatedReports.value[reviewId]=await getReviewReportsForActor(reviewId) } catch (failure) { reviewError.value=failure instanceof Error?failure.message:'当前账号没有该评价举报的查询权限' } }
-async function uploadEvidenceImage(reviewId:string,event:Event) { const file=(event.target as HTMLInputElement).files?.[0];const list=evidenceImages.value[reviewId]??[];if(!file||list.length>=6)return;try{evidenceImages.value[reviewId]=[...list,await uploadReviewImage(file)]}catch(failure){reportStatus.value[reviewId]=failure instanceof Error?failure.message:'证据图片上传失败'}finally{(event.target as HTMLInputElement).value=''} }
-async function submitEvidence(reviewId:string,reportId:string) { const list=evidenceImages.value[reviewId]??[];try{await addReviewReportEvidence(reportId,{content:evidenceText.value[reviewId]?.trim()??'',imageIds:list.map(x=>x.id)});reportStatus.value[reviewId]='材料已提交';evidenceText.value[reviewId]='';evidenceImages.value[reviewId]=[];await loadRelatedReports(reviewId)}catch(failure){reportStatus.value[reviewId]=failure instanceof Error?failure.message:'材料提交失败'} }
+async function uploadReportImage(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || reportImages.value.length >= 6) return
+  const current = reportRevision
+  try {
+    const image = await uploadReviewImage(file)
+    if (current === reportRevision) reportImages.value.push(image)
+  } catch (failure) {
+    if (current === reportRevision) reviewError.value = failure instanceof Error ? failure.message : '证据图片上传失败'
+  } finally {
+    input.value = ''
+  }
+}
+async function loadRelatedReports(reviewId: string) {
+  const current = reportRevision
+  try {
+    const reports = await getReviewReportsForActor(reviewId)
+    if (current === reportRevision) relatedReports.value[reviewId] = reports
+  } catch (failure) {
+    if (current === reportRevision) reviewError.value = failure instanceof Error ? failure.message : '当前账号没有该评价举报的查询权限'
+  }
+}
+async function uploadEvidenceImage(reviewId: string, event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  const list = evidenceImages.value[reviewId] ?? []
+  if (!file || list.length >= 6) return
+  const current = reportRevision
+  try {
+    const image = await uploadReviewImage(file)
+    if (current === reportRevision) evidenceImages.value[reviewId] = [...list, image]
+  } catch (failure) {
+    if (current === reportRevision) reportStatus.value[reviewId] = failure instanceof Error ? failure.message : '证据图片上传失败'
+  } finally {
+    input.value = ''
+  }
+}
+async function submitEvidence(reviewId: string, reportId: string) {
+  const current = reportRevision
+  const list = evidenceImages.value[reviewId] ?? []
+  try {
+    await addReviewReportEvidence(reportId, { content: evidenceText.value[reviewId]?.trim() ?? '', imageIds: list.map(x => x.id) })
+    if (current !== reportRevision) return
+    reportStatus.value[reviewId] = '材料已提交'
+    evidenceText.value[reviewId] = ''
+    evidenceImages.value[reviewId] = []
+    await loadRelatedReports(reviewId)
+  } catch (failure) {
+    if (current === reportRevision) reportStatus.value[reviewId] = failure instanceof Error ? failure.message : '材料提交失败'
+  }
+}
 // 主页举报入口：管理员不显示，提交后收起表单并提示。
 const profileReportOpen = ref(false)
 const profileReportMessage = ref('')
 const profileReportError = ref('')
 async function submitProfileReport(input: ReportInput) {
+  const current = reportRevision
   profileReportError.value = ''
   try {
     await reportCreatorProfile(String(route.params.id), input)
+    if (current !== reportRevision) return
     profileReportMessage.value = '举报已提交，管理员将核查处理；可在“我的举报”中查看进度。'
     profileReportOpen.value = false
-  } catch (failure) { profileReportError.value = failure instanceof Error ? failure.message : '举报提交失败' }
+  } catch (failure) {
+    if (current === reportRevision) profileReportError.value = failure instanceof Error ? failure.message : '举报提交失败'
+  }
 }
-// 同账号凭证回读保留当前作者与分页，实际身份或主页变化仍清理旧内容。
-watch([() => route.params.id, () => auth.session?.userId, () => auth.session?.activeRole], () => { creator.value = undefined; works.value = []; profileReportOpen.value = false; void load(1) }, { immediate: true })
-onBeforeUnmount(() => { revision++; clearTimeout(timer) })
+// 公开分页与头像续签保留举报输入。账号资格、会话身份或主页变更时清除私有材料并拒收旧响应。
+watch([() => route.params.id, () => auth.session?.userId, () => auth.session?.activeRole, () => auth.session?.roles.join(',')], () => {
+  reportRevision++
+  reviewError.value = ''
+  reportingId.value = ''
+  reportReason.value = 'OTHER'
+  reportDescription.value = ''
+  reportImages.value = []
+  relatedReports.value = {}
+  evidenceText.value = {}
+  evidenceImages.value = {}
+  reportStatus.value = {}
+  profileReportOpen.value = false
+  profileReportMessage.value = ''
+  profileReportError.value = ''
+  creator.value = undefined
+  works.value = []
+  reviews.value = []
+  void load(1)
+}, { immediate: true, flush: 'sync' })
+onBeforeUnmount(() => { revision++; reportRevision++; clearTimeout(timer) })
 </script>
 <template>
-  <WorkLayout>
-    <nav class="work-breadcrumb">
-      <RouterLink :to="auth.session?.roles.includes('ADMIN') ? '/discover' : '/'">发现作品</RouterLink><span>/</span><span>创作者主页</span>
+  <WorkLayout
+    presentation="craftflow"
+    class="cf-creator-public"
+  >
+    <nav aria-label="创作者主页导航">
+      <RouterLink
+        class="cf-work-back"
+        :to="auth.session?.roles.includes('ADMIN') ? '/discover' : '/'"
+      >返回作品广场</RouterLink>
     </nav><p
       v-if="error"
       class="form-alert"
@@ -94,36 +187,49 @@ onBeforeUnmount(() => { revision++; clearTimeout(timer) })
           v-if="creator.avatarUrl"
           :src="creator.avatarUrl"
           :alt="`${creator.nickname}的头像`"
+          referrerpolicy="no-referrer"
           @error="creator.avatarUrl = null"
         ><span
           v-else
           class="creator-public-avatar"
-        >{{ creator.nickname.slice(0, 1) }}</span><div>
-          <p class="eyebrow">
-            THE HANDS BEHIND THE CRAFT
-          </p><h1>{{ creator.nickname }}</h1><p>{{ creator.province }} {{ creator.city }} <span v-if="creator.province">·</span> {{ creator.categories.map(c => c.name).join(' / ') }}</p><p class="creator-bio">
-            {{ creator.bio || '这位创作者还未填写简介。' }}
+          aria-hidden="true"
+        >{{ creator.nickname.slice(0, 1) }}</span>
+        <div class="creator-public-identity">
+          <h1>{{ creator.nickname }}</h1>
+          <p v-if="creatorLocation">
+            {{ creatorLocation }}
+          </p>
+          <p
+            v-if="creator.bio"
+            class="creator-bio"
+          >
+            {{ creator.bio }}
           </p><p
             v-if="creator.paused"
             class="field-error"
           >
             创作者暂时停止承接新业务
           </p>
-          <CreatorFollow :creator-id="creator.id" />
+          <div class="creator-public-actions">
+            <CreatorFollow :creator-id="creator.id" />
+            <RouterLink
+              v-if="!creator.paused && creator.id !== auth.session?.userId && !auth.session?.roles.includes('ADMIN')"
+              class="button-primary"
+              :to="{ path: '/my-requests/new', query: { creatorId: creator.id } }"
+            >邀请定制</RouterLink>
+            <button
+              v-if="creator.id !== auth.session?.userId && !auth.session?.roles.includes('ADMIN')"
+              class="inline-button profile-report-toggle"
+              :aria-expanded="profileReportOpen"
+              @click="profileReportOpen = !profileReportOpen; profileReportMessage = ''"
+            >
+              {{ profileReportOpen ? '收起主页举报' : '举报主页' }}
+            </button>
+          </div>
         </div><dl class="creator-public-stats">
           <div><dt>口碑评分</dt><dd>{{ creator.averageRating || '暂无评价' }}</dd></div><div><dt>好评率</dt><dd>{{ creator.positiveRate === null ? '暂无评价' : `${creator.positiveRate}%` }}</dd></div><div><dt>真实评价</dt><dd>{{ creator.reviewCount }}</dd></div><div><dt>已完成订单</dt><dd>{{ creator.completedOrderCount }}</dd></div>
         </dl>
-      </section><RouterLink
-        v-if="!creator.paused && creator.id !== auth.session?.userId && !auth.session?.roles.includes('ADMIN')"
-        class="button-primary"
-        :to="{ path: '/my-requests/new', query: { creatorId: creator.id } }"
-      >邀请定制 ↗</RouterLink><button
-        v-if="creator.id !== auth.session?.userId && !auth.session?.roles.includes('ADMIN')"
-        class="inline-button profile-report-toggle"
-        @click="profileReportOpen = !profileReportOpen; profileReportMessage = ''"
-      >
-        {{ profileReportOpen ? '收起主页举报' : '举报主页' }}
-      </button><p
+      </section><p
         v-if="profileReportMessage"
         role="status"
       >
@@ -144,7 +250,7 @@ onBeforeUnmount(() => { revision++; clearTimeout(timer) })
         v-if="!works.length && !loading"
         class="work-empty"
       >
-        <h3>创作慢慢来，好物值得等</h3><p>目前没有已上架作品。</p>
+        <p>暂无已上架作品。</p>
       </div><div class="work-grid">
         <WorkCard
           v-for="work in works"

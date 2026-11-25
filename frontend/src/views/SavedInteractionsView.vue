@@ -61,11 +61,7 @@ watch([() => route.path, () => auth.session?.userId, () => auth.session?.activeR
 onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
 </script>
 <template>
-  <AccountLayout
-    :title="favoritesMode ? '收藏作品' : '关注创作者'"
-    :subtitle="favoritesMode ? '收藏每一份打动你的手作。' : '和喜欢的手艺，保持相遇。'"
-    :number="favoritesMode ? '04' : '05'"
-  >
+  <AccountLayout :title="favoritesMode ? '收藏作品' : '关注创作者'">
     <p
       v-if="!allowed"
       class="form-alert"
@@ -80,24 +76,29 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
       >
         {{ error }}
       </p>
-      <button
-        class="inline-button"
-        :disabled="loading || busy"
-        @click="load()"
-      >
-        刷新列表
-      </button>
-      <p
-        v-if="loading"
-        role="status"
-      >
-        正在读取…
-      </p>
+      <div class="saved-list-toolbar">
+        <span
+          v-if="!loading && !error"
+          class="muted"
+        >{{ favoritesMode ? `${total} 件作品` : `${total} 位创作者` }}</span>
+        <span
+          v-if="loading"
+          role="status"
+        >正在读取…</span>
+        <button
+          class="inline-button"
+          :disabled="loading || busy"
+          @click="load()"
+        >
+          刷新列表
+        </button>
+      </div>
       <div
         v-if="!loading && !error && !total"
-        class="work-empty"
+        class="saved-empty"
       >
-        <h2>{{ favoritesMode ? '还没有收藏作品' : '还没有关注创作者' }}</h2><RouterLink to="/">去发现手作</RouterLink>
+        <h2>{{ favoritesMode ? '还没有收藏作品' : '还没有关注创作者' }}</h2>
+        <RouterLink to="/">浏览作品广场</RouterLink>
       </div>
       <div
         v-if="favoritesMode"
@@ -106,25 +107,39 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
         <article
           v-for="item in favorites"
           :key="item.workId"
-          class="saved-card"
+          class="saved-card favorite-card"
         >
-          <RouterLink
-            v-if="item.available"
-            :to="`/works/${item.workId}`"
-          ><WorkImage
-            v-if="item.coverImage"
-            :image-id="item.coverImage.id"
-            :initial="item.coverImage"
-            :label="item.title || '收藏作品'"
-          /><h2>{{ item.title }}</h2><p>{{ item.creatorNickname }}</p></RouterLink>
+          <template v-if="item.available">
+            <div
+              v-if="item.coverImage"
+              class="saved-cover"
+            >
+              <WorkImage
+                :image-id="item.coverImage.id"
+                :initial="item.coverImage"
+                :label="item.title || '收藏作品'"
+              />
+              <RouterLink
+                class="saved-cover-link"
+                :to="`/works/${item.workId}`"
+                :aria-label="'查看' + item.title"
+              />
+            </div>
+            <div class="saved-card-copy">
+              <h2><RouterLink :to="`/works/${item.workId}`">{{ item.title }}</RouterLink></h2>
+              <p v-if="item.creatorNickname">
+                {{ item.creatorNickname }}
+              </p>
+            </div>
+          </template>
           <div
             v-else
-            class="unavailable-work"
+            class="saved-card-copy unavailable-work"
           >
-            <h2>已下架</h2><p>这件收藏作品暂不可浏览。</p>
+            <h2>已下架</h2>
           </div>
           <button
-            class="inline-button"
+            class="inline-button saved-remove"
             :disabled="busy || loading"
             @click="remove(item.workId)"
           >
@@ -144,17 +159,34 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
           <RouterLink
             v-if="item.available"
             :to="`/creators/${item.creatorId}`"
-          ><img
-            v-if="item.avatarUrl"
-            :src="item.avatarUrl"
-            :alt="`${item.nickname}的头像`"
-            @error="item.avatarUrl = null"
-          ><div><h2>{{ item.nickname }}</h2><p>{{ item.bio || '这位创作者还未填写简介。' }}</p><p v-if="item.paused">暂时停止承接新业务</p></div></RouterLink>
+            class="followed-link"
+          >
+            <img
+              v-if="item.avatarUrl"
+              class="followed-avatar"
+              :src="item.avatarUrl"
+              alt=""
+              @error="item.avatarUrl = null"
+            >
+            <span
+              v-else
+              class="followed-avatar followed-avatar-fallback"
+              aria-hidden="true"
+            >{{ item.nickname?.slice(0, 1) }}</span>
+            <div class="saved-card-copy">
+              <h2>{{ item.nickname }}</h2>
+              <p v-if="item.bio">{{ item.bio }}</p>
+              <span
+                v-if="item.paused"
+                class="followed-paused"
+              >暂时停止承接新业务</span>
+            </div>
+          </RouterLink>
           <div v-else>
             <h2>创作者暂不可浏览</h2>
           </div>
           <button
-            class="inline-button"
+            class="inline-button saved-remove"
             :disabled="busy || loading"
             @click="remove(item.creatorId)"
           >
@@ -172,7 +204,31 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
   </AccountLayout>
 </template>
 <style scoped>
-.favorite-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 24px; }.saved-card { border: 1px solid #e5dfd3; padding: 20px; border-radius: 8px; }.saved-card a { color: inherit; text-decoration: none; }.saved-card h2 { font-size: 20px; }.saved-card p { color: #777; line-height: 1.6; }.unavailable-work { min-height: 120px; padding: 24px; background: #f3f0ea; }/* 收藏封面按宽度确定高度，避免继承通用全高样式后挤出正文和取消入口。 */
-.saved-card :deep(.work-image) { aspect-ratio: 4/3; height: auto; }.followed-list { margin-top: 24px; display: grid; gap: 16px; }.followed-card, .followed-card a { display: flex; align-items: center; gap: 20px; }.followed-card a { flex: 1; }.followed-card img { width: 72px; height: 72px; object-fit: cover; border-radius: 50%; }
-@media (max-width: 640px) { .favorite-grid { grid-template-columns: minmax(0, 1fr); }.followed-card { flex-wrap: wrap; }.followed-card a { min-width: 0; }.followed-card p { overflow-wrap: anywhere; } }
+.saved-list-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 16px; color: var(--craft-muted); font-size: 13px; }
+.saved-list-toolbar > button { margin-inline-start: auto; }
+.favorite-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 16px; }
+.saved-card { min-width: 0; border: 1px solid var(--craft-border); border-radius: 14px; background: var(--craft-surface); }
+.saved-card a { color: inherit; text-decoration: none; }
+.saved-card a:hover h2, .saved-card h2 a:hover { color: #854d0e; }
+.saved-card h2, .saved-empty h2 { margin: 0; color: var(--craft-ink); font: 650 15px var(--craft-font); overflow-wrap: anywhere; }
+.saved-card-copy p { margin: 5px 0 0; color: var(--craft-muted); line-height: 1.65; overflow-wrap: anywhere; }
+.favorite-card { display: flex; flex-direction: column; align-items: start; padding-bottom: 12px; }
+.favorite-card .saved-card-copy { padding: 14px 16px; }
+.favorite-card .saved-remove { margin: auto 16px 0; }
+/* 用封面比例确定高度，其他内容可随标题换行。 */
+.saved-cover { position: relative; width: 100%; }
+.saved-cover-link { position: absolute; inset: 0; }
+.saved-cover-link:focus-visible { outline-offset: -3px; }
+.favorite-card :deep(.work-image) { width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: 13px 13px 0 0; background: #f4f4f5; }
+.favorite-card :deep(.work-image-placeholder) { background: #f4f4f5; color: var(--craft-muted); }
+.favorite-card :deep(.work-image-error) { z-index: 1; }
+.unavailable-work { margin: 12px; border-radius: 8px; background: #f4f4f5; }
+.followed-list { display: grid; gap: 10px; }
+.followed-card { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; padding: 14px 16px; }
+.followed-link { flex: 1; min-width: min(100%, 160px); display: flex; align-items: center; gap: 12px; }
+.followed-avatar { flex: 0 0 46px; width: 46px; height: 46px; object-fit: cover; border-radius: 50%; }
+.followed-avatar-fallback { display: grid; place-items: center; background: #fef3c7; color: #78350f; font-weight: 650; }
+.followed-paused { display: inline-block; margin-top: 6px; color: #92400e; font-size: 12px; }
+.saved-empty { display: grid; justify-items: center; gap: 10px; padding: 34px 12px; border: 1px dashed var(--craft-border); border-radius: 14px; }
+.saved-empty a { color: #854d0e; font-size: 13px; }
 </style>

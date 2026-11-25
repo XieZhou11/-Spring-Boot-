@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures'
-import { origin } from './environment'
-import { publishWork, register } from './interaction-helpers'
+import { api, origin } from './environment'
+import { mutate, publishWork, register } from './interaction-helpers'
 
 test.use({ storageMode: 'receiver', databaseGroup: 'content-reports', actionTimeout: 15_000 })
 
@@ -18,7 +18,14 @@ test('举报入口提交、我的举报列表与后台隐藏评论处置', async
     // 访客举报已上架作品。
     await page.goto(`/works/${workId}`)
     await page.getByRole('button', { name: '举报作品', exact: true }).click()
-    await page.getByLabel('说明', { exact: true }).fill('作品描述涉嫌夸大宣传，请管理员核实。')
+    const workReport = page.getByLabel('说明', { exact: true })
+    const workReportText = '作品描述涉嫌夸大宣传，请管理员核实。'
+    await workReport.fill(workReportText)
+    // 独立的评论读取失败时，作品举报草稿仍可继续提交。
+    await page.route(url => url.pathname === `/api/works/${workId}/comments`, route => route.abort('failed'), { times: 1 })
+    await page.getByRole('button', { name: '核对评论', exact: true }).click()
+    await expect(page.getByRole('alert')).toContainText('请检查网络后重试')
+    await expect(workReport).toHaveValue(workReportText)
     await page.getByRole('button', { name: '提交举报', exact: true }).click()
     await expect(page.getByText('举报已提交，管理员将核查处理', { exact: false })).toBeVisible()
 
@@ -77,6 +84,64 @@ test('举报入口提交、我的举报列表与后台隐藏评论处置', async
     await page.goto(`/creators/${creatorId}`)
     await expect(page.getByText('创作者暂时停止承接新业务', { exact: true })).toBeVisible()
   } finally {
+    await adminContext.close()
+    await creatorContext.close()
+  }
+})
+
+test('创作者主页换账号清除评价举报材料并忽略旧账号的迟到响应', async ({ page, browser, mailbox }) => {
+  test.setTimeout(180_000)
+  const adminContext = await browser.newContext({ baseURL: origin })
+  const creatorContext = await browser.newContext({ baseURL: origin })
+  let releaseRead = () => {}
+  const holdRead = new Promise<void>(resolve => { releaseRead = resolve })
+  try {
+    const creator = await creatorContext.newPage()
+    const { creatorId } = await publishWork(creator, await adminContext.newPage(), mailbox.codes, mailbox.promoteAdmin)
+    const newEmail = await register(page, mailbox.codes, '新评价访客')
+    await register(page, mailbox.codes, '原评价举报人')
+    const session = await page.request.get(`${api}/sessions/current`)
+    expect(session.status()).toBe(200)
+    const oldUserId = (await session.json()).data.userId
+    const reviewId = '92001'
+    const createdAt = '2026-11-25T10:00:00+08:00'
+    const publicReview = { id: reviewId, buyerNickname: '交易买家', rating: 5, content: '确认收货后留下交易评价。', images: [], canReport: true, createdAt }
+    const existingReport = { id: '93001', reviewId, reporterId: oldUserId, status: 'PENDING', reasonCode: 'OTHER', decisionReason: null }
+    // 真实会话和主页负责上下文切换，受控评价响应负责精确重现迟到顺序。
+    await page.route(url => url.pathname === `/api/creators/${creatorId}/reviews`, route => route.fulfill({
+      json: { code: 0, data: { page: 1, size: 20, total: 1, items: [publicReview] } },
+    }))
+    let reads = 0
+    await page.route(`**/api/reviews/${reviewId}/reports`, async route => {
+      if (++reads === 2) await holdRead
+      await route.fulfill({ json: { code: 0, data: [existingReport] } })
+    })
+    await page.goto(`/creators/${creatorId}`)
+    await page.getByRole('button', { name: '查询关联举报', exact: true }).click()
+    await expect(page.getByText('举报 #93001', { exact: false })).toBeVisible()
+    await page.getByLabel('补充证据', { exact: true }).fill('待提交的私有举报证据')
+    await page.getByRole('button', { name: '举报评价', exact: true }).click()
+    await page.getByLabel('说明', { exact: true }).fill('原账号未提交的评价举报')
+    await page.getByRole('button', { name: '查询关联举报', exact: true }).click()
+    await expect.poll(() => reads).toBe(2)
+
+    expect((await mutate(page, '/sessions', 'post', { email: newEmail, password: 'CraftTest123' })).status()).toBe(201)
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+    await expect(page.getByRole('link', { name: /新评价访客.*个人中心/ })).toBeVisible()
+    await expect(page.getByText('确认收货后留下交易评价。', { exact: true })).toBeVisible()
+    await expect(page.getByText('举报 #93001', { exact: false })).toHaveCount(0)
+    await expect(page.getByLabel('补充证据', { exact: true })).toHaveCount(0)
+    await expect(page.getByLabel('说明', { exact: true })).toHaveCount(0)
+
+    const lateRead = page.waitForResponse(response => response.url().endsWith(`/api/reviews/${reviewId}/reports`))
+    releaseRead()
+    await (await lateRead).finished()
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+    await expect(page.getByText('举报 #93001', { exact: false })).toHaveCount(0)
+    await page.getByRole('button', { name: '举报评价', exact: true }).click()
+    await expect(page.getByLabel('说明', { exact: true })).toHaveValue('')
+  } finally {
+    releaseRead()
     await adminContext.close()
     await creatorContext.close()
   }

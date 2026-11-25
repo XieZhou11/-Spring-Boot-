@@ -13,7 +13,7 @@
 | 后续功能清单 | 独立于 MVP 正文，完成后按剩余时间选择补充 | [后续功能清单](requirements/archive/手工定制作品分享与交易平台后续功能清单.md)，保存移出功能及补充规则线索 |
 | 需求历史资料 | V1.4 MVP 版、修订版、旧版 Markdown 和 Word 保留供追溯及展示版本更替 | [需求索引](requirements/README.md)，区分当前版本同步副本与历史资料 |
 | 页面原型 | 用户指定 TSX 为新版 PC Web 界面参考 | [原型索引](prototypes/README.md)，含角色页面索引和 TSX 原件 |
-| PC Web 前端重做 | 第 1 批接通认证、公共导航、作品广场和详情 | [前端重做开发指南](design/frontend-rebuild-guide.md) · [T-021](development/tasks/T-021-craftflow-auth-discovery.md) |
+| PC Web 前端重做 | 第 1 批接通认证和作品浏览，第 2 批接通个人中心、创作者入驻、审核、作品管理和互动 | [前端重做开发指南](design/frontend-rebuild-guide.md) · [T-021](development/tasks/T-021-craftflow-auth-discovery.md) · [T-022](development/tasks/T-022-craftflow-account-works.md) |
 | AI 协作约定 | 已建立 | [AGENTS.md](../AGENTS.md)，规定任务、实现与验证方式 |
 | 技术选型 | 用户已确认采用；账号本地业务集成已验证，QQ/163 公网收件及找回密码补充验收已由用户于 2026-11-23 手动验证通过（依据用户反馈），其他业务能力按任务验证 | [ADR-001](design/decisions/ADR-001-technology-stack.md) |
 | 数据库详细设计 | V1.5 设计草稿；27 表 Flyway SQL 已在本地执行，迁移及失败补偿在 MySQL 8.4 验证 | [数据库表结构](design/数据库表结构.md)，含字段、索引、应用关联与事务回滚 |
@@ -136,7 +136,8 @@ docs/
 │       ├── T-018-custom-publication-consent.md # 定制成品公开授权及案例发布
 │       ├── T-019-admin-management.md # 后台看板、用户、订单和资金筛选
 │       ├── T-020-content-report-governance.md # 内容举报扩展、处置与账号处置通知
-│       └── T-021-craftflow-auth-discovery.md   # CraftFlow 认证、公共布局与作品浏览
+│       ├── T-021-craftflow-auth-discovery.md   # CraftFlow 认证、公共布局与作品浏览
+│       └── T-022-craftflow-account-works.md    # CraftFlow 个人中心、入驻、作品与互动
 └── testing/                          # 简短测试结果，不存测试代码、不建子目录
     ├── README.md                     # 业务功能测试记录方式与格式示例
     ├── T-001-backend-auth.md          # 账号后端测试与复测结果
@@ -159,7 +160,8 @@ docs/
     ├── T-018-custom-publication-consent.md # 定制成品公开授权与案例发布验收
     ├── T-019-admin-management.md        # 后台看板、用户与订单管理验收
     ├── T-020-content-report-governance.md # 内容举报、处置及账号处置通知
-    └── T-021-craftflow-auth-discovery.md   # CraftFlow 首批浏览器回归
+    ├── T-021-craftflow-auth-discovery.md   # CraftFlow 首批浏览器回归
+    └── T-022-craftflow-account-works.md    # CraftFlow 第 2 批浏览器回归
 ```
 
 补充说明：
@@ -236,7 +238,7 @@ docs/
 
 ## 8. 下一阶段入口
 
-PC Web 按业务链路分批重做。首批认证、公共布局和作品浏览见 [T-021](development/tasks/T-021-craftflow-auth-discovery.md)，下一批从个人中心、创作者入驻、作品与互动开始。 [前端重做开发指南](design/frontend-rebuild-guide.md)
+PC Web 按业务链路分批重做。认证、公共布局和作品浏览见 [T-021](development/tasks/T-021-craftflow-auth-discovery.md)，个人中心、创作者入驻、作品与互动见 [T-022](development/tasks/T-022-craftflow-account-works.md)。下一批为定制需求、报价与消息。 [前端重做开发指南](design/frontend-rebuild-guide.md)
 
 后续统一以[当前 V1.5 MVP 版需求](requirements/requirements.md)为依据，其中所列需求均须实现；[后续功能清单](requirements/archive/手工定制作品分享与交易平台后续功能清单.md)独立留存，供完成后选择补充。数据库设计及 SQL 待审核。
 

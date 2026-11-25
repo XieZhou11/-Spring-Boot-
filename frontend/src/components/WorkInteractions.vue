@@ -10,7 +10,7 @@ import CommentImage from './CommentImage.vue'
 import ReportDialog from './ReportDialog.vue'
 import { reportWork, reportComment } from '@/api/report'
 import type { ReportInput } from '@/types/report'
-const props = defineProps<{ workId: string }>()
+const props = defineProps<{ workId: string; actionsTarget: HTMLElement | null }>()
 const auth = useAuthStore()
 const allowed = computed(() => !!auth.session && !auth.session.roles.includes('ADMIN'))
 const stats = ref<InteractionStats>()
@@ -23,6 +23,7 @@ const uploading = ref(false)
 const content = ref('')
 const images = ref<ImageVO[]>([])
 const error = ref('')
+const reactionError = ref('')
 const unknown = ref(false)
 const checked = ref(false)
 let revision = 0
@@ -50,10 +51,10 @@ async function load(next = page.value) {
 async function reaction(kind: 'like' | 'favorite') {
   if (busy.value || !stats.value || !allowed.value) return
   const current = revision
-  busy.value = true; error.value = ''
+  busy.value = true; reactionError.value = ''
   const active = kind === 'like' ? !stats.value.liked : !stats.value.favorited
   try { await api.setReaction(props.workId, kind, active); if (current === revision) await load() }
-  catch (failure) { if (current === revision) error.value = failure instanceof Error ? failure.message : '操作失败，可重试' }
+  catch (failure) { if (current === revision) reactionError.value = failure instanceof Error ? failure.message : '操作失败，可重试' }
   finally { if (current === revision) busy.value = false }
 }
 async function upload(event: Event) {
@@ -92,78 +93,143 @@ async function remove(id: string) {
 }
 // 作品及评论举报入口：'work' 或 'comment:<id>'，提交后提示结果并收起表单。
 const reportTarget = ref('')
+const reportScope = ref<'work' | 'comment'>('work')
 const reportMessage = ref('')
 const reportError = ref('')
+function toggleReport(target: string) {
+  reportTarget.value = reportTarget.value === target ? '' : target
+  reportScope.value = target === 'work' ? 'work' : 'comment'
+  reportMessage.value = ''; reportError.value = ''
+}
 async function submitReport(input: ReportInput) {
+  const target = reportTarget.value
+  const current = revision
   reportError.value = ''
   try {
-    if (reportTarget.value === 'work') await reportWork(props.workId, input)
-    else if (reportTarget.value.startsWith('comment:')) await reportComment(reportTarget.value.slice('comment:'.length), input)
+    if (target === 'work') await reportWork(props.workId, input)
+    else if (target.startsWith('comment:')) await reportComment(target.slice('comment:'.length), input)
     else return
+    if (current !== revision || target !== reportTarget.value) return
     reportMessage.value = '举报已提交，管理员将核查处理；可在“我的举报”中查看进度。'
     reportTarget.value = ''
-  } catch (failure) { reportError.value = failure instanceof Error ? failure.message : '举报提交失败' }
+  } catch (failure) {
+    if (current === revision && target === reportTarget.value) reportError.value = failure instanceof Error ? failure.message : '举报提交失败'
+  }
 }
 // 会话对象同账号刷新时保留草稿及未知提交保护，仅实际身份或作品变化才清理。
 watch([() => props.workId, () => auth.session?.userId, () => auth.session?.activeRole], () => {
   revision++; readRevision++; clearTimeout(timer)
   stats.value = undefined; comments.value = []; content.value = ''; images.value = []; unknown.value = false; checked.value = false; busy.value = false; uploading.value = false
+  reactionError.value = ''
+  reportTarget.value = ''; reportMessage.value = ''; reportError.value = ''
   void load(1)
 }, { immediate: true })
 onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
 </script>
 <template>
+  <!-- 右栏互动和左栏评论共用一次读取，避免两处状态在刷新时分离。 -->
+  <Teleport
+    v-if="actionsTarget"
+    :to="actionsTarget"
+  >
+    <div
+      v-if="allowed || stats"
+      class="interaction-toolbar"
+    >
+      <div
+        v-if="allowed"
+        class="interaction-actions"
+        role="group"
+        aria-label="作品互动"
+      >
+        <button
+          v-if="stats"
+          class="button-secondary reaction-like"
+          :disabled="busy || loading"
+          :aria-label="stats.liked ? '取消点赞' : '点赞'"
+          :aria-description="'点赞数 ' + stats.likeCount"
+          :aria-pressed="stats.liked"
+          @click="reaction('like')"
+        >
+          {{ stats.liked ? '取消点赞' : '点赞' }} <span>{{ stats.likeCount }}</span>
+        </button>
+        <button
+          v-if="stats"
+          class="button-secondary reaction-favorite"
+          :disabled="busy || loading"
+          :aria-label="stats.favorited ? '取消收藏' : '收藏'"
+          :aria-description="'收藏数 ' + stats.favoriteCount"
+          :aria-pressed="stats.favorited"
+          @click="reaction('favorite')"
+        >
+          {{ stats.favorited ? '取消收藏' : '收藏' }} <span>{{ stats.favoriteCount }}</span>
+        </button>
+        <button
+          class="inline-button work-report-toggle"
+          :aria-expanded="reportTarget === 'work'"
+          @click="toggleReport('work')"
+        >
+          举报作品
+        </button>
+      </div>
+      <span
+        v-else-if="stats"
+        class="muted"
+      >{{ stats.likeCount }} 点赞 · {{ stats.favoriteCount }} 收藏</span>
+      <p
+        v-if="reactionError"
+        class="form-alert"
+        role="alert"
+      >
+        {{ reactionError }}
+      </p>
+      <ReportDialog
+        v-if="reportTarget === 'work'"
+        @submit="submitReport"
+      />
+      <p
+        v-if="reportScope === 'work' && reportMessage"
+        role="status"
+      >
+        {{ reportMessage }}
+      </p>
+      <p
+        v-if="reportScope === 'work' && reportError"
+        class="field-error"
+        role="alert"
+      >
+        {{ reportError }}
+      </p>
+    </div>
+  </Teleport>
   <section class="work-interactions">
     <header class="work-section-heading">
-      <h2>手作共鸣</h2><span
+      <h2>作品公开评论</h2>
+      <span
         v-if="stats"
         class="muted"
-      >{{ stats.likeCount }} 点赞 · {{ stats.favoriteCount }} 收藏 · {{ stats.commentCount }} 评论</span>
-    </header>
-    <div
-      v-if="allowed && stats"
-      class="interaction-actions"
-    >
-      <button
-        class="button-secondary"
-        :disabled="busy || loading"
-        :aria-pressed="stats.liked"
-        @click="reaction('like')"
-      >
-        {{ stats.liked ? '取消点赞' : '点赞' }}
-      </button>
-      <button
-        class="button-secondary"
-        :disabled="busy || loading"
-        :aria-pressed="stats.favorited"
-        @click="reaction('favorite')"
-      >
-        {{ stats.favorited ? '取消收藏' : '收藏' }}
-      </button>
+      >{{ stats.commentCount }} 评论</span>
       <button
         class="inline-button"
-        @click="reportTarget = reportTarget === 'work' ? '' : 'work'; reportMessage = ''"
+        :disabled="loading || busy"
+        @click="load()"
       >
-        举报作品
+        核对评论
       </button>
-    </div>
+    </header>
     <p
-      v-if="reportMessage"
+      v-if="reportScope === 'comment' && reportMessage"
       role="status"
     >
       {{ reportMessage }}
     </p>
     <p
-      v-if="reportError"
+      v-if="reportScope === 'comment' && reportError"
       class="field-error"
       role="alert"
     >
       {{ reportError }}
     </p>
-    <ReportDialog
-      v-if="reportTarget === 'work'"
-      @submit="submitReport"
-    />
     <p
       v-if="error"
       class="form-alert"
@@ -171,13 +237,6 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
     >
       {{ error }}
     </p>
-    <button
-      class="inline-button"
-      :disabled="loading || busy"
-      @click="load()"
-    >
-      核对评论
-    </button>
     <form
       v-if="allowed"
       class="comment-form"
@@ -189,10 +248,10 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
         rows="4"
         maxlength="1000"
         :disabled="busy || unknown"
-        placeholder="分享你对这件手作的感受（10—500字）"
+        placeholder="请输入 10—500 字"
       />
       <p class="field-help">
-        {{ Array.from(content.trim()).length }}/500 · 最多3张JPG、PNG、WebP图片，每张不超过5MB
+        {{ Array.from(content.trim()).length }}/500 · 最多 3 张 JPG、PNG 或 WebP 图片，每张不超过 5 MB
       </p>
       <label class="comment-upload">评论图片<input
         type="file"
@@ -200,7 +259,10 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
         :disabled="uploading || busy || unknown || images.length >= 3"
         @change="upload"
       ></label>
-      <div class="comment-images">
+      <div
+        v-if="images.length"
+        class="comment-images"
+      >
         <div
           v-for="(image, index) in images"
           :key="image.id"
@@ -253,8 +315,15 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
       </button>
     </form>
     <p
-      v-if="!comments.length && !loading"
-      class="muted"
+      v-if="loading && !comments.length"
+      class="comment-empty muted"
+      role="status"
+    >
+      正在读取评论…
+    </p>
+    <p
+      v-else-if="!comments.length && stats"
+      class="comment-empty muted"
     >
       还没有评论，留下你的第一份共鸣。
     </p>
@@ -269,11 +338,17 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
           :src="comment.avatarUrl"
           :alt="`${comment.authorNickname}的头像`"
           @error="comment.avatarUrl = null"
-        ><strong>{{ comment.authorNickname }}</strong><time>{{ new Date(comment.createdAt).toLocaleString('zh-CN') }}</time>
+        >
+        <strong>{{ comment.authorNickname }}</strong>
+        <time :datetime="comment.createdAt">{{ new Date(comment.createdAt).toLocaleString('zh-CN') }}</time>
       </div>
       <p class="comment-content">
         {{ comment.content }}
-      </p><div class="comment-images">
+      </p>
+      <div
+        v-if="comment.images.length"
+        class="comment-images"
+      >
         <CommentImage
           v-for="(image, index) in comment.images"
           :key="image.id"
@@ -292,7 +367,8 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
       <button
         v-if="allowed && !comment.canDelete"
         class="inline-button"
-        @click="reportTarget = reportTarget === `comment:${comment.id}` ? '' : `comment:${comment.id}`; reportMessage = ''"
+        :aria-expanded="reportTarget === `comment:${comment.id}`"
+        @click="toggleReport(`comment:${comment.id}`)"
       >
         举报评论
       </button>
@@ -317,11 +393,29 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
   </section>
 </template>
 <style scoped>
-.work-interactions { margin-top: 48px; border-top: 1px solid var(--line); padding-top: 32px; }
-.interaction-actions, .comment-images { display: flex; flex-wrap: wrap; gap: 14px; margin: 16px 0; }
-.comment-form { margin: 24px 0; padding: 24px; background: #f5f2eb; border-radius: 8px; }
-.comment-form textarea { display: block; box-sizing: border-box; width: 100%; margin-top: 10px; padding: 12px; border: 1px solid #d9d3c7; border-radius: 4px; font: inherit; resize: vertical; }
-.comment-upload { display: block; margin: 16px 0; }.comment-upload input { display: block; width: 100%; max-width: 100%; margin-top: 8px; }
-.work-comment { padding: 24px 0; border-bottom: 1px solid #e5dfd3; }.comment-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }.comment-heading img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }.comment-heading time { font-size: 12px; color: #777; }.comment-content { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
-.comment-images :deep(img) { width: 140px; height: 140px; object-fit: contain; border-radius: 4px; }
+.interaction-toolbar { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--craft-border); }
+.interaction-toolbar > .muted { color: var(--craft-muted); font-size: 13px; }
+.interaction-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.interaction-actions :is(.reaction-like, .reaction-favorite) { padding-inline: 10px; font-variant-numeric: tabular-nums; }
+.interaction-actions .reaction-like[aria-pressed=true] { border-color: #fecdd3; background: #fff1f2; color: #9f1239; }
+.interaction-actions .reaction-favorite[aria-pressed=true] { border-color: #fde68a; background: #fffbeb; color: #854d0e; }
+.interaction-actions .work-report-toggle { margin-inline-start: auto; color: var(--craft-muted); font-size: 13px; }
+.interaction-toolbar :deep(.report-dialog), .work-interactions :deep(.report-dialog) { background: var(--craft-bg); border: 1px solid var(--craft-border); }
+.work-interactions .work-section-heading { display: flex; justify-content: flex-start; gap: 8px 12px; }
+.work-section-heading > .inline-button { margin-inline-start: auto; }
+.comment-form { display: grid; gap: 10px; margin: 16px 0; padding: 16px; border: 1px solid var(--craft-border); border-radius: 10px; background: var(--craft-bg); }
+.comment-form > label { font-size: 13px; font-weight: 600; }
+.comment-form textarea { display: block; box-sizing: border-box; width: 100%; padding: 10px 12px; border: 1px solid var(--craft-border); font: inherit; resize: vertical; }
+.comment-form .field-help, .comment-form [role=status] { margin: 0; }
+.comment-form .button-primary { justify-self: end; }
+.comment-upload input { display: block; width: 100%; max-width: 100%; margin-top: 6px; font-size: 13px; }
+.comment-empty { padding: 15px 0; text-align: center; }
+.work-comment { padding: 16px 0; border-top: 1px solid var(--craft-border); }
+.comment-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 10px; overflow-wrap: anywhere; }
+.comment-heading img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+.comment-heading time { color: var(--craft-muted); font-size: 12px; }
+.comment-content { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+.comment-images { display: flex; flex-wrap: wrap; gap: 10px; }
+.work-comment .comment-images { margin: 10px 0; }
+.comment-images :deep(img) { width: 120px; height: 120px; object-fit: contain; border-radius: 6px; }
 </style>

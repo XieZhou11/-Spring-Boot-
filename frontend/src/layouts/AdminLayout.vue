@@ -8,8 +8,10 @@ import { countLabel } from '@/utils/customRequest'
 import '@/assets/styles/account.css'
 import '@/assets/styles/work.css'
 import '@/assets/styles/admin.css'
+import '@/assets/styles/craftflow-admin.css'
 
-defineProps<{ title: string; subtitle?: string }>()
+/** 审核和品类页面启用新版后台样式，其他管理流程可分批接入。 */
+defineProps<{ title: string; subtitle?: string; presentation?: 'craftflow' }>()
 const auth = useAuthStore()
 const notifications = useNotificationsStore()
 const router = useRouter()
@@ -27,7 +29,10 @@ async function signOut() {
 </script>
 
 <template>
-  <div class="admin-page">
+  <div
+    class="admin-page"
+    :class="{ 'craft-admin': presentation === 'craftflow' }"
+  >
     <aside class="admin-sidebar">
       <RouterLink
         to="/admin/dashboard"
@@ -36,7 +41,10 @@ async function signOut() {
         <span
           class="admin-brand-seal"
           aria-hidden="true"
-        >匠</span>
+        ><AppIcon
+          v-if="presentation === 'craftflow'"
+          name="hammer"
+        /><template v-else>匠</template></span>
         <strong>匠心集管理台</strong>
       </RouterLink>
       <nav aria-label="后台管理">

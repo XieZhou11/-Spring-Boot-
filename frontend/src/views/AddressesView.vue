@@ -3,6 +3,7 @@ import { nextTick, onMounted, reactive, ref } from 'vue'
 import AccountLayout from '@/layouts/AccountLayout.vue'
 import AccountField from '@/components/AccountField.vue'
 import AddressRegion from '@/components/AddressRegion.vue'
+import AppIcon from '@/components/AppIcon.vue'
 import { deleteAddress, getAddresses, saveAddress, setDefaultAddress } from '@/api/account'
 import { useAuthForm } from '@/composables/useAuthForm'
 import type { AddressDTO, AddressVO } from '@/types/account'
@@ -134,11 +135,7 @@ onMounted(() => void load())
 </script>
 
 <template>
-  <AccountLayout
-    title="收货地址"
-    subtitle="为心爱的手作，留一个妥帖的收件处。"
-    number="02"
-  >
+  <AccountLayout title="收货地址">
     <p
       v-if="loading"
       class="account-loading"
@@ -170,7 +167,7 @@ onMounted(() => void load())
           :disabled="addresses.length >= 10 || Boolean(busyId) || submitting"
           @click="edit()"
         >
-          新增地址 <span aria-hidden="true">＋</span>
+          <AppIcon name="plus" /> 新增地址
         </button>
       </div>
       <p
@@ -202,7 +199,8 @@ onMounted(() => void load())
         v-if="!addresses.length && !editorOpen"
         class="address-empty"
       >
-        <span aria-hidden="true">⌂</span><h2>手作的下一站，从这里开始</h2><p>还没有收货地址。第一条地址会自动设为默认。</p>
+        <h2>暂无收货地址</h2>
+        <p>第一条地址会自动设为默认。</p>
       </div>
       <div class="address-list">
         <article
@@ -217,11 +215,8 @@ onMounted(() => void load())
               class="default-badge"
             >默认地址</span>
           </div>
-          <p class="address-location">
-            {{ address.province }} {{ address.city }} {{ address.district }}
-          </p>
           <p class="address-detail">
-            {{ address.detailAddress }}
+            {{ address.province }} {{ address.city }} {{ address.district }} {{ address.detailAddress }}
           </p>
           <div class="address-actions">
             <button
@@ -232,10 +227,6 @@ onMounted(() => void load())
             >
               设为默认
             </button>
-            <span
-              v-else
-              class="default-note"
-            >优先使用此地址</span>
             <div>
               <button
                 class="inline-button"
@@ -260,9 +251,7 @@ onMounted(() => void load())
         class="address-editor"
         :aria-label="editingId ? '编辑地址' : '新增地址'"
       >
-        <div class="section-caption">
-          <span>{{ editingId ? '编辑地址' : '新增地址' }}</span><small>A PLACE FOR SOMETHING SPECIAL</small>
-        </div>
+        <h2>{{ editingId ? '编辑地址' : '新增地址' }}</h2>
         <form
           novalidate
           :aria-busy="submitting"
@@ -321,7 +310,7 @@ onMounted(() => void load())
               class="button-primary"
               :disabled="submitting"
             >
-              {{ submitting ? '正在保存…' : '保存地址' }} <span aria-hidden="true">↗</span>
+              {{ submitting ? '正在保存…' : '保存地址' }}
             </button><button
               class="button-secondary"
               type="button"
@@ -340,11 +329,13 @@ onMounted(() => void load())
         :closedby="busyId ? 'none' : 'closerequest'"
         @cancel="busyId && $event.preventDefault()"
       >
-        <p class="eyebrow">
-          A SMALL CONFIRMATION
-        </p><h2 id="delete-title">
+        <h2 id="delete-title">
           确认删除这个地址？
-        </h2><p>收件人：{{ deletion?.recipientName }}</p><p>{{ deletion?.isDefault && addresses.length > 1 ? '删除后，最近新增的剩余地址会自动成为默认地址。' : '删除后可重新添加地址。' }}</p>
+        </h2>
+        <p>收件人：{{ deletion?.recipientName }}</p>
+        <p v-if="deletion?.isDefault && addresses.length > 1">
+          删除后，最近新增的剩余地址会自动成为默认地址。
+        </p>
         <div>
           <button
             class="button-secondary"

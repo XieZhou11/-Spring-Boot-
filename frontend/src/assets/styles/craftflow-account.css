@@ -1,0 +1,199 @@
+/* 个人中心与入驻沿用匠心集色板。表单覆盖限定在本布局内容区。 */
+.craft-account {
+  color: var(--craft-ink);
+  background: var(--craft-bg);
+  font-family: var(--craft-font);
+}
+.craft-account .account-shell {
+  width: min(1280px, calc(100% - 64px));
+  grid-template-columns: 216px minmax(0, 1fr);
+  align-items: start;
+  gap: 32px;
+  flex: 0 1 auto;
+  margin: 32px auto 64px;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+}
+.craft-account .account-sidebar {
+  padding: 16px;
+  border: 1px solid var(--craft-border);
+  border-radius: 16px;
+  background: var(--craft-surface);
+}
+.craft-account .account-sidebar h2 {
+  margin: 4px 10px 12px;
+  font: 600 14px/1.4 var(--craft-font);
+}
+.craft-account .account-sidebar nav { gap: 4px; }
+.craft-account .account-sidebar nav a {
+  padding: 11px 12px;
+  border-radius: 8px;
+  color: var(--craft-muted);
+  font-size: 14px;
+}
+.craft-account .account-sidebar nav a:not(.active):hover { background: #f4f4f5; color: var(--craft-ink); }
+.craft-account .account-sidebar nav a.active { background: var(--craft-primary); color: #fff; }
+.craft-account .account-content { padding: 0; }
+.craft-account .account-heading { margin: 0 0 22px; padding: 0; border: 0; }
+.craft-account .account-heading h1 { margin: 0; font: 700 27px/1.35 var(--craft-font); }
+.craft-account .site-footer { margin-top: auto; color: var(--craft-muted); font-size: 12px; }
+
+.craft-account-panel {
+  --green: var(--craft-primary);
+  --green-hover: #3f3f46;
+  --muted: var(--craft-muted);
+  --border: var(--craft-border);
+  --paper: var(--craft-surface);
+  --error: #b91c1c;
+  color: var(--craft-ink);
+  min-width: 0;
+  font-family: var(--craft-font);
+}
+.craft-account-panel :is(.button-primary, .button-secondary) {
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  min-width: 0;
+  padding: 8px 15px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.craft-account-panel .button-primary { border-color: var(--craft-primary); }
+.craft-account-panel .button-secondary { border-color: var(--craft-border); background: var(--craft-surface); color: var(--craft-ink); }
+.craft-account-panel .button-secondary:hover:not(:disabled) { background: #f4f4f5; }
+.craft-account-panel .app-icon { width: 16px; height: 16px; }
+.craft-account-panel :is(.inline-button, .text-link) { color: var(--craft-ink); font-size: 13px; font-weight: 500; }
+.craft-account-panel .delete-button { color: var(--error); }
+.craft-account-panel :is(.field-help, .account-loading) { color: var(--craft-muted); }
+.craft-account-panel .field-error { color: var(--error); }
+.craft-account-panel :is(.form-alert, .form-notice, .success-note) { padding: 11px 14px; border: 1px solid #bbf7d0; border-radius: 8px; background: #f0fdf4; color: #166534; }
+.craft-account-panel .form-alert { border-color: #fecaca; background: #fef2f2; color: var(--error); }
+.craft-account-panel > :is(.form-alert, .form-notice, .success-note) { margin-bottom: 14px; }
+.craft-account-panel .account-loading { padding: 26px 0; }
+.craft-account-panel .account-load-error { gap: 12px; }
+.craft-account-panel .account-field > label,
+.craft-account-panel .region-fieldset legend { color: var(--craft-ink); font-size: 13px; font-weight: 600; }
+.craft-account-panel .account-field > :is(input, textarea) {
+  padding: 10px 12px;
+  border-color: var(--craft-border);
+  border-radius: 8px;
+  background: var(--craft-surface);
+  color: var(--craft-ink);
+  font-size: 14px;
+}
+.craft-account-panel .account-field > textarea { min-height: 104px; }
+.craft-account-panel .account-field > :is(input, textarea):focus { border-color: #71717a; box-shadow: 0 0 0 3px #18181b0d; }
+.craft-account-panel .account-field > input[readonly] { background: #f4f4f5; color: var(--craft-muted); }
+.craft-account-panel .account-field.has-error > :is(input, textarea),
+.craft-account-panel .account-field.has-error .el-input__wrapper { border-color: #dc2626; box-shadow: 0 0 0 1px #dc2626; }
+.craft-account-panel .region-fieldset .el-cascader { --el-color-primary: var(--craft-ink); --el-border-color: var(--craft-border); --el-fill-color-blank: var(--craft-surface); }
+.craft-account-panel .region-fieldset .el-input__wrapper { min-height: 43px; border-radius: 8px; padding-inline: 12px; }
+.craft-account-panel .account-checkbox { font-size: 13px; }
+.craft-account-panel .account-form-footer { padding-top: 0; gap: 12px; }
+.craft-account-panel .account-form-footer > p.save-success { color: #166534; }
+
+.craft-account-panel :is(.avatar-section, .profile-form, .creator-pause-panel, .address-editor, .certification-overview, .certification-form-section, .current-application, .application-history) {
+  padding: 24px;
+  border: 1px solid var(--craft-border);
+  border-radius: 16px;
+  background: var(--craft-surface);
+}
+.craft-account-panel :is(.avatar-section, .profile-form, .creator-pause-panel, .address-editor, .certification-overview, .certification-form-section, .current-application, .application-history) h2 {
+  margin: 0;
+  color: var(--craft-ink);
+  font: 650 17px/1.4 var(--craft-font);
+}
+.craft-account-panel .avatar-section { gap: 20px; margin-bottom: 16px; }
+.craft-account-panel .profile-avatar {
+  width: 72px;
+  height: 72px;
+  flex-basis: 72px;
+  border: 0;
+  outline: 1px solid #fde68a;
+  background: #fef3c7;
+}
+.craft-account-panel .profile-avatar span { font: 650 26px/1 var(--craft-font); color: #92400e; }
+.craft-account-panel .avatar-copy > p { margin-top: 4px; font-size: 12px; }
+.craft-account-panel .avatar-copy .avatar-feedback:not(.field-error) { color: #166534; }
+.craft-account-panel .avatar-selected-preview img { border-color: var(--craft-border); border-radius: 8px; }
+.craft-account-panel .avatar-selected-preview figcaption { color: var(--craft-muted); font-size: 11px; }
+.craft-account-panel .profile-form { gap: 16px; }
+.craft-account-panel .profile-form > .text-link { justify-self: start; margin-top: -6px; }
+.craft-account-panel .creator-pause-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 20px; margin-top: 16px; }
+.craft-account-panel .creator-pause-panel p { margin-top: 5px; color: var(--craft-muted); font-size: 13px; }
+.craft-account-panel .creator-pause-panel > p { grid-column: 1 / -1; margin-top: 0; }
+.craft-account-panel .creator-pause-panel > .form-alert { color: var(--error); }
+.craft-account-panel .creator-pause-panel > .form-notice { color: #166534; }
+
+.craft-account-panel .address-toolbar { margin-bottom: 16px; }
+.craft-account-panel .address-toolbar > p { color: var(--craft-muted); font-size: 13px; }
+.craft-account-panel .address-toolbar strong { margin: 0 2px; color: var(--craft-ink); font: 650 14px/1 var(--craft-font); }
+.craft-account-panel .address-limit { margin: -6px 0 14px; }
+.craft-account-panel .address-list { gap: 12px; }
+.craft-account-panel .address-card { padding: 16px 20px; border: 1px solid var(--craft-border); border-radius: 12px; background: var(--craft-surface); }
+.craft-account-panel .address-card.is-default { border-color: #d4d4d8; }
+.craft-account-panel .address-card-top { gap: 10px; }
+.craft-account-panel .address-card h2 { font-size: 15px; font-weight: 650; }
+.craft-account-panel .address-phone { color: var(--craft-muted); font-size: 13px; }
+.craft-account-panel .default-badge { margin-left: 0; border-radius: 20px; padding: 3px 8px; background: var(--craft-primary); color: #fff; }
+.craft-account-panel .address-detail { margin-top: 6px; color: var(--craft-muted); }
+.craft-account-panel .address-actions { justify-content: flex-end; gap: 18px; margin-top: 12px; padding-top: 10px; border-color: #f4f4f5; }
+.craft-account-panel .address-actions > button:first-child { margin-right: auto; color: #92400e; }
+.craft-account-panel .address-actions > div { gap: 16px; }
+.craft-account-panel .address-empty { padding: 40px 16px; border-color: var(--craft-border); border-radius: 12px; background: var(--craft-surface); }
+.craft-account-panel .address-empty h2 { font: 650 16px/1.4 var(--craft-font); }
+.craft-account-panel .address-empty p { margin-top: 5px; color: var(--craft-muted); font-size: 13px; }
+.craft-account-panel .address-editor { margin-top: 18px; }
+.craft-account-panel .address-editor form { margin-top: 16px; gap: 16px; }
+.craft-account-panel .address-editor .account-checkbox + .field-help { margin-top: -9px; }
+
+.craft-account-panel .certification-overview { gap: 12px; margin-bottom: 16px; }
+.craft-account-panel .certification-overview > div { flex: 1 1 70%; }
+.craft-account-panel .certification-overview p:not(.eyebrow) { margin-top: 5px; color: var(--craft-muted); font-size: 13px; }
+.craft-account-panel .certification-overview .button-primary { margin-top: 4px; }
+.craft-account-panel .creator-form { gap: 16px; }
+.craft-account-panel .certification-form-section { display: grid; gap: 15px; }
+.craft-account-panel .certification-form-section > .field-help { margin: -6px 0 0; }
+.craft-account-panel .category-picker legend { font-size: 13px; font-weight: 600; }
+.craft-account-panel .category-choice { padding: 7px 10px; border-color: var(--craft-border); border-radius: 8px; background: var(--craft-bg); }
+.craft-account-panel .category-choice:has(input:checked) { border-color: #d4d4d8; background: #f4f4f5; }
+.craft-account-panel :is(.work-editor, .material-work) { border-color: var(--craft-border); border-radius: 12px; background: var(--craft-bg); }
+.craft-account-panel .work-editor legend,
+.craft-account-panel .material-work h3 { font: 650 14px/1.4 var(--craft-font); }
+.craft-account-panel .work-images { gap: 10px; }
+.craft-account-panel :is(.private-image img, .image-placeholder, .image-upload) { border-color: #d4d4d8; border-radius: 8px; background: #f4f4f5; color: var(--craft-muted); }
+.craft-account-panel .private-image figcaption,
+.craft-account-panel .image-picker-label span { color: var(--craft-muted); }
+.craft-account-panel .privacy-note { padding: 11px 13px; border: 1px solid var(--craft-border); border-radius: 8px; background: var(--craft-bg); color: var(--craft-muted); font-size: 12px; }
+.craft-account-panel .material-fields > div { border-color: var(--craft-border); }
+.craft-account-panel :is(.material-fields dt, .material-summary) { color: var(--craft-muted); }
+.craft-account-panel .review-note { border-left-color: var(--craft-accent); border-radius: 8px; background: #fffbeb; }
+.craft-account-panel .review-note strong { color: #92400e; }
+.craft-account-panel .status-pill { padding: 5px 10px; border-radius: 20px; background: #f4f4f5; color: var(--craft-muted); font-weight: 600; }
+.craft-account-panel .status-pill[data-status='PENDING'] { background: #fef3c7; color: #92400e; }
+.craft-account-panel .status-pill[data-status='APPROVED'] { background: #dcfce7; color: #166534; }
+.craft-account-panel .status-pill[data-status='REJECTED'] { background: #ffe4e6; color: #9f1239; }
+.craft-account-panel .application-history { margin-top: 16px; }
+.craft-account-panel .application-history > h2 { margin-bottom: 8px; }
+.craft-account-panel .history-row { padding: 12px; border-color: #f4f4f5; border-radius: 8px; color: var(--craft-ink); }
+.craft-account-panel .history-row:is(:hover, .selected) { background: #f4f4f5; }
+.craft-account-panel .history-row small { color: var(--craft-muted); }
+
+.craft-account-panel .delete-dialog { padding: 24px; border-color: var(--craft-border); border-radius: 14px; color: var(--craft-ink); box-shadow: 0 12px 45px #18181b24; }
+.craft-account-panel .delete-dialog::backdrop { background: #18181b75; }
+.craft-account-panel .delete-dialog h2 { margin: 0 0 12px; font: 650 18px/1.4 var(--craft-font); }
+.craft-account-panel .delete-dialog > p:not(.eyebrow) { color: var(--craft-muted); font-size: 13px; }
+.craft-account-panel .delete-dialog > p.field-error { color: var(--error); }
+.craft-account-panel .delete-dialog > div { margin-top: 18px; }
+
+@media (max-width: 760px) {
+  .craft-account .account-shell { width: calc(100% - 32px); grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 18px; }
+  .craft-account .account-heading h1 { font-size: 23px; }
+  .craft-account-panel :is(.address-editor, .avatar-section, .profile-form, .creator-pause-panel, .certification-overview, .certification-form-section, .current-application, .application-history) { padding: 16px; }
+  .craft-account-panel .avatar-section { align-items: flex-start; }
+  .craft-account-panel .creator-pause-panel { grid-template-columns: 1fr; justify-items: start; }
+}

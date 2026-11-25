@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import AdminLayout from '@/layouts/AdminLayout.vue'
+import AppIcon from '@/components/AppIcon.vue'
 import AccountField from '@/components/AccountField.vue'
 import { getCategories, saveCategory } from '@/api/creator'
 import type { CategoryVO } from '@/types/creator'
@@ -56,23 +57,29 @@ onMounted(() => void load())
 <template>
   <AdminLayout
     title="手作品类管理"
-    subtitle="用清晰的两级品类，连接手艺与发现。"
+    presentation="craftflow"
   >
-    <div class="queue-toolbar">
-      <p>一级主品类 / 二级品类</p><button
-        class="button-primary"
-        :disabled="loading"
-        @click="openEditor()"
-      >
-        ＋ 新增一级品类
-      </button><button
-        class="button-secondary"
-        :disabled="loading"
-        @click="load"
-      >
-        刷新
-      </button>
-    </div><p
+    <template #actions>
+      <div class="category-actions">
+        <button
+          type="button"
+          class="button-secondary"
+          :disabled="loading"
+          @click="load"
+        >
+          刷新
+        </button>
+        <button
+          type="button"
+          class="button-primary"
+          :disabled="loading"
+          @click="openEditor()"
+        >
+          <AppIcon name="plus" /> 新增一级品类
+        </button>
+      </div>
+    </template>
+    <p
       v-if="notice"
       class="success-note"
       role="status"
@@ -94,7 +101,7 @@ onMounted(() => void load())
       v-else-if="!categories.length"
       class="creator-empty"
     >
-      <span aria-hidden="true">✳</span><h2>从第一个品类开始</h2><p>先建立一级主品类，再按实际需要添加二级品类。</p>
+      <h2>暂无品类</h2><p>创建一级品类后，可在其下新增二级品类。</p>
     </div>
     <div
       v-else
@@ -107,12 +114,15 @@ onMounted(() => void load())
       >
         <header>
           <div>
-            <span class="eyebrow">CATEGORY / {{ category.sortOrder }}</span><h2>
+            <h2>
               {{ category.name }} <span
                 class="status-pill"
                 :data-status="category.enabled ? 'APPROVED' : 'WITHDRAWN'"
               >{{ category.enabled ? '启用' : '停用' }}</span>
             </h2>
+            <p class="category-order">
+              排序 {{ category.sortOrder }}
+            </p>
           </div><div class="category-actions">
             <button
               class="inline-button"
@@ -123,7 +133,7 @@ onMounted(() => void load())
               class="button-secondary"
               @click="openEditor(undefined, category.id)"
             >
-              ＋ 新增二级品类
+              <AppIcon name="plus" /> 新增二级品类
             </button>
           </div>
         </header><p
@@ -164,9 +174,7 @@ onMounted(() => void load())
       aria-labelledby="category-editor-title"
       @cancel="submitting && $event.preventDefault()"
     >
-      <p class="eyebrow">
-        CATEGORY EDITOR
-      </p><h2 id="category-editor-title">
+      <h2 id="category-editor-title">
         {{ editingId ? '编辑品类' : parentId ? '新增二级品类' : '新增一级品类' }}
       </h2><form
         novalidate

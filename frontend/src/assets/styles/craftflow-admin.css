@@ -1,0 +1,154 @@
+/* 后台审核与品类使用新版色板，沿用固定导航和队列、材料的双栏结构。 */
+.admin-page.craft-admin {
+  color: var(--craft-ink);
+  background: var(--craft-bg);
+  font-family: var(--craft-font);
+}
+
+.craft-admin .admin-sidebar,
+.craft-admin .admin-topbar {
+  color: var(--craft-ink);
+  border-color: var(--craft-border);
+  background: var(--craft-surface);
+}
+.craft-admin .admin-brand { gap: 10px; }
+.craft-admin .admin-brand strong { font-size: 16px; }
+.craft-admin .admin-brand-seal {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--craft-primary);
+  color: var(--craft-accent);
+}
+.craft-admin .admin-brand-seal .app-icon { width: 18px; height: 18px; }
+.craft-admin .admin-sidebar nav a,
+.craft-admin .admin-sidebar-bottom :is(a, button),
+.craft-admin .admin-topbar nav,
+.craft-admin .admin-user-tools .identity-label { color: var(--craft-muted); }
+.craft-admin .admin-sidebar nav a { border-radius: 8px; }
+.craft-admin .admin-sidebar nav a:hover { background: #f4f4f5; }
+.craft-admin .admin-sidebar nav a.active { color: #fff; background: var(--craft-primary); }
+.craft-admin .admin-user > span { font: 600 12px var(--craft-font); background: #f4f4f5; }
+.craft-admin .admin-heading { gap: 12px; flex-wrap: wrap; }
+.craft-admin .admin-heading h1 { font: 650 25px var(--craft-font); }
+
+.craft-admin :where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid #b45309;
+  outline-offset: 3px;
+}
+.craft-admin :is(.button-primary, .button-secondary) {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 8px 13px;
+  border-radius: 8px;
+  font: 600 12px var(--craft-font);
+  white-space: nowrap;
+}
+.craft-admin .button-primary { color: #fff; background: var(--craft-primary); border-color: var(--craft-primary); }
+.craft-admin .button-primary:hover:not(:disabled) { background: #3f3f46; }
+.craft-admin .button-secondary { color: var(--craft-ink); background: #fff; border-color: var(--craft-border); }
+.craft-admin .button-secondary:hover:not(:disabled) { background: #f4f4f5; }
+.craft-admin :is(.inline-button, .text-link, .review-detail-heading a) { color: #854d0e; }
+.craft-admin :is(.inline-button, .text-link, .review-detail-heading a):hover { text-decoration: underline; }
+
+.craft-admin :is(.review-queue, .review-detail, .category-branch, .delete-dialog) {
+  background: var(--craft-surface);
+  border: 1px solid var(--craft-border);
+  border-radius: 14px;
+}
+.craft-admin .review-queue-heading { border-color: var(--craft-border); }
+.craft-admin :is(.review-queue-heading, .review-detail-heading) h2,
+.craft-admin .review-editor .section-caption > span {
+  font: 650 16px var(--craft-font);
+}
+.craft-admin :is(.review-queue-heading span, .managed-work-copy p, .review-table small, .review-placeholder, .category-order, .account-loading) {
+  color: var(--craft-muted);
+}
+.craft-admin .review-placeholder .app-icon { color: #a1a1aa; }
+.craft-admin .review-placeholder h2 { font-size: 15px; }
+.craft-admin .review-queue .category-tabs {
+  gap: 4px;
+  margin-bottom: 13px;
+  border: 0;
+}
+.craft-admin .review-queue .category-tabs button {
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--craft-muted);
+}
+.craft-admin .review-queue .category-tabs button.active {
+  color: var(--craft-ink);
+  background: #f4f4f5;
+  border-color: var(--craft-border);
+}
+.craft-admin :is(.review-queue, .review-detail, .category-dialog)
+  :is(input:not([type='checkbox']), textarea, select) {
+  color: var(--craft-ink);
+  background: var(--craft-surface);
+  border: 1px solid var(--craft-border);
+  border-radius: 8px;
+}
+.craft-admin .review-queue .queue-toolbar { align-items: end; flex-wrap: wrap; }
+.craft-admin :is(.review-queue, .review-detail) :is(.work-empty, .creator-empty) {
+  background: var(--craft-bg);
+  color: var(--craft-muted);
+  border-color: var(--craft-border);
+  border-radius: 10px;
+}
+.craft-admin .review-queue .managed-work-row,
+.craft-admin .review-table td { border-bottom-color: var(--craft-border); }
+.craft-admin .review-queue .managed-work-row.selected {
+  background: #fffbeb;
+  border-left-color: #b45309;
+}
+.craft-admin .review-table th,
+.craft-admin .review-table tr.selected td { color: var(--craft-ink); background: #f4f4f5; }
+.craft-admin .managed-work-empty-image { color: var(--craft-muted); background: #f4f4f5; }
+.craft-admin :is(.status-pill, .work-status) {
+  border-radius: 999px;
+  color: #52525b;
+  background: #f4f4f5;
+}
+.craft-admin :is(.status-pill[data-status='PENDING'], .work-status.PENDING) { color: #92400e; background: #fef3c7; }
+.craft-admin :is(.status-pill[data-status='APPROVED'], .work-status.ONLINE) { color: #065f46; background: #d1fae5; }
+.craft-admin :is(.status-pill[data-status='REJECTED'], .work-status.REJECTED) { color: #9f1239; background: #ffe4e6; }
+
+.craft-admin .review-detail :is(.trade-summary, .work-review-panel, .review-editor) {
+  border-color: var(--craft-border);
+  background: var(--craft-bg);
+  border-radius: 10px;
+}
+.craft-admin .review-detail :is(.material-fields > div, .work-specifications, .work-prose section, .work-history) { border-color: var(--craft-border); }
+.craft-admin .review-detail .material-fields .changed { background: #fffbeb; }
+.craft-admin .review-detail :is(.material-fields dt, .material-fields .previous-value, .field-help, .work-prose p, .admin-work-meta) { color: var(--craft-muted); }
+.craft-admin .review-detail :is(.work-price, .work-detail-info .eyebrow, .work-creator-link) { color: var(--craft-ink); }
+.craft-admin .review-detail :is(.work-price, .work-history h2) { font-family: var(--craft-font); }
+.craft-admin .delete-dialog h2 { font: 650 19px var(--craft-font); }
+
+.craft-admin .category-tree { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.craft-admin .category-branch h2 { flex-wrap: wrap; gap: 7px; margin: 0; font: 650 17px var(--craft-font); }
+.craft-admin .category-branch > header { gap: 10px; flex-wrap: wrap; }
+.craft-admin .category-branch > header > div:first-child,
+.craft-admin .category-children > div > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.craft-admin .category-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.craft-admin .category-actions .app-icon { width: 14px; height: 14px; }
+.craft-admin .category-branch .category-order { margin: 5px 0 0; font-size: 12px; }
+.craft-admin .category-branch .category-children {
+  display: grid;
+  margin: 14px 0 0;
+  padding-inline-start: 12px;
+  border-color: var(--craft-border);
+}
+.craft-admin .category-branch .category-children > div {
+  background: var(--craft-bg);
+  border-radius: 7px;
+}
+.craft-admin .category-dialog .privacy-note { color: var(--craft-muted); background: var(--craft-bg); }
+
+@media (max-width: 1150px) {
+  .craft-admin .category-tree { grid-template-columns: minmax(0, 1fr); }
+}

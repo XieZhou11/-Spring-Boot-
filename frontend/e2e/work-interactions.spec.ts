@@ -27,9 +27,12 @@ test('审核上架后互动、导航收藏关注、邀请定制、取消与下�
     await register(page, mailbox.codes, '寻木访客')
     await page.goto(`/works/${workId}`)
     await expect(page.getByRole('heading', { name: '山间手工木杯垫', exact: true })).toBeVisible()
-    await page.getByRole('button', { name: '点赞', exact: true }).click()
-    await expect(page.getByRole('button', { name: '取消点赞', exact: true })).toBeVisible()
-    await page.getByRole('button', { name: '收藏', exact: true }).click()
+    const actions = page.getByRole('group', { name: '作品互动', exact: true })
+    await expect(actions.getByRole('button', { name: '点赞', exact: true })).toHaveText('点赞 0')
+    await actions.getByRole('button', { name: '点赞', exact: true }).click()
+    await expect(actions.getByRole('button', { name: '取消点赞', exact: true })).toHaveText('取消点赞 1')
+    await expect(actions.getByRole('button', { name: '收藏', exact: true })).toHaveText('收藏 0')
+    await actions.getByRole('button', { name: '收藏', exact: true }).click()
     await page.getByRole('button', { name: '关注创作者', exact: true }).click()
     await page.getByLabel('评论内容', { exact: true }).fill('木纹的细节非常漂亮，很喜欢这样温暖的手作。')
     // 仅缩短真实签名响应的到期元数据，加速验证续签仍调用鉴权端点。
@@ -57,9 +60,10 @@ test('审核上架后互动、导航收藏关注、邀请定制、取消与下�
     await expect(page.getByText('木纹的细节非常漂亮，很喜欢这样温暖的手作。', { exact: true })).toBeVisible()
     await expect(page.getByRole('img', { name: '评论图片 1', exact: true })).toBeVisible()
     await page.reload()
-    await expect(page.getByRole('button', { name: '取消收藏', exact: true })).toBeVisible()
+    await expect(actions.getByRole('button', { name: '取消点赞', exact: true })).toHaveText('取消点赞 1')
+    await expect(actions.getByRole('button', { name: '取消收藏', exact: true })).toHaveText('取消收藏 1')
     await expect(page.getByRole('button', { name: '取消关注', exact: true })).toBeVisible()
-    for (const width of [1440, 390]) {
+    for (const width of [1366, 1440, 390]) {
       await page.setViewportSize({ width, height: 1000 })
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
       await page.screenshot({ path: testInfo.outputPath(`interactions-${width}.png`), fullPage: true })

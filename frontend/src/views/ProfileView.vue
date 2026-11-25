@@ -185,11 +185,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <AccountLayout
-    title="个人资料"
-    subtitle="认真介绍自己，也是一件有温度的小事。"
-    number="01"
-  >
+  <AccountLayout title="个人资料">
     <p
       v-if="loading"
       class="account-loading"
@@ -217,7 +213,7 @@ onBeforeUnmount(() => {
     <template v-else>
       <section
         class="avatar-section"
-        aria-label="头像"
+        aria-labelledby="profile-avatar-title"
       >
         <div class="profile-avatar">
           <img
@@ -233,7 +229,9 @@ onBeforeUnmount(() => {
           >{{ initials }}</span>
         </div>
         <div class="avatar-copy">
-          <h2>给相遇，一个熟悉的模样</h2>
+          <h2 id="profile-avatar-title">
+            头像
+          </h2>
           <p>JPEG / PNG 图片，大小不超过 2 MiB</p>
           <label
             class="button-secondary avatar-upload"
@@ -287,14 +285,12 @@ onBeforeUnmount(() => {
         :aria-busy="submitting"
         @submit.prevent="save"
       >
-        <div class="section-caption">
-          <span>基本信息</span><small>YOUR EVERYDAY SIGNATURE</small>
-        </div>
+        <h2>基本信息</h2>
         <AccountField
           v-model="form.nickname"
           label="昵称"
           autocomplete="nickname"
-          hint="2—8 字，让大家记住你"
+          hint="2—8 字"
           :error="errors.nickname"
           :disabled="submitting"
         />
@@ -308,13 +304,13 @@ onBeforeUnmount(() => {
           class="text-link"
           to="/forgot-password"
         >
-          重新设置密码 ↗
+          重新设置密码
         </RouterLink>
         <AccountField
           v-model="form.bio"
           label="个人简介"
           multiline
-          :hint="`${Array.from(form.bio).length} / 200 字 · 可以留白，也可以分享你的手作故事`"
+          :hint="`${Array.from(form.bio).length} / 200 字（选填）`"
           :error="errors.bio"
           :disabled="submitting"
         />
@@ -330,29 +326,53 @@ onBeforeUnmount(() => {
             class="button-primary"
             :disabled="submitting"
           >
-            {{ submitting ? '正在保存…' : '保存资料' }} <span aria-hidden="true">↗</span>
+            {{ submitting ? '正在保存…' : '保存资料' }}
           </button>
           <p
             v-if="saved"
             class="save-success"
             role="status"
           >
-            ✓ {{ saved }}
-          </p>
-          <p v-else>
-            让每一处改变，都恰如其分。
+            {{ saved }}
           </p>
         </div>
       </form>
-      <section v-if="auth.session?.roles.includes('CREATOR')" class="creator-pause-panel">
-        <div><h2>创作者接单状态</h2><p>本人暂停只限制新的创作者业务，不影响已有订单履约。管理员暂停与此状态分别生效。</p><p v-if="adminBusinessPause" class="field-help">账号同时处于管理员新业务暂停状态，恢复本人接单不会解除管理员暂停。</p></div>
-        <button class="button-secondary" :disabled="creatorPauseBusy" @click="toggleCreatorPause">{{ creatorPauseBusy ? '正在保存…' : creatorPause ? '恢复接单' : '暂停接单' }}</button>
-        <p v-if="creatorPauseError" class="form-alert" role="alert">{{ creatorPauseError }}</p><p v-if="creatorPauseMessage" role="status">{{ creatorPauseMessage }}</p>
+      <section
+        v-if="auth.session?.roles.includes('CREATOR')"
+        class="creator-pause-panel"
+      >
+        <div>
+          <h2>创作者接单状态</h2>
+          <p>暂停接单后，仍可继续履行已有订单。</p>
+          <p
+            v-if="adminBusinessPause"
+            class="field-help"
+          >
+            管理员已暂停此账号的新业务，恢复本人接单后仍需管理员恢复业务资格。
+          </p>
+        </div>
+        <button
+          class="button-secondary"
+          :disabled="creatorPauseBusy"
+          @click="toggleCreatorPause"
+        >
+          {{ creatorPauseBusy ? '正在保存…' : creatorPause ? '恢复接单' : '暂停接单' }}
+        </button>
+        <p
+          v-if="creatorPauseError"
+          class="form-alert"
+          role="alert"
+        >
+          {{ creatorPauseError }}
+        </p>
+        <p
+          v-if="creatorPauseMessage"
+          class="form-notice"
+          role="status"
+        >
+          {{ creatorPauseMessage }}
+        </p>
       </section>
     </template>
   </AccountLayout>
 </template>
-
-<style scoped>
-.creator-pause-panel{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:22px;padding:18px;border:1px solid #e7e2d8;border-radius:12px;background:#fff}.creator-pause-panel h2{font-size:17px;margin:0 0 6px}.creator-pause-panel p{margin:5px 0;color:#70736d}.creator-pause-panel button{flex:none}@media(max-width:620px){.creator-pause-panel{align-items:flex-start;flex-direction:column}}
-</style>

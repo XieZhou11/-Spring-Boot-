@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import WorkLayout from '@/layouts/WorkLayout.vue'
 import WorkImagePicker from '@/components/WorkImagePicker.vue'
@@ -12,6 +12,7 @@ import type { CategoryVO } from '@/types/creator'
 import type { PublicationOrderOptionVO, PublicationQuotaVO, WorkVO } from '@/types/work'
 import { ApiError } from '@/utils/request'
 import { useAuthStore } from '@/stores/auth'
+import '@/assets/styles/craftflow-publication.css'
 
 const route = useRoute()
 const router = useRouter()
@@ -24,6 +25,10 @@ const publicationOrders = ref<PublicationOrderOptionVO[]>([])
 const error = ref('')
 const notice = ref('')
 const fieldErrors = ref<Record<string, string>>({})
+const editorForm = ref<HTMLFormElement>()
+const errorFeedback = ref<HTMLElement>()
+const successFeedback = ref<HTMLElement>()
+const mainImageError = ref<HTMLElement>()
 const loading = ref(true)
 const ready = ref(false)
 const busy = ref(false)
@@ -37,6 +42,17 @@ const dirty = computed(() => JSON.stringify(form) !== baseline.value)
 const selectable = computed(() => categories.value.flatMap(parent => parent.children.length ? parent.children.filter(c => c.enabled && c.selectableForWork).map(c => ({ id: c.id, name: `${parent.name} / ${c.name}` })) : parent.selectableForWork ? [{ id: parent.id, name: parent.name }] : []))
 const pending = computed(() => work.value?.reviewStatus === 'PENDING')
 let disposed = false
+
+/** 四段表单操作后将反馈带入视口，字段校验时优先定位可修正的位置。 */
+watch([error, notice, fieldErrors], ([failure, result]) => {
+  if (!failure && !result) return
+  const invalidField = failure && !unresolved.value
+    ? editorForm.value?.querySelector<HTMLElement>('[aria-invalid="true"]') || mainImageError.value
+    : undefined
+  const target = invalidField || (failure ? errorFeedback.value : successFeedback.value)
+  target?.focus({ preventScroll: true })
+  target?.scrollIntoView({ block: 'center' })
+}, { flush: 'post' })
 
 /** 服务端读取只在初始化或明确刷新时覆盖表单；失败和冲突保留输入。 */
 async function initialize() {
@@ -63,7 +79,10 @@ function validate() {
   if (form.saleEnabled && (!form.stockPrice || !/^(?:[1-9]\d{0,4}|0)(?:\.\d{1,2})?$/.test(form.stockPrice) || /^0(?:\.0{1,2})?$/.test(form.stockPrice) || Number(form.stockPrice) > 99999)) errors.stockPrice = '现货售价为 0.01—99999 元，最多两位小数'
   if (form.customEnabled && (!Number.isInteger(form.customReferenceDays) || form.customReferenceDays! < 3 || form.customReferenceDays! > 180)) errors.customReferenceDays = '参考周期为 3—180 个自然日'
   fieldErrors.value = errors
-  if (Object.keys(errors).length) { error.value = '请检查标记的字段'; requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()); return false }
+  if (Object.keys(errors).length) {
+    error.value = '请检查标记的字段'
+    return false
+  }
   return true
 }
 /** 关联订单后立即关闭现货销售；已保存来源由服务端禁止解除或替换。 */
@@ -85,8 +104,8 @@ async function persist(submit: boolean) {
     attemptedSubmission = submit
     work.value = submit ? await submitWork(current.id, workContent(form), current.version) : await saveWork(current.id, workContent(form), current.version)
     Object.assign(form, workContent(work.value)); baseline.value = JSON.stringify(form)
-    notice.value = submit ? work.value.reviewStatus === 'ONLINE' ? '交易设置已即时更新' : '作品已提交，等待管理员审核' : '草稿已保存'
     if (!route.params.id) await router.replace(`/creator/works/${work.value.id}/edit`)
+    notice.value = submit ? work.value.reviewStatus === 'ONLINE' ? '交易设置已即时更新' : '作品已提交，等待管理员审核' : '草稿已保存'
     quota.value = await getPublicationQuota()
   } catch (failure) {
     if (failure instanceof ApiError && failure.status) {
@@ -98,14 +117,17 @@ async function persist(submit: boolean) {
       try {
         const current = work.value ? await getManagedWork(work.value.id) : await createWork(workContent(form), requestKey)
         work.value = current
-        if (attemptedSubmission && ['PENDING', 'ONLINE'].includes(current.reviewStatus) && JSON.stringify(workContent(current)) === JSON.stringify(workContent(form))) { baseline.value = JSON.stringify(form); notice.value = '已核验：服务器已接收本次提交'; if (!route.params.id) await router.replace(`/creator/works/${current.id}/edit`) }
-        else error.value = '已核验服务器状态，输入仍保留，可继续保存或提交。'
+        if (attemptedSubmission && ['PENDING', 'ONLINE'].includes(current.reviewStatus) && JSON.stringify(workContent(current)) === JSON.stringify(workContent(form))) {
+          baseline.value = JSON.stringify(form)
+          if (!route.params.id) await router.replace(`/creator/works/${current.id}/edit`)
+          notice.value = '已核验：服务器已接收本次提交'
+        } else error.value = '已核验服务器状态，输入仍保留，可继续保存或提交。'
       } catch { unresolved.value = true; error.value = '网络中断，操作结果尚未确认。输入已保留，请恢复网络后核验。' }
     }
   } finally { busy.value = false }
 }
 async function reconcile() {
-  busy.value = true; error.value = ''
+  busy.value = true; error.value = ''; notice.value = ''
   try { work.value = work.value ? await getManagedWork(work.value.id) : await createWork(workContent(form), requestKey); unresolved.value = false; notice.value = '已核验最新状态。输入已保留，请确认后再操作。' }
   catch (failure) { error.value = failure instanceof Error ? failure.message : '仍无法核验，请稍后重试' }
   finally { busy.value = false }
@@ -126,7 +148,7 @@ async function trading() {
 }
 async function withdraw() {
   if (!work.value || busy.value || !window.confirm('确定撤回本轮审核并返回草稿？')) return
-  busy.value = true; error.value = ''
+  busy.value = true; error.value = ''; notice.value = ''
   try {
     const preserveInput = dirty.value
     work.value = await withdrawWork(work.value.id, work.value.version)
@@ -149,252 +171,398 @@ onBeforeUnmount(() => { disposed = true; window.removeEventListener('beforeunloa
 </script>
 
 <template>
-  <WorkLayout>
-    <nav class="work-breadcrumb">
-      <RouterLink to="/creator/works">我的作品</RouterLink><span>/</span><span>{{ work ? '编辑作品' : '发布作品' }}</span>
-    </nav><header class="work-section-heading">
-      <div>
-        <p class="eyebrow">
-          LET YOUR CRAFT BE SEEN
-        </p><h1>{{ pending ? '待审核作品' : work ? '编辑作品' : '发布新作品' }}</h1><p class="muted">
+  <WorkLayout presentation="craftflow">
+    <section class="cf-publication cf-publication--editor">
+      <nav
+        class="cf-publication-breadcrumb"
+        aria-label="当前位置"
+      >
+        <RouterLink to="/creator/works">
+          我的作品
+        </RouterLink>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">{{ work ? '编辑作品' : '发布作品' }}</span>
+      </nav>
+      <header class="cf-publication-heading">
+        <h1>{{ pending ? '待审核作品' : work ? '编辑作品' : '发布新作品' }}</h1>
+        <span
+          v-if="work"
+          class="work-status"
+          :class="work.reviewStatus"
+        >{{ workStatusLabels[work.reviewStatus] }}</span>
+      </header>
+      <p
+        v-if="error"
+        ref="errorFeedback"
+        class="form-alert"
+        role="alert"
+        tabindex="-1"
+      >
+        {{ error }}
+        <button
+          v-if="unresolved"
+          type="button"
+          class="inline-button"
+          :disabled="busy"
+          @click="reconcile"
+        >
+          核验最新状态
+        </button>
+        <button
+          v-else-if="!ready"
+          type="button"
+          class="inline-button"
+          @click="initialize"
+        >
+          重新读取
+        </button>
+      </p>
+      <p
+        v-if="notice"
+        ref="successFeedback"
+        class="form-success"
+        role="status"
+        tabindex="-1"
+      >
+        {{ notice }}
+      </p>
+      <p
+        v-if="work?.reviewReason"
+        class="cf-publication-warning"
+      >
+        审核意见：{{ work.reviewReason }}
+      </p>
+      <p
+        v-if="loading"
+        class="cf-publication-state"
+      >
+        正在读取作品资料…
+      </p>
+      <template v-else-if="pending && work">
+        <div class="cf-publication-warning cf-publication-pending">
+          <p>当前材料正在审核，撤回后才能修改。</p>
+          <button
+            class="button-secondary"
+            type="button"
+            :disabled="busy || uploading || unresolved"
+            @click="withdraw"
+          >
+            撤回审核
+          </button>
+        </div>
+        <div class="cf-publication-card cf-publication-materials">
+          <WorkMaterials :work="work" />
+        </div>
+      </template>
+      <form
+        v-else-if="ready"
+        ref="editorForm"
+        class="cf-publication-form"
+        @submit.prevent="persist(true)"
+      >
+        <p class="cf-publication-warning">
           请发布本人原创作品，勿重复发布相同内容；违规或重复作品可能被审核驳回或下架。
         </p>
-      </div><span
-        v-if="work"
-        class="work-status"
-        :class="work.reviewStatus"
-      >{{ workStatusLabels[work.reviewStatus] }}</span>
-    </header><p
-      v-if="error"
-      class="form-alert"
-      role="alert"
-    >
-      {{ error }} <button
-        v-if="unresolved"
-        type="button"
-        class="inline-button"
-        :disabled="busy"
-        @click="reconcile"
-      >
-        核验最新状态
-      </button><button
-        v-else-if="!ready"
-        type="button"
-        class="inline-button"
-        @click="initialize"
-      >
-        重新读取
-      </button>
-    </p><p
-      v-if="notice"
-      class="form-success"
-      role="status"
-    >
-      {{ notice }}
-    </p><p
-      v-if="work?.reviewReason"
-      class="review-reason"
-    >
-      审核意见：{{ work.reviewReason }}
-    </p><p
-      v-if="loading"
-      class="account-loading"
-    >
-      正在准备创作台…
-    </p><template v-else-if="pending && work">
-      <div class="pending-work-banner">
-        <p>当前材料正在审核，撤回后才能修改。</p><button
-          class="button-secondary"
-          :disabled="busy || uploading || unresolved"
-          @click="withdraw"
+        <section
+          class="cf-publication-card cf-publication-section"
+          aria-labelledby="work-basics"
         >
-          撤回审核
-        </button>
-      </div><WorkMaterials :work="work" />
-    </template><form
-      v-else-if="ready"
-      class="work-editor"
-      @submit.prevent="persist(true)"
-    >
-      <div class="work-editor-main">
-        <fieldset :disabled="busy || uploading || unresolved">
-          <legend class="sr-only">
-            作品展示内容
-          </legend><section class="editor-section">
-            <header><span>01</span><div><h2>基础信息</h2><p>先给这件作品一个名字。</p></div></header><label class="work-field">作品标题<input
-              v-model="form.title"
-              aria-label="作品标题"
-              maxlength="30"
-              :aria-invalid="Boolean(fieldErrors.title)"
-            ><small
-              v-if="fieldErrors.title"
-              class="field-error"
-            >{{ fieldErrors.title }}</small></label><label class="work-field">所属品类<select
-              v-model="form.categoryId"
-              aria-label="所属品类"
-              :aria-invalid="Boolean(fieldErrors.categoryId)"
-            ><option :value="null">请选择最具体的品类</option><option
-              v-if="form.categoryId && !selectable.some(c => c.id === form.categoryId)"
-              :value="form.categoryId"
-              disabled
-            >原品类已停用或不再为末级，请重新选择</option><option
-              v-for="category in selectable"
-              :key="category.id"
-              :value="category.id"
-            >{{ category.name }}</option></select><small
-              v-if="fieldErrors.categoryId"
-              class="field-error"
-            >{{ fieldErrors.categoryId }}</small></label>
-            <label class="work-field">关联已授权的定制成品（选填）<select
-              v-model="form.sourceOrderId"
-              aria-label="关联已授权的定制成品"
-              :disabled="Boolean(work?.sourceOrderId)"
-              @change="sourceOrderChanged"
-            ><option :value="null">普通作品，不关联定制订单</option><option
-              v-for="item in publicationOrders"
-              :key="item.orderId"
-              :value="item.orderId"
-            >订单 {{ item.orderId }} · {{ item.title }} · 完成于 {{ item.completedAt.slice(0, 10) }}</option></select><small class="field-help">
-              {{ work?.sourceOrderId ? `此案例来源订单 ${work.sourceOrderId} 已固定，不能更换或解除关联。` : '只显示买家已明确同意公开的定制订单；关联后仍需手动整理内容并通过作品审核。' }}
-            </small></label>
-          </section><section class="editor-section">
-            <header><span>02</span><div><h2>作品图片</h2><p>让细节和质感被看见。</p></div></header><WorkImagePicker
+          <h2 id="work-basics">
+            基本信息
+          </h2>
+          <fieldset
+            aria-labelledby="work-basics"
+            :disabled="busy || uploading || unresolved"
+          >
+            <div class="cf-publication-fields">
+              <label class="work-field">
+                作品标题
+                <input
+                  v-model="form.title"
+                  aria-label="作品标题"
+                  maxlength="30"
+                  :aria-invalid="Boolean(fieldErrors.title)"
+                >
+                <small
+                  v-if="fieldErrors.title"
+                  class="field-error"
+                >{{ fieldErrors.title }}</small>
+              </label>
+              <label class="work-field">
+                所属品类
+                <select
+                  v-model="form.categoryId"
+                  aria-label="所属品类"
+                  :aria-invalid="Boolean(fieldErrors.categoryId)"
+                >
+                  <option :value="null">请选择最具体的品类</option>
+                  <option
+                    v-if="form.categoryId && !selectable.some(c => c.id === form.categoryId)"
+                    :value="form.categoryId"
+                    disabled
+                  >原品类已停用或不再为末级，请重新选择</option>
+                  <option
+                    v-for="category in selectable"
+                    :key="category.id"
+                    :value="category.id"
+                  >{{ category.name }}</option>
+                </select>
+                <small
+                  v-if="fieldErrors.categoryId"
+                  class="field-error"
+                >{{ fieldErrors.categoryId }}</small>
+              </label>
+            </div>
+            <label class="work-field">
+              关联已授权的定制成品（选填）
+              <select
+                v-model="form.sourceOrderId"
+                aria-label="关联已授权的定制成品"
+                :disabled="Boolean(work?.sourceOrderId)"
+                @change="sourceOrderChanged"
+              >
+                <option :value="null">普通作品，不关联定制订单</option>
+                <option
+                  v-for="item in publicationOrders"
+                  :key="item.orderId"
+                  :value="item.orderId"
+                >订单 {{ item.orderId }} · {{ item.title }} · 完成于 {{ item.completedAt.slice(0, 10) }}</option>
+              </select>
+              <small class="field-help">
+                {{ work?.sourceOrderId ? `来源订单 ${work.sourceOrderId} 已固定，不能更换或解除关联。` : '仅列出买家已同意公开的定制订单。' }}
+              </small>
+            </label>
+          </fieldset>
+        </section>
+        <section
+          class="cf-publication-card cf-publication-section"
+          aria-labelledby="work-craft"
+        >
+          <h2 id="work-craft">
+            工艺参数
+          </h2>
+          <fieldset
+            aria-labelledby="work-craft"
+            :disabled="busy || uploading || unresolved"
+          >
+            <div class="cf-publication-fields">
+              <label class="work-field">
+                材质
+                <input
+                  v-model="form.material"
+                  aria-label="材质"
+                  maxlength="20"
+                  :aria-invalid="Boolean(fieldErrors.material)"
+                >
+                <small
+                  v-if="fieldErrors.material"
+                  class="field-error"
+                >{{ fieldErrors.material }}</small>
+              </label>
+              <label class="work-field">
+                尺寸规格
+                <input
+                  v-model="form.specification"
+                  aria-label="尺寸规格"
+                  maxlength="200"
+                  :aria-invalid="Boolean(fieldErrors.specification)"
+                >
+                <small
+                  v-if="fieldErrors.specification"
+                  class="field-error"
+                >{{ fieldErrors.specification }}</small>
+              </label>
+            </div>
+            <WorkImagePicker
+              v-model="form.specificationImageIds"
+              label="尺寸图"
+              :max="9"
+              :disabled="busy || uploading || unresolved"
+              @uploading="specificationUploading = $event"
+            />
+          </fieldset>
+        </section>
+        <section
+          class="cf-publication-card cf-publication-section"
+          aria-labelledby="work-trading"
+        >
+          <header class="cf-publication-section-heading">
+            <div>
+              <h2 id="work-trading">
+                交易信息
+              </h2>
+              <p>两个开关可独立设置，均关闭时作品仅供展示。</p>
+            </div>
+            <button
+              v-if="work?.reviewStatus === 'ONLINE'"
+              type="button"
+              class="button-secondary"
+              :disabled="busy || uploading || unresolved"
+              @click="trading"
+            >
+              即时更新交易设置
+            </button>
+          </header>
+          <fieldset
+            class="cf-publication-fields"
+            aria-labelledby="work-trading"
+            :disabled="busy || uploading || unresolved"
+          >
+            <div class="cf-publication-trade">
+              <label class="trade-toggle">
+                <span><strong>出售现货</strong><small>出售当前这一件成品</small></span>
+                <input
+                  v-model="form.saleEnabled"
+                  type="checkbox"
+                  role="switch"
+                  aria-label="出售现货"
+                  :disabled="Boolean(form.sourceOrderId)"
+                >
+              </label>
+              <p
+                v-if="form.sourceOrderId"
+                class="field-help"
+              >
+                定制成品案例不得出售现货。
+              </p>
+              <label
+                v-if="form.saleEnabled"
+                class="work-field"
+              >
+                成品售价（元）
+                <input
+                  v-model="form.stockPrice"
+                  aria-label="成品售价（元）"
+                  inputmode="decimal"
+                  placeholder="0.01—99999"
+                  :aria-invalid="Boolean(fieldErrors.stockPrice)"
+                >
+                <small
+                  v-if="fieldErrors.stockPrice"
+                  class="field-error"
+                >{{ fieldErrors.stockPrice }}</small>
+              </label>
+            </div>
+            <div class="cf-publication-trade">
+              <label class="trade-toggle">
+                <span><strong>接受定制</strong><small>以作品为参考，另外制作</small></span>
+                <input
+                  v-model="form.customEnabled"
+                  type="checkbox"
+                  role="switch"
+                  aria-label="接受定制"
+                >
+              </label>
+              <label
+                v-if="form.customEnabled"
+                class="work-field"
+              >
+                同类定制参考周期（天）
+                <input
+                  v-model.number="form.customReferenceDays"
+                  aria-label="同类定制参考周期（天）"
+                  type="number"
+                  min="3"
+                  max="180"
+                  :aria-invalid="Boolean(fieldErrors.customReferenceDays)"
+                >
+                <small :class="fieldErrors.customReferenceDays ? 'field-error' : 'field-help'">{{ fieldErrors.customReferenceDays || '3—180 个自然日，实际价格和工期以独立报价为准。' }}</small>
+              </label>
+            </div>
+          </fieldset>
+        </section>
+        <section
+          class="cf-publication-card cf-publication-section"
+          aria-labelledby="work-story"
+        >
+          <h2 id="work-story">
+            图文详情
+          </h2>
+          <fieldset
+            aria-labelledby="work-story"
+            :disabled="busy || uploading || unresolved"
+          >
+            <WorkImagePicker
               v-model="form.mainImageIds"
               label="作品主图"
               cover
               :max="9"
               :disabled="busy || uploading || unresolved"
               @uploading="mainUploading = $event"
-            /><p
+            />
+            <p
               v-if="fieldErrors.mainImageIds"
+              ref="mainImageError"
               class="field-error"
+              tabindex="-1"
             >
               {{ fieldErrors.mainImageIds }}
             </p>
-          </section><section class="editor-section">
-            <header><span>03</span><div><h2>规格与创作故事</h2><p>讲讲材质、工艺与使用方式。</p></div></header><div class="work-fields-pair">
-              <label class="work-field">材质<input
-                v-model="form.material"
-                aria-label="材质"
-                maxlength="20"
-                :aria-invalid="Boolean(fieldErrors.material)"
-              ><small
-                v-if="fieldErrors.material"
-                class="field-error"
-              >{{ fieldErrors.material }}</small></label><label class="work-field">尺寸规格<input
-                v-model="form.specification"
-                aria-label="尺寸规格"
-                maxlength="200"
-                :aria-invalid="Boolean(fieldErrors.specification)"
-              ><small
-                v-if="fieldErrors.specification"
-                class="field-error"
-              >{{ fieldErrors.specification }}</small></label>
-            </div><WorkImagePicker
-              v-model="form.specificationImageIds"
-              label="尺寸图"
-              :max="9"
-              :disabled="busy || uploading || unresolved"
-              @uploading="specificationUploading = $event"
-            /><label class="work-field">作品描述<textarea
-              v-model="form.description"
-              aria-label="作品描述"
-              rows="7"
-              maxlength="2000"
-              :aria-invalid="Boolean(fieldErrors.description)"
-            /><small :class="fieldErrors.description ? 'field-error' : 'field-help'">{{ fieldErrors.description || `${form.description.length} / 2000 · 至少 20 字` }}</small></label><label class="work-field">制作过程说明<textarea
-              v-model="form.processDescription"
-              aria-label="制作过程说明"
-              rows="5"
-              maxlength="1000"
-              :aria-invalid="Boolean(fieldErrors.processDescription)"
-            /><small class="field-help">可选，最多 1000 字。</small></label>
-          </section>
-        </fieldset>
-      </div><aside class="work-editor-aside">
-        <section class="editor-section trading-editor">
-          <header><span>04</span><div><h2>交易设置</h2><p>两种方式可独立开启或关闭。</p></div></header><fieldset :disabled="busy || uploading || unresolved">
-            <label class="trade-toggle"><span><strong>出售现货</strong><small>出售当前这一件成品</small></span><input
-              v-model="form.saleEnabled"
-              type="checkbox"
-              role="switch"
-              aria-label="出售现货"
-              :disabled="Boolean(form.sourceOrderId)"
-            ></label><p v-if="form.sourceOrderId" class="field-help">
-              定制成品案例不得出售现货；可以继续接受新的同类定制。
-            </p><label
-              v-if="form.saleEnabled"
-              class="work-field"
-            >成品售价（元）<input
-              v-model="form.stockPrice"
-              aria-label="成品售价（元）"
-              inputmode="decimal"
-              placeholder="0.01—99999"
-              :aria-invalid="Boolean(fieldErrors.stockPrice)"
-            ><small
-              v-if="fieldErrors.stockPrice"
-              class="field-error"
-            >{{ fieldErrors.stockPrice }}</small></label><label class="trade-toggle"><span><strong>接受定制</strong><small>以作品为参考，另外制作</small></span><input
-              v-model="form.customEnabled"
-              type="checkbox"
-              role="switch"
-              aria-label="接受定制"
-            ></label><label
-              v-if="form.customEnabled"
-              class="work-field"
-            >同类定制参考周期（天）<input
-              v-model.number="form.customReferenceDays"
-              aria-label="同类定制参考周期（天）"
-              type="number"
-              min="3"
-              max="180"
-              :aria-invalid="Boolean(fieldErrors.customReferenceDays)"
-            ><small :class="fieldErrors.customReferenceDays ? 'field-error' : 'field-help'">{{ fieldErrors.customReferenceDays || '3—180 个自然日，实际价格和工期以独立报价为准。' }}</small></label><p
-              v-if="!form.saleEnabled && !form.customEnabled"
-              class="trade-display-note"
-            >
-              仅展示作品，也是一种分享。
+            <label class="work-field">
+              作品描述
+              <textarea
+                v-model="form.description"
+                aria-label="作品描述"
+                rows="5"
+                maxlength="2000"
+                :aria-invalid="Boolean(fieldErrors.description)"
+              />
+              <small :class="fieldErrors.description ? 'field-error' : 'field-help'">{{ fieldErrors.description || `${form.description.length} / 2000 · 至少 20 字` }}</small>
+            </label>
+            <label class="work-field">
+              制作过程说明
+              <textarea
+                v-model="form.processDescription"
+                aria-label="制作过程说明"
+                rows="3"
+                maxlength="1000"
+                :aria-invalid="Boolean(fieldErrors.processDescription)"
+              />
+              <small :class="fieldErrors.processDescription ? 'field-error' : 'field-help'">{{ fieldErrors.processDescription || '可选，最多 1000 字。' }}</small>
+            </label>
+          </fieldset>
+        </section>
+        <footer class="cf-publication-card cf-publication-footer">
+          <div class="cf-publication-guidance">
+            <p>标题和描述请勿包含联系方式、外链或其他平台店铺名。</p>
+            <p v-if="work?.reviewStatus === 'ONLINE'">
+              展示内容提交重审后将暂时停止公开展示。
             </p>
-          </fieldset><button
-            v-if="work?.reviewStatus === 'ONLINE'"
-            type="button"
-            class="button-secondary"
-            :disabled="busy || uploading || unresolved"
-            @click="trading"
-          >
-            即时更新交易设置
-          </button>
-        </section><section class="editor-guidance">
-          <h3>发布前的小提醒</h3><p>标题和描述请勿包含联系方式、外链或其他平台店铺名。</p><p>展示内容修改需重新审核，提交后暂时停止公开展示。</p><p v-if="quota">
-            今日首次提交 {{ quota.used }} / {{ quota.limit }} 件。保存草稿及同一作品重提不重复计数。
-          </p><p
-            v-if="quota && !quota.canPublish"
-            class="field-error"
-          >
-            {{ quota.reason }}
-          </p>
-        </section><div class="editor-actions">
-          <button
-            v-if="work?.reviewStatus !== 'ONLINE'"
-            class="button-secondary"
-            type="button"
-            :disabled="busy || uploading || unresolved"
-            @click="persist(false)"
-          >
-            {{ busy ? '处理中…' : '保存草稿' }}
-          </button><button
-            class="button-primary"
-            type="submit"
-            :disabled="busy || uploading || unresolved"
-          >
-            {{ busy ? '处理中…' : work?.reviewStatus === 'ONLINE' ? '提交修改并重新审核' : '提交审核' }}
-          </button>
-        </div>
-      </aside>
-    </form><WorkHistory
-      v-if="work"
-      :work-id="work.id"
-      :revision="work.version"
-    />
+            <p v-if="quota">
+              今日首次提交 {{ quota.used }} / {{ quota.limit }} 件，保存草稿和同一作品重提不计入额度。
+            </p>
+            <p
+              v-if="quota && !quota.canPublish"
+              class="field-error"
+            >
+              {{ quota.reason }}
+            </p>
+          </div>
+          <div class="cf-publication-buttons">
+            <button
+              v-if="work?.reviewStatus !== 'ONLINE'"
+              class="button-secondary"
+              type="button"
+              :disabled="busy || uploading || unresolved"
+              @click="persist(false)"
+            >
+              {{ busy ? '处理中…' : '保存草稿' }}
+            </button>
+            <button
+              class="button-primary"
+              type="submit"
+              :disabled="busy || uploading || unresolved"
+            >
+              {{ busy ? '处理中…' : work?.reviewStatus === 'ONLINE' ? '提交修改并重新审核' : '提交审核' }}
+            </button>
+          </div>
+        </footer>
+      </form>
+      <WorkHistory
+        v-if="work"
+        :work-id="work.id"
+        :revision="work.version"
+      />
+    </section>
   </WorkLayout>
 </template>

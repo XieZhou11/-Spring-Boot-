@@ -94,7 +94,9 @@ onBeforeUnmount(() => { avatarRevision++; clearTimeout(avatarTimer) })
         v-if="work.customizable && work.creatorId !== auth.session?.userId && !auth.session?.roles.includes('ADMIN')"
         class="button-primary"
         :to="{ path: '/my-requests/new', query: { sourceWorkId: work.id } }"
-      >发起同类定制 ↗</RouterLink><RouterLink
+      >发起同类定制 ↗</RouterLink>
+      <slot name="interaction-actions" />
+      <RouterLink
         :to="`/creators/${work.creatorId}`"
         class="work-creator-link"
       ><img
