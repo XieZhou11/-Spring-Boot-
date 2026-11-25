@@ -30,19 +30,28 @@ async function signOut() {
   <div class="admin-page">
     <aside class="admin-sidebar">
       <RouterLink
-        to="/admin/works"
+        to="/admin/dashboard"
         class="admin-brand"
       >
         <span
           class="admin-brand-seal"
           aria-hidden="true"
-        >拾</span>
-        <strong>拾作管理台</strong>
+        >匠</span>
+        <strong>匠心集管理台</strong>
       </RouterLink>
       <nav aria-label="后台管理">
-        <RouterLink to="/admin/dashboard" active-class="active"><AppIcon name="grid" />数据看板</RouterLink>
-        <RouterLink to="/admin/users" active-class="active"><AppIcon name="shield" />用户管理</RouterLink>
-        <RouterLink to="/admin/orders" active-class="active"><AppIcon name="grid" />订单查询</RouterLink>
+        <RouterLink
+          to="/admin/dashboard"
+          active-class="active"
+        ><AppIcon name="grid" />数据看板</RouterLink>
+        <RouterLink
+          to="/admin/users"
+          active-class="active"
+        ><AppIcon name="shield" />用户管理</RouterLink>
+        <RouterLink
+          to="/admin/orders"
+          active-class="active"
+        ><AppIcon name="grid" />订单查询</RouterLink>
         <RouterLink
           to="/admin/works"
           active-class="active"

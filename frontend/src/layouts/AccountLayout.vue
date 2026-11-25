@@ -59,7 +59,7 @@ const auth = useAuthStore()
       </section>
     </main>
     <footer class="site-footer">
-      <span>拾作 SHIZUO</span><span>好手艺，值得被看见。</span>
+      <span>匠心集 CraftFlow</span>
     </footer>
   </div>
 </template>

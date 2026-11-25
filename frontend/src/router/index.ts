@@ -10,7 +10,7 @@ const router = createRouter({
       alias: '/discover',
       name: 'home',
       component: () => import('@/views/HomeView.vue'),
-      meta: { requiresAuth: true, title: '发现手作' },
+      meta: { requiresAuth: true, title: '作品广场' },
     },
     { path: '/account/favorites', component: () => import('@/views/SavedInteractionsView.vue'), meta: { requiresAuth: true, title: '收藏作品' } },
     { path: '/account/following', component: () => import('@/views/SavedInteractionsView.vue'), meta: { requiresAuth: true, title: '关注创作者' } },
@@ -141,7 +141,7 @@ router.beforeEach(async (to) => {
 })
 
 router.afterEach((to) => {
-  document.title = `${String(to.meta.title || '拾作')} · 拾作 SHIZUO`
+  document.title = to.meta.title ? `${String(to.meta.title)} · 匠心集 CraftFlow` : '匠心集 CraftFlow'
 })
 
 export default router

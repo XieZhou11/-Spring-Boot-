@@ -76,7 +76,7 @@ async function buy() {
     <RouterLink
       v-if="!addresses.length && !loading"
       class="inline-button"
-      to="/addresses"
+      to="/account/addresses"
     >管理收货地址 ↗</RouterLink>
     <p class="field-help">
       当前为一件现货。下单后将锁定该成品，请在 24 小时内模拟支付。

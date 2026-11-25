@@ -39,6 +39,7 @@ async function switchRole() {
       :to="auth.session?.roles.includes('ADMIN') ? '/messages/notifications' : '/messages/conversations'"
       class="notification-link"
       aria-label="消息中心"
+      title="消息中心"
     >
       <AppIcon name="message" /><span>消息中心</span>
       <span

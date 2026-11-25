@@ -1,6 +1,6 @@
 # PC Web 前端重做开发指南
 
-更新于 2026-11-25。新版前端待开发。
+更新于 2026-11-25。新版前端按业务链路实施，第 1 批已完成真实后端联调及浏览器验收。 [T-021](../development/tasks/T-021-craftflow-auth-discovery.md)
 
 ## 1. 实现依据
 
@@ -28,6 +28,8 @@
 | 7. 全站联验与新版切换 | 第 1 至 6 批 | 用真实后端走通跨角色流程，核对新版入口和 V1.5 验收范围。 |
 
 ### 第 1 批 · 认证、公共布局与作品浏览
+
+已完成。浏览器回归和保留差异见 [T-021 测试记录](../testing/T-021-craftflow-auth-discovery.md)。
 
 - 从登录、注册、找回密码和顶部导航建立样板。以「匠心集 CraftFlow」原型的浅色背景、白色内容区、深色主操作、细边框和状态徽章为参照，统一版心、字号、间距及按钮反馈。
 - 重做作品广场与详情，接现有分页和图片读取。关键词、两级品类、交易属性、价格区间和排序走现有查询参数。保留普通用户与管理员的访问边界、登录回跳和管理员显式进入前台的 `/discover`。
@@ -75,7 +77,7 @@
 1. **接口与状态。** 从现有路由和 API 封装定位入口。复用带 Cookie、CSRF 与会话异常处理的请求层，以及已有的图像授权、并发保护和未知结果核验。网络中断后先查业务结果，字段校验或提交失败保留输入。 [请求层](../../frontend/src/utils/request.ts) · [登录状态](../../frontend/src/stores/auth.ts)
 2. **页面呈现。** 选取相同视口和可对齐的数据状态，对照原型的排版、配色、组件和反馈。最终覆盖 PC Chrome 和 Edge，并检查 V1.5 的最小宽度 1366 像素。原型缺少或与业务不一致的界面，按同一视觉风格和真实操作逐项核查。
 3. **浏览器回归。** 在 `frontend/` 执行 `npm run type-check`、`npm run lint`、`npm run build`，专项命令示例为 `npm run test:e2e -- e2e/auth.spec.ts`。现有 Playwright 夹具使用后端 JAR、隔离 MySQL 及按需配置的本地 SMTP 和 OSS 接收器。按变更风险覆盖权限、状态、金额、重复请求等分支。 [Playwright 配置](../../frontend/playwright.config.ts) · [测试夹具](../../frontend/e2e/fixtures.ts) · [环境与命令](../../frontend/README.md)
-4. **核对已有断言。** 开始开发时记下基线。当前 `navigation-layout.spec.ts` 的管理员默认路由断言仍指向 `/admin/works`，与源码的 `/admin/dashboard` 有差异。新版可同步更新标题、元素定位与已变化的导航目标，权限、状态、金额及流水等业务断言继续覆盖。 [导航用例](../../frontend/e2e/navigation-layout.spec.ts) · [路由源码](../../frontend/src/router/index.ts)
+4. **核对已有断言。** 开始开发时记下基线。第 1 批已将管理员默认路由断言同步为 `/admin/dashboard`，并从后台导航进入 `/admin/works` 验证原审核双栏。新版可同步更新标题、元素定位与已变化的导航目标，权限、状态、金额及流水等业务断言继续覆盖。 [导航用例](../../frontend/e2e/navigation-layout.spec.ts) · [路由源码](../../frontend/src/router/index.ts)
 5. **记录结果。** 业务开发开始后按仓库约定记录可独立验收的任务和实际验证，沿用相关历史记录及其入口。各批写明实际命令、结果和未覆盖项。 [任务约定](../development/README.md) · [测试记录约定](../testing/README.md)
 
 ## 4. 已知业务差异

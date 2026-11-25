@@ -3,7 +3,6 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AuthLayout from '@/layouts/AuthLayout.vue'
 import AuthField from '@/components/AuthField.vue'
-import AppIcon from '@/components/AppIcon.vue'
 import VerificationCodeButton from '@/components/VerificationCodeButton.vue'
 import { resetPassword } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
@@ -70,105 +69,86 @@ async function submit() {
 
 <template>
   <AuthLayout>
-    <div class="auth-form-content recovery-content">
-      <RouterLink
-        class="back-link"
-        :to="{ path: '/login', query: redirectQuery }"
-      ><span aria-hidden="true">←</span> 返回登录</RouterLink>
-      <div class="form-heading">
-        <p class="eyebrow">
-          LET’S GET YOU BACK
-        </p>
-        <h1>找回你的拾作账号</h1>
-        <p>验证注册邮箱，为账号设置一个新密码。</p>
-      </div>
-      <form
-        class="auth-form"
-        novalidate
-        :aria-busy="submitting"
-        @submit.prevent="submit"
+    <h1>设置新的登录密码</h1>
+    <form
+      class="craft-auth__form"
+      novalidate
+      :aria-busy="submitting"
+      @submit.prevent="submit"
+    >
+      <AuthField
+        v-model="form.email"
+        label="邮箱地址"
+        type="email"
+        autocomplete="username"
+        inputmode="email"
+        placeholder="请输入已注册的 QQ / 163 邮箱"
+        :error="errors.email"
+        :disabled="submitting"
+      />
+      <AuthField
+        v-model="form.verificationCode"
+        label="邮箱验证码"
+        autocomplete="one-time-code"
+        inputmode="numeric"
+        placeholder="请输入 6 位数字"
+        :maxlength="6"
+        :error="errors.verificationCode"
+        :disabled="submitting"
       >
-        <AuthField
-          v-model="form.email"
-          label="邮箱地址"
-          type="email"
-          icon="mail"
-          autocomplete="username"
-          inputmode="email"
-          placeholder="请输入已注册的 QQ / 163 邮箱"
-          :error="errors.email"
-          :disabled="submitting"
-        />
-        <AuthField
-          v-model="form.verificationCode"
-          label="邮箱验证码"
-          icon="code"
-          autocomplete="one-time-code"
-          inputmode="numeric"
-          placeholder="请输入六位验证码"
-          :maxlength="6"
-          :error="errors.verificationCode"
-          :disabled="submitting"
-        >
-          <template #suffix>
-            <VerificationCodeButton
-              :email="form.email"
-              :disabled="submitting"
-              @sending="sentNotice = ''"
-              @invalid-email="errors.email = $event"
-              @error="message = $event"
-              @sent="codeSent"
-            />
-          </template>
-        </AuthField>
-        <p
-          v-if="sentNotice"
-          class="inline-notice"
-          role="status"
-        >
-          {{ sentNotice }}
-        </p>
-        <AuthField
-          v-model="form.newPassword"
-          label="新密码"
-          type="password"
-          icon="lock"
-          autocomplete="new-password"
-          placeholder="8—20 位，包含字母和数字"
-          :error="errors.newPassword"
-          :disabled="submitting"
-        />
-        <AuthField
-          v-model="form.confirmPassword"
-          label="确认新密码"
-          type="password"
-          icon="lock"
-          autocomplete="new-password"
-          placeholder="请再次输入新密码"
-          :error="errors.confirmPassword"
-          :disabled="submitting"
-        />
-        <p
-          v-if="message"
-          class="form-alert"
-          role="alert"
-        >
-          {{ message }}
-        </p>
-        <button
-          class="button-primary submit-button"
-          type="submit"
-          :disabled="submitting"
-        >
-          {{ submitting ? '正在重置…' : '重置密码' }}<AppIcon
-            v-if="!submitting"
-            name="arrow"
+        <template #suffix>
+          <VerificationCodeButton
+            :email="form.email"
+            :disabled="submitting"
+            @sending="sentNotice = ''"
+            @invalid-email="errors.email = $event"
+            @error="message = $event"
+            @sent="codeSent"
           />
-        </button>
-      </form>
-      <p class="recovery-note">
-        <AppIcon name="code" /> 重置成功后，所有设备都需要重新登录。
+        </template>
+      </AuthField>
+      <p
+        v-if="sentNotice"
+        class="craft-auth__feedback"
+        role="status"
+      >
+        {{ sentNotice }}
       </p>
-    </div>
+      <AuthField
+        v-model="form.newPassword"
+        label="新密码"
+        type="password"
+        autocomplete="new-password"
+        hint="8—20 位，包含字母和数字，不能有空格。"
+        :error="errors.newPassword"
+        :disabled="submitting"
+      />
+      <AuthField
+        v-model="form.confirmPassword"
+        label="确认新密码"
+        type="password"
+        autocomplete="new-password"
+        placeholder="请再次输入新密码"
+        :error="errors.confirmPassword"
+        :disabled="submitting"
+      />
+      <p
+        v-if="message"
+        class="craft-auth__feedback"
+        role="alert"
+      >
+        {{ message }}
+      </p>
+      <button
+        class="craft-auth__submit"
+        type="submit"
+        :disabled="submitting"
+      >
+        {{ submitting ? '正在重置…' : '重置密码' }}
+      </button>
+      <p class="craft-auth__note">
+        重置成功后，所有设备都需要重新登录。
+      </p>
+    </form>
   </AuthLayout>
 </template>

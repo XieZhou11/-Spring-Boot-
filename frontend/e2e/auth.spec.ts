@@ -43,18 +43,27 @@ async function signIn(page: Page, email: string, value = password) {
   await page.getByRole('button', { name: '登录', exact: true }).click()
 }
 
-// 此用例会捕获认证路由缺失、表单入口不可达和原型主题丢失。
-test('登录和注册页面可直接访问，提供邮箱表单与互跳入口', async ({ page }) => {
-  await page.goto('/login')
-  await expect(page.getByRole('heading', { name: '欢迎回到拾作' })).toBeVisible()
+test('三个认证页签可直接访问和互跳，并保留登录回跳地址', async ({ page }) => {
+  const target = '/works/42?from=collection#materials'
+  await page.goto(`/login?redirect=${encodeURIComponent(target)}`)
+  const tabs = page.getByRole('navigation', { name: '账号入口' })
+  await expect(tabs.getByRole('link', { name: '邮箱登录' })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('heading', { name: '欢迎回到匠心集' })).toBeVisible()
   await expect(page.getByLabel('邮箱地址')).toBeVisible()
   await expect(page.getByLabel('密码', { exact: true })).toBeVisible()
-  await page.getByRole('link', { name: '立即注册' }).click()
-  await expect(page).toHaveURL(/\/register$/)
-  await expect(page.getByRole('heading', { name: '在拾作，遇见手作之美' })).toBeVisible()
+  await tabs.getByRole('link', { name: '新用户注册' }).click()
+  await expect(page).toHaveURL(url => url.pathname === '/register' && url.searchParams.get('redirect') === target)
+  await expect(tabs.getByRole('link', { name: '新用户注册' })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('heading', { name: '创建匠心集账号' })).toBeVisible()
   await expect(page.getByLabel('昵称')).toBeVisible()
   await expect(page.getByLabel('邮箱验证码')).toBeVisible()
   await expect(page.getByRole('button', { name: '发送验证码' })).toBeVisible()
+  await tabs.getByRole('link', { name: '找回密码' }).click()
+  await expect(page).toHaveURL(url => url.pathname === '/forgot-password' && url.searchParams.get('redirect') === target)
+  await expect(tabs.getByRole('link', { name: '找回密码' })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByLabel('新密码', { exact: true })).toBeVisible()
+  await tabs.getByRole('link', { name: '邮箱登录' }).click()
+  await expect(page).toHaveURL(url => url.pathname === '/login' && url.searchParams.get('redirect') === target)
 })
 
 test('空值、邮箱域、昵称和确认密码错误就近提示，密码可切换可见性', async ({ page }) => {
@@ -85,7 +94,7 @@ for (const domain of ['qq.com', '163.com']) {
     await expect(page.getByRole('alert')).toHaveText('邮箱或密码错误')
     await expect(page).toHaveURL(/\/login/)
     await signIn(page, email)
-    await expect(page.getByRole('heading', { name: '发现手作之美' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '作品广场', exact: true })).toBeVisible()
     await page.reload()
     await expect(page.getByRole('link', { name: '手作测试 · 个人中心' })).toBeVisible()
     expect((await (await page.request.get(`${api}/sessions/current`)).json()).data.email).toBe(email)
@@ -147,13 +156,13 @@ test('邮箱找回重置后旧密码失效、新密码可用，另一设备旧�
   const newPassword = 'ChangedCraft123'
   await registerAccount(page, email, mailbox.codes)
   await signIn(page, email)
-  await expect(page.getByRole('heading', { name: '发现手作之美' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '作品广场', exact: true })).toBeVisible()
   const otherContext = await browser.newContext()
   try {
     const other = await otherContext.newPage()
     await other.goto(`${frontendOrigin}/login`)
     await signIn(other, email)
-    await expect(other.getByRole('heading', { name: '发现手作之美' })).toBeVisible()
+    await expect(other.getByRole('heading', { name: '作品广场', exact: true })).toBeVisible()
     await page.getByRole('link', { name: '手作测试 · 个人中心', exact: true }).click()
     await page.getByRole('link', { name: /重新设置密码/ }).click()
     await page.getByLabel('邮箱地址').fill(email)
@@ -168,7 +177,7 @@ test('邮箱找回重置后旧密码失效、新密码可用，另一设备旧�
     await signIn(page, email)
     await expect(page.getByRole('alert')).toHaveText('邮箱或密码错误')
     await signIn(page, email, newPassword)
-    await expect(page.getByRole('heading', { name: '发现手作之美' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '作品广场', exact: true })).toBeVisible()
   } finally {
     await otherContext.close()
   }
@@ -222,7 +231,7 @@ test('退出后延迟到达的旧会话响应不能恢复登录缓存', async ({
   const email = newEmail()
   await registerAccount(page, email, mailbox.codes)
   await signIn(page, email)
-  await expect(page.getByRole('heading', { name: '发现手作之美' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '作品广场', exact: true })).toBeVisible()
   let release: (() => void) | undefined
   const gate = new Promise<void>((resolve) => {
     release = resolve
@@ -240,10 +249,10 @@ test('退出后延迟到达的旧会话响应不能恢复登录缓存', async ({
   await expect.poll(() => captured).toBe(true)
   await page.getByRole('button', { name: '退出登录' }).click()
   // 等待退出确已清空本人信息，再释放此前的 200 响应，稳定覆盖响应乱序。
-  await expect(page.getByRole('heading', { name: '发现手作之美' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: '作品广场', exact: true })).toHaveCount(0)
   release!()
   await expect(page).toHaveURL(/\/login$/)
-  await page.getByRole('link', { name: '立即注册' }).click()
+  await page.getByRole('link', { name: '新用户注册' }).click()
   await expect(page).toHaveURL(/\/register$/)
 })
 

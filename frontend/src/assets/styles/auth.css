@@ -1,0 +1,295 @@
+/* CraftFlow 认证页的双栏布局与表单，只作用于三个认证路由。 */
+.craft-auth {
+  display: grid;
+  place-items: center;
+  min-height: 100svh;
+  padding: 24px;
+  background: #f8f9fa;
+  color: var(--craft-ink);
+  font-family: var(--craft-font);
+}
+
+.craft-auth__card {
+  display: grid;
+  grid-template-columns: 5fr 7fr;
+  width: min(100%, 980px);
+  min-height: 492px;
+  border: 1px solid var(--craft-border);
+  border-radius: 16px;
+  background: var(--craft-surface);
+  box-shadow: 0 18px 36px #18181b0d;
+  overflow: hidden;
+}
+
+.craft-auth__intro {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 40px;
+  background: var(--craft-primary);
+  color: #fff;
+}
+
+.craft-auth__intro .craft-brand .brand-mark {
+  border: 1px solid #fbbf244d;
+  background: #f59e0b26;
+  color: #fbbf24;
+}
+
+.craft-auth__statement {
+  margin: 40px 0 0;
+  font-size: clamp(21px, 2.1vw, 27px);
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.craft-auth__features {
+  display: grid;
+  gap: 13px;
+  margin: 0;
+  padding: 24px 0 0;
+  border-top: 1px solid #3f3f46;
+  color: #d4d4d8;
+  list-style: none;
+  font-size: 13px;
+}
+
+.craft-auth__features li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.craft-auth__features .app-icon {
+  width: 16px;
+  height: 16px;
+  color: #fbbf24;
+}
+
+.craft-auth__panel {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: 36px 40px;
+}
+
+.craft-auth__content {
+  width: min(100%, 380px);
+  min-width: 0;
+}
+
+.craft-auth__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 24px;
+  margin: 0 0 25px;
+  border-bottom: 1px solid var(--craft-border);
+}
+
+.craft-auth__tabs a {
+  margin-bottom: -1px;
+  padding: 0 0 10px;
+  border-bottom: 2px solid transparent;
+  color: var(--craft-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.craft-auth__tabs a:hover,
+.craft-auth__tabs a[aria-current='page'] {
+  color: var(--craft-ink);
+}
+
+.craft-auth__tabs a[aria-current='page'] {
+  border-bottom-color: var(--craft-ink);
+  font-weight: 650;
+}
+
+.craft-auth__panel h1 {
+  margin-bottom: 18px;
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.craft-auth__form {
+  display: grid;
+  gap: 13px;
+}
+
+.craft-auth__field label {
+  display: block;
+  margin-bottom: 5px;
+  color: #3f3f46;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.4;
+}
+
+.craft-auth__field-row {
+  display: flex;
+  gap: 8px;
+}
+
+.craft-auth__input {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  background: var(--craft-surface);
+}
+
+.craft-auth__input:focus-within {
+  border-color: var(--craft-muted);
+  box-shadow: 0 0 0 3px #18181b14;
+}
+
+.craft-auth__input:has(input[aria-invalid='true']) {
+  border-color: #b91c1c;
+}
+
+.craft-auth__input input {
+  flex: 1;
+  align-self: stretch;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: inherit;
+  outline: none;
+  background: transparent;
+  color: var(--craft-ink);
+  font-size: 14px;
+}
+
+.craft-auth__input input::placeholder {
+  color: #71717a;
+}
+
+.craft-auth__visibility {
+  display: grid;
+  flex: 0 0 36px;
+  place-items: center;
+  align-self: stretch;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--craft-muted);
+}
+
+.craft-auth__visibility svg {
+  width: 18px;
+  height: 18px;
+}
+
+.craft-auth__visibility:hover:not(:disabled),
+.craft-auth__code:hover:not(:disabled) {
+  background: #f4f4f5;
+  color: var(--craft-ink);
+}
+
+.craft-auth__code {
+  align-self: start;
+  min-height: 42px;
+  padding: 0 11px;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  background: var(--craft-surface);
+  color: #3f3f46;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.craft-auth__field-help,
+.craft-auth__note {
+  color: var(--craft-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.craft-auth__field-help {
+  margin: 5px 0 0;
+}
+
+.craft-auth .field-error {
+  color: #b91c1c;
+}
+
+.craft-auth__submit {
+  min-height: 42px;
+  margin-top: 4px;
+  border: 1px solid var(--craft-primary);
+  border-radius: 8px;
+  background: var(--craft-primary);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.craft-auth__submit:hover:not(:disabled) {
+  background: #27272a;
+}
+
+.craft-auth__feedback {
+  padding: 8px 10px;
+  border: 1px solid var(--craft-border);
+  border-radius: 8px;
+  background: #f4f4f5;
+  color: #3f3f46;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.craft-auth__content > .craft-auth__feedback {
+  margin-bottom: 13px;
+}
+
+.craft-auth__feedback[role='alert'] {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.craft-auth a:focus-visible,
+.craft-auth button:focus-visible {
+  outline: 2px solid #a16207;
+  outline-offset: 3px;
+}
+
+@media (max-width: 800px) {
+  .craft-auth__intro,
+  .craft-auth__panel {
+    padding: 28px;
+  }
+}
+
+@media (max-width: 640px) {
+  .craft-auth {
+    padding: 16px;
+  }
+
+  .craft-auth__card {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .craft-auth__intro,
+  .craft-auth__panel {
+    padding: 20px;
+  }
+
+  .craft-auth__statement,
+  .craft-auth__features {
+    display: none;
+  }
+
+  .craft-auth__tabs {
+    column-gap: 16px;
+  }
+}

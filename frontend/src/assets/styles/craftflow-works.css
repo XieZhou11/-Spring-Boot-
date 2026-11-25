@@ -1,0 +1,259 @@
+/* 广场与公开详情采用匠心集样式，选择器限定在新版页面的内容区。 */
+:where(.cf-works, .cf-work-detail) :is(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--craft-primary);
+  outline-offset: 2px;
+}
+
+:is(.cf-works, .cf-work-detail) :is(.button-primary, .button-secondary) {
+  border-radius: 8px;
+  min-height: 36px;
+  padding: 8px 14px;
+  font: 600 13px var(--craft-font);
+}
+
+:is(.cf-works, .cf-work-detail) .button-primary {
+  border: 1px solid var(--craft-primary);
+  color: white;
+  background: var(--craft-primary);
+}
+
+:is(.cf-works, .cf-work-detail) .button-primary:hover:not(:disabled) { background: #3f3f46; }
+
+:is(.cf-works, .cf-work-detail) .button-secondary {
+  border: 1px solid var(--craft-border);
+  color: var(--craft-ink);
+  background: var(--craft-surface);
+}
+
+:is(.cf-works, .cf-work-detail) .button-secondary:hover:not(:disabled) { background: #f4f4f5; }
+:is(.cf-works, .cf-work-detail) .inline-button { color: #854d0e; font-size: inherit; }
+
+.cf-work-search { display: grid; gap: 14px; }
+
+.cf-work-search-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  padding: 24px;
+  border: 1px solid var(--craft-border);
+  border-radius: 16px;
+  background: var(--craft-surface);
+}
+
+.cf-work-search-heading h1 {
+  margin: 0 0 5px;
+  color: var(--craft-ink);
+  font-size: 22px;
+  letter-spacing: -.025em;
+  line-height: 1.35;
+}
+
+.cf-work-search-heading p { margin: 0; color: var(--craft-muted); font-size: 14px; }
+
+.cf-work-search-fields,
+.cf-work-criteria,
+.cf-work-filter-row,
+.cf-work-categories { display: flex; flex-wrap: wrap; align-items: center; }
+
+.cf-work-search-fields, .cf-work-criteria { gap: 8px; }
+.cf-work-filter-row { justify-content: space-between; gap: 12px 24px; }
+.cf-work-keyword { position: relative; width: 288px; max-width: 100%; }
+.cf-work-keyword .app-icon { position: absolute; inset: 10px auto auto 12px; width: 16px; height: 16px; color: #71717a; pointer-events: none; }
+
+.cf-work-search :is(input:not([type=checkbox]), select) {
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--craft-border);
+  border-radius: 8px;
+  color: var(--craft-ink);
+  background: var(--craft-surface);
+  font: 400 13px var(--craft-font);
+}
+
+.cf-work-search .cf-work-keyword input { width: 100%; padding-left: 36px; background: var(--craft-bg); }
+.cf-work-categories { gap: 6px; min-width: 0; }
+
+.cf-work-categories button {
+  padding: 6px 13px;
+  min-height: 32px;
+  border: 1px solid var(--craft-border);
+  border-radius: 999px;
+  background: var(--craft-surface);
+  color: var(--craft-muted);
+  font: 500 12px var(--craft-font);
+}
+
+.cf-work-categories button[aria-pressed=true] {
+  border-color: var(--craft-primary);
+  background: var(--craft-primary);
+  color: white;
+}
+
+.cf-work-categories button:hover:not([aria-pressed=true]) { border-color: #a1a1aa; color: var(--craft-ink); }
+.cf-work-subcategories { border-left: 2px solid var(--craft-border); padding-left: 12px; }
+.cf-work-subcategories button { min-height: 30px; border-radius: 7px; }
+
+.cf-work-trade,
+.cf-work-price-range { display: flex; align-items: center; gap: 6px; }
+
+.cf-work-trade {
+  border: 1px solid var(--craft-border);
+  border-radius: 8px;
+  padding: 3px;
+  background: var(--craft-surface);
+}
+
+.cf-work-trade label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 5px;
+  padding: 4px 6px;
+  color: var(--craft-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.cf-work-trade label:has(input:checked) { background: #f4f4f5; color: var(--craft-ink); }
+.cf-work-trade input { margin: 0; accent-color: var(--craft-primary); }
+.cf-work-price-range input { width: 76px; }
+.cf-work-price-range > span { color: var(--craft-muted); }
+.cf-work-results { margin-top: 18px; scroll-margin-top: 84px; }
+.cf-work-count { margin: 0 0 10px; color: var(--craft-muted); font-size: 12px; }
+
+.cf-work-state {
+  margin: 0;
+  padding: 56px 20px;
+  border: 1px solid var(--craft-border);
+  border-radius: 16px;
+  background: var(--craft-surface);
+  color: var(--craft-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.cf-work-state h2 { margin: 0 0 7px; color: var(--craft-ink); font: 600 16px var(--craft-font); }
+.cf-work-status, .cf-work-error { margin-block: 0; font-size: 13px; }
+.cf-work-status { color: var(--craft-muted); }
+.cf-work-error { color: #9f1239; }
+.cf-work-error button { margin-left: 8px; }
+
+.cf-works .work-grid { gap: 20px; }
+.cf-work-detail :is(.work-gallery, .work-prose, .work-detail-info, .work-interactions) {
+  border: 1px solid var(--craft-border);
+  border-radius: 16px;
+  background: var(--craft-surface);
+}
+
+.cf-work-detail :is(.work-image, .work-image-placeholder) { background: #f4f4f5; color: var(--craft-muted); }
+.cf-work-detail .work-image-error { background: #fffbebf5; color: #78350f; }
+.cf-works .pagination { color: var(--craft-muted); }
+
+/* 公开详情沿用共用图库、交易卡和互动功能，按原型把图文和交易分列。 */
+.cf-work-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 16px;
+  color: var(--craft-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cf-work-back:hover { color: var(--craft-ink); }
+.cf-work-back .app-icon { width: 15px; height: 15px; transform: rotate(180deg); }
+
+.cf-work-detail-content {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  grid-template-rows: auto auto 1fr;
+  align-items: start;
+  gap: 18px 24px;
+}
+
+.cf-work-detail .work-detail-grid { display: contents; }
+.cf-work-detail .work-gallery { grid-column: 1; grid-row: 1; min-width: 0; overflow: hidden; }
+.cf-work-detail .work-gallery > .work-image { border-radius: 0; aspect-ratio: 16 / 10; }
+/* 主图和尺寸说明完整展示，只有列表封面和导航缩略图按画幅裁切。 */
+.cf-work-detail :is(.work-gallery > .work-image, .specification-images .work-image) > img { object-fit: contain; }
+.cf-work-detail .work-thumbnails { margin: 0; padding: 12px 16px; }
+.cf-work-detail .work-thumbnails button.selected { border-color: var(--craft-primary); border-radius: 7px; }
+.cf-work-detail .work-thumbnails .work-image { border-radius: 4px; }
+.cf-work-detail .work-detail-info { grid-column: 2; grid-row: 1 / span 3; padding: 23px; }
+.cf-work-detail .work-prose { grid-column: 1; grid-row: 2; max-width: none; margin: 0; padding: 20px 23px; }
+.cf-work-detail .work-interactions { grid-column: 1; grid-row: 3; min-width: 0; margin: 0; padding: 20px 23px; }
+.cf-work-detail .eyebrow { color: var(--craft-muted); font: 500 12px var(--craft-font); letter-spacing: 0; }
+
+.cf-work-detail .work-detail-info h1 {
+  margin: 7px 0 16px;
+  color: var(--craft-ink);
+  font: 650 24px/1.4 var(--craft-font);
+  letter-spacing: -.025em;
+}
+
+.cf-work-detail .work-specifications,
+.cf-work-detail .trade-summary,
+.cf-work-detail .stock-purchase {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid #eeeef0;
+  border-radius: 10px;
+  background: var(--craft-bg);
+  color: var(--craft-ink);
+}
+
+.cf-work-detail .work-specifications > div { justify-content: space-between; }
+.cf-work-detail .work-specifications dt, .cf-work-detail .field-help { color: var(--craft-muted); }
+.cf-work-detail .work-specifications dd { text-align: right; }
+.cf-work-detail .trade-summary > div { margin-top: 8px; }
+.cf-work-detail .trade-summary h2 { margin: 0 0 8px; color: var(--craft-ink); font: 600 14px var(--craft-font); }
+.cf-work-detail .work-price { color: var(--craft-ink); font: 650 23px var(--craft-font); font-variant-numeric: tabular-nums; }
+.cf-work-detail .work-detail-info > .button-primary { display: block; text-align: center; }
+
+.cf-work-detail .work-detail-info:has(.stock-purchase) > .button-primary {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #78350f;
+}
+
+.cf-work-detail .work-detail-info:has(.stock-purchase) > .button-primary:hover { background: #fef3c7; }
+.cf-work-detail .work-creator-link { margin-top: 18px; padding: 14px 0; border-color: var(--craft-border); }
+.cf-work-detail .creator-initial { background: #fef3c7; color: #78350f; font: 650 17px var(--craft-font); object-fit: cover; }
+.cf-work-detail .work-creator-link small { margin-top: 4px; color: var(--craft-muted); }
+.cf-work-detail .work-prose section { padding: 14px 0; border-color: var(--craft-border); }
+.cf-work-detail .work-prose section:first-child { padding-top: 0; border-top: 0; }
+.cf-work-detail .work-prose section:last-child { padding-bottom: 0; }
+
+.cf-work-detail :is(.work-prose, .work-interactions) h2 {
+  margin: 0 0 7px;
+  color: var(--craft-ink);
+  font: 650 16px var(--craft-font);
+  letter-spacing: 0;
+}
+
+.cf-work-detail .work-prose section > p { color: var(--craft-muted); line-height: 1.7; }
+.cf-work-detail .work-interactions .work-section-heading { flex-wrap: wrap; margin-bottom: 13px; }
+.cf-work-detail .work-section-heading h2 { margin: 0; }
+.cf-work-detail .work-interactions .muted { color: var(--craft-muted); }
+.cf-work-detail :is(.comment-form textarea, .stock-purchase select) {
+  border-color: var(--craft-border);
+  border-radius: 7px;
+  background: var(--craft-surface);
+  color: var(--craft-ink);
+}
+
+@media (max-width: 900px) {
+  .cf-works .work-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .cf-work-detail-content { display: flex; flex-direction: column; align-items: stretch; }
+  .cf-work-detail .work-detail-info { padding: 16px; }
+  .cf-work-detail :is(.work-prose, .work-interactions) { padding: 16px; }
+}
+
+@media (max-width: 500px) {
+  .cf-work-search-heading { padding: 14px; }
+  .cf-work-search-fields { width: 100%; }
+  .cf-work-keyword { width: 100%; }
+}

@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
 import { test, expect, frontendOrigin } from './fixtures'
@@ -8,7 +8,7 @@ const image = readFileSync(new URL('./avatar.png', import.meta.url))
 test.use({ storageMode: 'receiver', actionTimeout: 15_000 })
 
 /** 走真实注册及会话，不依赖开发账号或浏览器持久化令牌。 */
-async function register(page: Page, codes: Map<string, string>, nickname = '作品访客') {
+async function register(page: Page, codes: Map<string, string>, nickname = '作品访客', signIn = true) {
   const email = `works-${randomBytes(6).toString('hex')}@qq.com`
   async function post(path: string, data: object) {
     const csrf = (await (await page.request.get(`${api}/csrf`)).json()).data
@@ -17,16 +17,15 @@ async function register(page: Page, codes: Map<string, string>, nickname = '作�
   expect((await post('/email-verification-codes', { email })).status()).toBe(201)
   await expect.poll(() => codes.get(email)).toMatch(/^\d{6}$/)
   expect((await post('/accounts', { email, nickname, password: 'CraftTest123', verificationCode: codes.get(email) })).status()).toBe(201)
-  expect((await post('/sessions', { email, password: 'CraftTest123' })).status()).toBe(201)
+  if (signIn) expect((await post('/sessions', { email, password: 'CraftTest123' })).status()).toBe(201)
   return email
 }
 
 test('买家进入作品发现首页，保留当前账号、搜索及退出入口', async ({ page, mailbox }) => {
   await register(page, mailbox.codes)
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: '发现手作之美' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '作品广场', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: /作品访客/ })).toBeVisible()
-  await expect(page.getByRole('searchbox', { name: '搜索作品' })).toBeVisible()
   // 其他业务套件可先发布作品；使用无匹配关键词验证空态，不依赖共享库执行顺序。
   await page.getByRole('searchbox', { name: '作品关键词', exact: true }).fill(`无匹配作品${randomBytes(6).toString('hex')}`)
   await page.getByRole('button', { name: '筛选', exact: true }).click()
@@ -62,8 +61,171 @@ async function prepareCreator(page: Page, admin: Page, codes: Map<string, string
   expect(application.status()).toBe(201)
   const applicationId = (await application.json()).data.id
   expect((await mutate(admin, `/admin/creator-applications/${applicationId}/review`, 'put', { decision: 'APPROVED', reason: '' })).status()).toBe(200)
-  return { categoryId, categoryName }
+  return { categoryId, categoryName, parentId }
 }
+
+/** 通过上传、提交和审核建立组合筛选所需的公开作品。 */
+async function publishBrowseWork(creator: Page, admin: Page, input: {
+  title: string
+  categoryId: string
+  description: string
+  stockPrice: string | null
+  customReferenceDays: number | null
+}) {
+  const csrf = (await (await creator.request.get(`${api}/csrf`)).json()).data
+  const upload = await creator.request.post(`${api}/work-images`, {
+    headers: { [csrf.headerName]: csrf.token },
+    multipart: { file: { name: 'browse.png', mimeType: 'image/png', buffer: image } },
+  })
+  expect(upload.status()).toBe(201)
+  const content = {
+    ...input,
+    mainImageIds: [(await upload.json()).data.id],
+    specificationImageIds: [],
+    material: '胡桃木与天然木蜡油',
+    specification: '直径十厘米',
+    processDescription: '切割原木、修边打磨，涂蜡后晾干。',
+    saleEnabled: input.stockPrice !== null,
+    customEnabled: input.customReferenceDays !== null,
+  }
+  const draft = await mutate(creator, '/me/works', 'post', { ...content, requestKey: randomUUID() })
+  expect(draft.status()).toBe(201)
+  const { id, version } = (await draft.json()).data as { id: string; version: number }
+  const submission = await mutate(creator, `/me/works/${id}/submission`, 'put', { ...content, version })
+  expect(submission.status()).toBe(200)
+  const review = await mutate(admin, `/admin/works/${id}/review`, 'put', { version: (await submission.json()).data.version, decision: 'APPROVED', reason: '' })
+  expect(review.status()).toBe(200)
+  return id
+}
+
+test('登录回到已上架作品并读取签名主图，详情刷新后可返回原筛选', async ({ page, browser, mailbox }, testInfo) => {
+  test.setTimeout(90_000)
+  const creatorContext = await browser.newContext({ baseURL: frontendOrigin })
+  const adminContext = await browser.newContext({ baseURL: frontendOrigin })
+  try {
+    const creator = await creatorContext.newPage()
+    const admin = await adminContext.newPage()
+    const { categoryId } = await prepareCreator(creator, admin, mailbox.codes, mailbox.promoteAdmin)
+    const title = `深链验收${randomBytes(3).toString('hex')}木盘`
+    const workId = await publishBrowseWork(creator, admin, {
+      title, categoryId, description: '手工制作的木盘，保留自然木纹，日常以天然木蜡油养护。',
+      stockPrice: '78.60', customReferenceDays: 15,
+    })
+    const email = await register(page, mailbox.codes, '深链访客', false)
+    const redirect = `/works/${workId}?from=saved#details`
+    await page.setViewportSize({ width: 1366, height: 900 })
+    await page.goto(redirect)
+    await expect.poll(() => new URL(page.url()).searchParams.get('redirect')).toBe(redirect)
+    await expect(page).toHaveURL(/\/login\?redirect=/)
+    await page.getByLabel('邮箱地址', { exact: true }).fill(email)
+    await page.getByLabel('密码', { exact: true }).fill('CraftTest123')
+    await page.getByRole('button', { name: '登录', exact: true }).click()
+    await expect(page).toHaveURL(redirect)
+    const heading = page.getByRole('heading', { name: title, level: 1, exact: true })
+    await expect(heading).toBeVisible()
+    const mainImage = page.getByRole('img', { name: title, exact: true })
+    await expect.poll(() => mainImage.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBeGreaterThan(0)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: testInfo.outputPath('work-detail-1366.png'), fullPage: true })
+    await page.reload()
+    await expect(page).toHaveURL(redirect)
+    await expect(heading).toBeVisible()
+    await expect.poll(() => mainImage.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBeGreaterThan(0)
+
+    await page.getByRole('link', { name: '返回作品广场', exact: true }).click()
+    await expect(page).toHaveURL('/')
+    const filters = `/?keyword=${encodeURIComponent(title)}&categoryId=${categoryId}&purchasable=true&sort=PRICE_DESC&page=1#discover`
+    await page.goto(filters)
+    const card = page.getByRole('link', { name: `查看${title}`, exact: true })
+    await card.click()
+    await expect(heading).toBeVisible()
+    await page.reload()
+    await page.getByRole('link', { name: '返回作品广场', exact: true }).click()
+    await expect(page).toHaveURL(filters)
+    await expect(page.getByRole('searchbox', { name: '作品关键词', exact: true })).toHaveValue(title)
+    await expect(card).toBeVisible()
+
+    await admin.goto('/admin/dashboard')
+    await admin.getByRole('link', { name: '查看前台作品', exact: true }).click()
+    await expect(admin).toHaveURL('/discover')
+    await admin.getByRole('link', { name: `查看${title}`, exact: true }).click()
+    await expect(admin.getByRole('heading', { name: title, level: 1, exact: true })).toBeVisible()
+    await expect(admin.getByRole('region', { name: '现货直购', exact: true })).toHaveCount(0)
+    await expect(admin.getByRole('link', { name: /发起同类定制/ })).toHaveCount(0)
+    await admin.getByRole('link', { name: '返回作品广场', exact: true }).click()
+    await expect(admin).toHaveURL('/discover')
+    await admin.getByRole('link', { name: '管理后台', exact: true }).click()
+    await expect(admin).toHaveURL('/admin/dashboard')
+  } finally {
+    await Promise.all([creatorContext.close(), adminContext.close()])
+  }
+})
+
+test('作品广场组合筛选两级品类和交易属性，价格排序将无可购价作品排在末尾', async ({ page, browser, mailbox }) => {
+  test.setTimeout(90_000)
+  const creatorContext = await browser.newContext({ baseURL: frontendOrigin })
+  const adminContext = await browser.newContext({ baseURL: frontendOrigin })
+  try {
+    const creator = await creatorContext.newPage()
+    const admin = await adminContext.newPage()
+    const { categoryId, categoryName, parentId } = await prepareCreator(creator, admin, mailbox.codes, mailbox.promoteAdmin)
+    const sibling = await mutate(admin, '/admin/categories', 'post', { parentId, name: '装饰摆件', enabled: true, sortOrder: 2 })
+    expect(sibling.status()).toBe(201)
+    const siblingId = (await sibling.json()).data.id as string
+    const keyword = `筛选${randomBytes(3).toString('hex')}`
+    const description = `这是${keyword}作品，采用传统工艺手工打磨，成品以天然木蜡油养护。`
+    const low = `${keyword}杯垫`
+    const high = `${keyword}果盘`
+    const custom = `${keyword}花器`
+    const display = '原木手作展示盘'
+    await publishBrowseWork(creator, admin, { title: low, categoryId, description, stockPrice: '35.00', customReferenceDays: 7 })
+    await publishBrowseWork(creator, admin, { title: high, categoryId, description, stockPrice: '85.00', customReferenceDays: null })
+    await publishBrowseWork(creator, admin, { title: custom, categoryId: siblingId, description, stockPrice: null, customReferenceDays: 10 })
+    // 展示作品只在描述中包含关键词，必须可搜到且没有价格。
+    await publishBrowseWork(creator, admin, { title: display, categoryId, description, stockPrice: null, customReferenceDays: null })
+
+    await register(page, mailbox.codes, '筛选访客')
+    await page.goto('/')
+    const filters = page.getByRole('button', { name: '筛选', exact: true })
+    const keywordInput = page.getByRole('searchbox', { name: '作品关键词', exact: true })
+    const order = page.getByLabel('作品排序', { exact: true })
+    const titles = page.locator('.work-card').getByRole('heading')
+    await page.getByRole('navigation', { name: '一级品类' }).getByRole('button', { name: categoryName, exact: true }).click()
+    await expect.poll(() => new URL(page.url()).searchParams.get('categoryId')).toBe(parentId)
+    await keywordInput.fill(keyword)
+    await order.selectOption('PRICE_ASC')
+    await filters.click()
+    await expect(titles).toHaveText([low, high, display, custom])
+    const displayCard = page.locator('.work-card').filter({ has: page.getByRole('heading', { name: display, exact: true }) })
+    await expect(displayCard).toContainText('作品展示')
+    await expect(displayCard).not.toContainText(/[¥￥]/)
+    const customCard = page.locator('.work-card').filter({ has: page.getByRole('heading', { name: custom, exact: true }) })
+    await expect(customCard).toContainText('约 10 天')
+    await order.selectOption('PRICE_DESC')
+    await filters.click()
+    await expect(titles).toHaveText([high, low, display, custom])
+
+    await page.getByRole('navigation', { name: '二级品类' }).getByRole('button', { name: '生活器物', exact: true }).click()
+    await expect.poll(() => new URL(page.url()).searchParams.get('categoryId')).toBe(categoryId)
+    await expect(titles).toHaveText([high, low, display])
+    await page.getByLabel('可直购', { exact: true }).check()
+    await page.getByLabel('接受定制', { exact: true }).check()
+    await page.getByLabel('最低价格', { exact: true }).fill('30')
+    await page.getByLabel('最高价格', { exact: true }).fill('90')
+    await filters.click()
+    await expect(titles).toHaveText([low])
+    await expect(page.locator('.work-card')).toContainText('35.00')
+    await page.reload()
+    await expect(titles).toHaveText([low])
+    await expect(page.getByLabel('可直购', { exact: true })).toBeChecked()
+    await expect(page.getByLabel('接受定制', { exact: true })).toBeChecked()
+    await expect(page.getByLabel('最低价格', { exact: true })).toHaveValue('30')
+    await expect(page.getByLabel('最高价格', { exact: true })).toHaveValue('90')
+  } finally {
+    await Promise.all([creatorContext.close(), adminContext.close()])
+  }
+})
+
 async function fillWork(page: Page, categoryId: string, title = '原木手工杯垫') {
   await page.getByLabel('作品标题', { exact: true }).fill(title)
   await page.getByLabel('所属品类', { exact: true }).selectOption(categoryId)
@@ -154,12 +316,15 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
       expect(await buyer.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
       await buyer.screenshot({ path: testInfo.outputPath(`discovery-${width}.png`), fullPage: true })
     }
-    const address = await mutate(buyer, '/me/addresses', 'post', { recipientName: '直购验收收件人', phone: '13800138000', province: '北京市', city: '市辖区', district: '东城区', detailAddress: '现货直购验收路一号', isDefault: true })
-    expect(address.status()).toBe(201)
     await buyer.getByRole('link', { name: '查看原木手工杯垫', exact: true }).click()
     await expect(buyer.getByRole('heading', { level: 1, name: '原木手工杯垫' })).toBeVisible()
     await expect(buyer.locator('.trade-summary')).toContainText('15 个自然日')
     await expect(buyer.getByRole('region', { name: '现货直购' })).toBeVisible()
+    await buyer.getByRole('link', { name: /管理收货地址/ }).click()
+    await expect(buyer).toHaveURL('/account/addresses')
+    const address = await mutate(buyer, '/me/addresses', 'post', { recipientName: '直购验收收件人', phone: '13800138000', province: '北京市', city: '市辖区', district: '东城区', detailAddress: '现货直购验收路一号', isDefault: true })
+    expect(address.status()).toBe(201)
+    await buyer.goBack()
     let stockCreateAttempts = 0
     await buyer.route(`**/api/works/${workId}/orders`, async route => {
       stockCreateAttempts++
@@ -203,7 +368,8 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
     await buyer.goto(`/works/${workId}`)
     await buyer.getByRole('link', { name: /木间手作.*查看主页/ }).click()
     await expect(buyer.getByRole('heading', { level: 1, name: '木间手作' })).toBeVisible()
-    await expect(buyer.getByText('暂无评价', { exact: true })).toBeVisible()
+    const rating = buyer.locator('.creator-public-stats > div').filter({ has: buyer.getByText('口碑评分', { exact: true }) })
+    await expect(rating.getByText('暂无评价', { exact: true })).toBeVisible()
     await expect(buyer.getByText('手作测试', { exact: true })).toHaveCount(0)
     await page.goto(`/creator/works/${workId}/edit`)
     await page.getByLabel('作品标题', { exact: true }).fill('原木手工圆杯垫')

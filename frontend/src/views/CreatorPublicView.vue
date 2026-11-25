@@ -76,7 +76,7 @@ onBeforeUnmount(() => { revision++; clearTimeout(timer) })
 <template>
   <WorkLayout>
     <nav class="work-breadcrumb">
-      <RouterLink to="/">发现作品</RouterLink><span>/</span><span>创作者主页</span>
+      <RouterLink :to="auth.session?.roles.includes('ADMIN') ? '/discover' : '/'">发现作品</RouterLink><span>/</span><span>创作者主页</span>
     </nav><p
       v-if="error"
       class="form-alert"

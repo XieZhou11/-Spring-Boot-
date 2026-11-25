@@ -1,0 +1,11 @@
+/* 新版页面共用色板，旧页面继续使用自身样式。 */
+:root {
+  --craft-ink: #18181b;
+  --craft-muted: #52525b;
+  --craft-border: #e4e4e7;
+  --craft-surface: #fff;
+  --craft-bg: #fafafa;
+  --craft-accent: #f59e0b;
+  --craft-primary: #18181b;
+  --craft-font: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+}

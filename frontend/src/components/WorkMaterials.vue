@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import WorkImage from './WorkImage.vue'
 import type { WorkVO } from '@/types/work'
 import { priceLabel } from '@/utils/work'
 import { getCreator } from '@/api/work'
 import { useAuthStore } from '@/stores/auth'
 const auth = useAuthStore()
-const props = defineProps<{ work: WorkVO }>()
+const props = defineProps<{ work: WorkVO; presentation?: 'public' }>()
 // 缩略图切换只影响当前展示，不改变持久化图片顺序。
 const selected = ref(0)
+const mainImage = computed(() => props.work.mainImageIds[selected.value] || props.work.mainImageIds[0])
 const avatar = ref('')
 let avatarTimer: ReturnType<typeof setTimeout> | undefined
 let avatarRevision = 0
@@ -37,10 +38,14 @@ onBeforeUnmount(() => { avatarRevision++; clearTimeout(avatarTimer) })
   <div class="work-detail-grid">
     <div class="work-gallery">
       <WorkImage
-        v-if="work.mainImageIds[selected]"
-        :image-id="work.mainImageIds[selected]!"
+        v-if="mainImage"
+        :image-id="mainImage"
         :label="work.title || '作品主图'"
-      /><div class="work-thumbnails">
+      />
+      <div
+        v-if="presentation !== 'public' || work.mainImageIds.length > 1"
+        class="work-thumbnails"
+      >
         <button
           v-for="(id, index) in work.mainImageIds"
           :key="id"
@@ -59,7 +64,10 @@ onBeforeUnmount(() => { avatarRevision++; clearTimeout(avatarTimer) })
     </div><div class="work-detail-info">
       <p class="eyebrow">
         {{ work.categoryPath.join(' / ') || '未选择品类' }}
-      </p><h1>{{ work.title || '未命名作品' }}</h1><p class="work-detail-lead">
+      </p><h1>{{ work.title || '未命名作品' }}</h1><p
+        v-if="presentation !== 'public'"
+        class="work-detail-lead"
+      >
         把手作的温度，带进每一天。
       </p><dl class="work-specifications">
         <div><dt>材质</dt><dd>{{ work.material || '未填写' }}</dd></div><div><dt>尺寸规格</dt><dd>{{ work.specification || '未填写' }}</dd></div>
@@ -80,7 +88,9 @@ onBeforeUnmount(() => { avatarRevision++; clearTimeout(avatarTimer) })
         >
           另行制作，具体价格和工期以独立报价为准。
         </p>
-      </section><RouterLink
+      </section>
+      <slot name="trade-actions" />
+      <RouterLink
         v-if="work.customizable && work.creatorId !== auth.session?.userId && !auth.session?.roles.includes('ADMIN')"
         class="button-primary"
         :to="{ path: '/my-requests/new', query: { sourceWorkId: work.id } }"
@@ -101,7 +111,10 @@ onBeforeUnmount(() => { avatarRevision++; clearTimeout(avatarTimer) })
   </div>
   <div class="work-prose">
     <section>
-      <p class="eyebrow">
+      <p
+        v-if="presentation !== 'public'"
+        class="eyebrow"
+      >
         ABOUT THE CRAFT
       </p><h2>作品介绍</h2><p>{{ work.description || '暂无描述' }}</p>
     </section><section v-if="work.specificationImageIds.length">
@@ -114,7 +127,10 @@ onBeforeUnmount(() => { avatarRevision++; clearTimeout(avatarTimer) })
         />
       </div>
     </section><section v-if="work.processDescription">
-      <p class="eyebrow">
+      <p
+        v-if="presentation !== 'public'"
+        class="eyebrow"
+      >
         THE MAKING
       </p><h2>制作过程</h2><p>{{ work.processDescription }}</p>
     </section>

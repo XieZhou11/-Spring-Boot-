@@ -40,7 +40,9 @@ async function send() {
       emit('sent', email)
     }
   } catch (error) {
-    emit('error', error instanceof Error ? error.message : '发送失败，请稍后重试')
+    if (normalizeEmail(props.email) === email) {
+      emit('error', error instanceof Error ? error.message : '发送失败，请稍后重试')
+    }
   } finally {
     sending.value = false
   }
@@ -50,7 +52,7 @@ async function send() {
 <template>
   <button
     type="button"
-    class="code-button"
+    class="craft-auth__code"
     :disabled="sending || disabled"
     :aria-busy="sending"
     @click="send"
