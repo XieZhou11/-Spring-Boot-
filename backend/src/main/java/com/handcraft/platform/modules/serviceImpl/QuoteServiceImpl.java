@@ -45,7 +45,7 @@ public class QuoteServiceImpl implements QuoteService {
         return BusinessLog.run(LOGGER,"需求报价提交",userId,()->{
             var initial=requests.find(requestId);if(initial==null)throw missing();
             BusinessException categoryFailure=null;
-            try{policy.lockCategory(initial.getCategoryId());}catch(BusinessException failure){categoryFailure=failure;}
+            try{policy.lockTradingCategory(initial.getCategoryId());}catch(BusinessException failure){categoryFailure=failure;}
             policy.lockUsers(userId,initial.getBuyerId());
             var request=requests.lock(requestId);
             var previous=quotes.findKey(userId,input.getRequestKey());
@@ -53,8 +53,10 @@ public class QuoteServiceImpl implements QuoteService {
                 if(!same(previous,requestId,input))throw conflict("同一请求键不能提交不同需求或报价内容");
                 return new Creation(view(previous,request,userId),false);
             }
-            if(categoryFailure!=null)throw categoryFailure;
             policy.visible(userId,request,false);
+            // 如果等待账号锁时草稿换类并发布，重新提交以取得当前品类的锁。
+            if(!Objects.equals(initial.getCategoryId(),request.getCategoryId()))throw conflict("需求品类已变化，请刷新需求状态");
+            if(categoryFailure!=null)throw categoryFailure;
             if(userId.equals(request.getBuyerId()))throw forbidden("不能为自己的需求报价");
             lifecycle.reconcile(request);policy.open(request);
             String reason=eligibility(userId,request);if(reason!=null)throw forbidden(reason);

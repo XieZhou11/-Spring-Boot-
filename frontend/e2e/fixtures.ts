@@ -37,6 +37,8 @@ interface Mailbox {
   seedInteractionHistory: (userId: string, workId: string, creatorId: string) => Promise<void>
   /** 仅调整本worker隔离库内已由真实业务建立订单的时限，避免浏览器验收实际等待48小时或七天。 */
   expireFulfillmentBoundary: (orderId: string, phase: 'NO_START' | 'AUTO_RECEIPT' | 'SHIPPING_OVERDUE' | 'COMPLETION') => Promise<void>
+  /** 仅推进本 worker 随机库内已真实提交报价的到期时刻。 */
+  expireQuote: (quoteId: string) => Promise<void>
 }
 
 /** 只在测试进程使用隔离库和 SMTP 夹具，生产后端无测试接口或假验证码。 */
@@ -53,6 +55,7 @@ export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabl
         promoteAdmin: async () => { throw new Error('测试数据库尚未就绪') },
         seedInteractionHistory: async () => { throw new Error('测试数据库尚未就绪') },
         expireFulfillmentBoundary: async () => { throw new Error('测试数据库尚未就绪') },
+        expireQuote: async () => { throw new Error('测试数据库尚未就绪') },
       }
       // 经过真实 OSS SDK 的 HTTP 协议；仅接收本夹具随机对象，绝不访问真实云端。
       const objects = new Map<string, { bytes: Buffer; type: string }>()
@@ -156,6 +159,10 @@ export const test = base.extend<object, { mailbox: Mailbox; storageMode: 'disabl
           }
           const [result] = await database.execute<ResultSetHeader>(`UPDATE \`${schema}\`.trade_order ${statements[phase]}`, [orderId])
           if (result.affectedRows !== 1) throw new Error(`履约时限夹具未命中本测试订单：${phase}`)
+        }
+        mailbox.expireQuote = async (quoteId) => {
+          const [result] = await database.execute<ResultSetHeader>(`UPDATE \`${schema}\`.quote SET expires_at=DATE_SUB(created_at,INTERVAL 1 SECOND) WHERE id=? AND status='ACTIVE'`, [quoteId])
+          if (result.affectedRows !== 1) throw new Error('到期夹具未命中本测试有效报价')
         }
         mailbox.seedInteractionHistory = async (userId, workId, creatorId) => {
           // 主流程对象仍由真实发布审核建立；这里只准备20条历史关系，使真实关系落在末页。

@@ -26,6 +26,13 @@ public interface QuoteMapper {
     @Options(useGeneratedKeys=true,keyProperty="id") int insert(Quote quote);
     @Update("UPDATE quote SET status=#{status},invalid_reason=#{invalidReason},invalidated_at=#{invalidatedAt},updated_at=#{updatedAt} WHERE id=#{id} AND status='ACTIVE'")
     int transition(Quote quote);
+    /** 定标时只有在同一业务时点仍有效的报价能写为中标或落选。 */
+    @Update("""
+        UPDATE quote SET status=#{status},updated_at=#{awardAt}
+        WHERE id=#{quoteId} AND request_id=#{requestId} AND status='ACTIVE' AND expires_at>#{awardAt}
+        """)
+    int resolveForAward(@Param("requestId") Long requestId,@Param("quoteId") Long quoteId,
+                        @Param("status") String status,@Param("awardAt") LocalDateTime awardAt);
     String FILTER="""
         <where>
         <if test='creatorId != null'>AND creator_id=#{creatorId}</if>

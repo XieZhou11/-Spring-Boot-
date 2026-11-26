@@ -1,6 +1,6 @@
 # MVP 后端专项审查修复实施计划
 
-- 前两批已通过验收，第三批待开始。制定日期为 2026-11-25。
+- 前三批已通过验收，第四批待开始。制定日期为 2026-11-25。
 - 开发基线为 `main` 的 `8a556dc`。需求、业务状态和验收口径见 [V1.5 MVP 需求正文](../requirements/requirements.md)。
 - 每次选定一个批次实施。完成该批的关键后端验证和前端主流程联调后，记录结果并交接到下一批。开始实际修复时按仓库约定登记业务任务，验证结果写入对应测试记录。
 
@@ -48,12 +48,14 @@
 
 **目标。** 新作品和新需求选当前启用的末级品类。已发布需求和已上架作品可沿用原品类编号。定标对报价状态和截止时间使用一致口径。对应 §4.2.3、§4.3.1、§4.4.4、§4.9.2、UC-10、UC-15、UC-17。
 
-- [ ] **拆分品类判断。** 在 `CustomRequestPolicyServiceImpl` 区分新发布选类和存量资格。咨询、报价、定标及现货建单允许使用已发布时的品类编号，保留启用状态、认证主品类和账号暂停等当前交易资格。管理员新增子品类后，原一级品类的在途业务仍可处理。已下单后的付款、履约和售后沿用订单关系。
-- [ ] **对齐公开入口。** 同步 `WorkMapper` 的现货与定制筛选、`WorkServiceImpl` 的详情标志，以及新交易入口的服务端校验。作品发起同类定制时校验来源作品、作者、受邀人与新需求品类。原分类仍可选时沿用该分类。原一级分类已有子类时，`CustomRequestEditorView.vue` 保留来源和受邀人，引导选择同一主品类下启用的末级品类。
-- [ ] **收紧定标写入。** 修改 `OrderServiceImpl`、`QuoteLifecycleServiceImpl` 和 `QuoteMapper`。在需求、报价及前置竞争锁就绪后，取一个毫秒精度的业务时点。目标报价必须仍为 `ACTIVE`，且 `expires_at` 严格晚于该时点。对其余报价按同一时点区分落选和超时。中标更新附带状态与截止条件，更新失败时回滚整笔定标。沿用原请求键和前端 `409` 刷新行为。
-- [ ] **联调。** 先用原一级品类发布需求、收一份报价，管理员新增二级品类后完成原单定标，并验证同主品类新末级可以发起同类定制。再用两份报价核对第一份到期时无法生成订单或中标通知，第二份仍可正常定标。用可控业务时钟覆盖恰好到期。
+- [x] **拆分品类判断。** 在 `CustomRequestPolicyServiceImpl` 区分新发布选类和存量资格。咨询、报价、定标及现货建单允许使用已发布时的品类编号，保留启用状态、认证主品类和账号暂停等当前交易资格。管理员新增子品类后，原一级品类的在途业务仍可处理。已下单后的付款、履约和售后沿用订单关系。
+- [x] **对齐公开入口。** 同步 `WorkMapper` 的现货与定制筛选、`WorkServiceImpl` 的详情标志，以及新交易入口的服务端校验。作品发起同类定制时校验来源作品、作者、受邀人与新需求品类。原分类仍可选时沿用该分类。原一级分类已有子类时，`CustomRequestEditorView.vue` 保留来源和受邀人，引导选择同一主品类下启用的末级品类。
+- [x] **收紧定标写入。** 修改 `OrderServiceImpl`、`QuoteLifecycleServiceImpl` 和 `QuoteMapper`。在需求、报价及前置竞争锁就绪后，取一个毫秒精度的业务时点。目标报价必须仍为 `ACTIVE`，且 `expires_at` 严格晚于该时点。对其余报价按同一时点区分落选和超时。中标更新附带状态与截止条件，更新失败时回滚整笔定标。沿用原请求键和前端 `409` 刷新行为。
+- [x] **联调。** 先用原一级品类发布需求、收一份报价，管理员新增二级品类后完成原单定标，并验证同主品类新末级可以发起同类定制。再用两份报价核对第一份到期时无法生成订单或中标通知，第二份仍可正常定标。用可控业务时钟覆盖恰好到期。
 
 [品类资格](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/CustomRequestPolicyServiceImpl.java) · [定标实现](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/OrderServiceImpl.java) · [需求编辑页](../../frontend/src/views/CustomRequestEditorView.vue) · [定标联调用例](../../frontend/e2e/quote-award.spec.ts)
+
+2026-11-25 第三批验收通过。隔离 MySQL 定向 153 项、Playwright 业务回归 18 项、前端检查、构建及独立审查通过。 [任务](tasks/T-030-category-continuity-quote-deadline.md) · [测试记录](../testing/T-030-category-continuity-quote-deadline.md)
 
 ## 第 4 批 · 评论锁序与图片输入
 

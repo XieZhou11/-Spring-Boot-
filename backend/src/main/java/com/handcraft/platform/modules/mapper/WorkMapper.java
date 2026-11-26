@@ -9,9 +9,23 @@ import org.apache.ibatis.annotations.*;
 @Mapper
 public interface WorkMapper {
     String COLUMNS="w.id,w.creator_id,w.create_request_key,w.version,w.category_id,w.title,w.main_image_ids,w.specification_image_ids,w.material,w.specification,w.description,w.process_description,w.sale_enabled,w.custom_enabled,w.stock_price,w.custom_reference_days,w.review_status,w.stock_status,w.stock_order_id,w.source_order_id,w.first_submitted_at,w.submitted_at,w.online_at,w.deleted_at,w.created_at,w.updated_at";
-    String ELIGIBLE="(u.certification_status='APPROVED' AND u.is_admin=0 AND u.creator_paused=0 AND u.admin_business_paused=0)";
+    // 已上架作品可沿用原一级品类，同时按当前启停状态和认证主品类判断能否发起交易。
+    String ELIGIBLE="""
+        (u.certification_status='APPROVED' AND u.is_admin=0 AND u.creator_paused=0 AND u.admin_business_paused=0
+          AND EXISTS (
+            SELECT 1 FROM category chosen
+            JOIN category root ON root.id=COALESCE(chosen.parent_id,chosen.id)
+            JOIN creator_application_category matched ON matched.category_id=root.id
+              AND matched.application_id=u.approved_application_id
+            WHERE chosen.id=w.category_id AND chosen.enabled=1 AND root.enabled=1
+          ))
+        """;
     String PURCHASABLE="("+ELIGIBLE+" AND w.sale_enabled=1 AND w.stock_status='AVAILABLE' AND w.source_order_id IS NULL AND w.stock_price IS NOT NULL)";
-    String CUSTOMIZABLE="("+ELIGIBLE+" AND w.custom_enabled=1)";
+    // 来源品类若已细分，新需求至少要有一个启用的末级子类可选。
+    String CUSTOMIZABLE="("+ELIGIBLE+" AND w.custom_enabled=1 AND " + """
+        (NOT EXISTS (SELECT 1 FROM category child WHERE child.parent_id=w.category_id)
+          OR EXISTS (SELECT 1 FROM category child WHERE child.parent_id=w.category_id AND child.enabled=1)))
+        """;
     /** 草稿仅作者可见，驳回或下架后的私下修改不能覆盖管理员看到的材料。 */
     String ADMIN_WORKS=" FROM work w LEFT JOIN operation_log audit ON audit.id=(SELECT a.id FROM operation_log a"
         +" WHERE a.target_type='WORK' AND a.target_id=w.id AND ((w.review_status='REJECTED' AND a.action='SUBMIT')"

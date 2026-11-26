@@ -3,6 +3,117 @@ import { anotherCreator, api, fillRequest, image, mutate, origin, prepareCreator
 
 test.use({ storageMode: 'receiver', actionTimeout: 15_000 })
 
+test('新增二级品类后旧需求可定标、旧作品可直购且能按新末级发起同类定制', async ({ page: buyer, browser, mailbox }) => {
+  test.setTimeout(180_000)
+  const adminContext = await browser.newContext({ baseURL: origin })
+  const creatorContext = await browser.newContext({ baseURL: origin })
+  try {
+    const admin = await adminContext.newPage()
+    const creator = await creatorContext.newPage()
+    const { categoryId: rootId } = await prepareCreator(creator, admin, mailbox.codes, mailbox.promoteAdmin, true, false)
+    await register(buyer, mailbox.codes, '存量品类买家')
+    const address = await mutate(buyer, '/me/addresses', {
+      recipientName: '存量品类收件人', phone: '13800138000', province: '北京市',
+      city: '市辖区', district: '东城区', detailAddress: '存量品类测试路一号', isDefault: true,
+    })
+    expect(address.status()).toBe(201)
+
+    const title = '可定制的存量木杯垫'
+    const csrf = (await (await creator.request.get(`${api}/csrf`)).json()).data
+    const upload = await creator.request.post(`${api}/work-images`, {
+      headers: { [csrf.headerName]: csrf.token },
+      multipart: { file: { name: 'work.png', mimeType: 'image/png', buffer: image } },
+    })
+    expect(upload.status()).toBe(201)
+    const work = {
+      title, categoryId: rootId, mainImageIds: [(await upload.json()).data.id], specificationImageIds: [],
+      material: '天然原木', specification: '直径十厘米',
+      description: '原木切割及手工打磨的杯垫，边缘圆润，使用环保木蜡油保养，平时可用干布轻擦。',
+      processDescription: '', saleEnabled: true, customEnabled: true, stockPrice: '138.60', customReferenceDays: 15,
+    }
+    const draftResponse = await mutate(creator, '/me/works', { ...work, requestKey: crypto.randomUUID() })
+    expect(draftResponse.status()).toBe(201)
+    const draft = (await draftResponse.json()).data
+    const submission = await mutate(creator, `/me/works/${draft.id}/submission`, { ...work, version: draft.version }, 'put')
+    expect(submission.status()).toBe(200)
+    const pending = (await submission.json()).data
+    expect((await mutate(admin, `/admin/works/${draft.id}/review`, { version: pending.version, decision: 'APPROVED', reason: '' }, 'put')).status()).toBe(200)
+
+    await buyer.goto('/my-requests/new')
+    await fillRequest(buyer, rootId, '旧一级上的原木小物需求')
+    await buyer.getByRole('button', { name: '发布需求', exact: true }).click()
+    await expect(buyer).toHaveURL(/\/requests\/\d+$/)
+    const requestPath = new URL(buyer.url()).pathname
+    const quote = await mutate(creator, `/custom-requests/${requestPath.split('/').at(-1)}/quotes`, {
+      requestKey: crypto.randomUUID(), goodsAmount: '170.00', durationDays: 12,
+      proposal: '选用优质木材，顺纹切割并采用细砂纸打磨，先与买家确认规格和刻印内容，再做环保木蜡油养护。',
+      additionalAgreement: '', imageIds: [],
+    })
+    expect(quote.status()).toBe(201)
+
+    // 保存引用原一级品类的草稿，覆盖新增子类前已打开及之后再续编的入口。
+    await buyer.goto(`/works/${draft.id}`)
+    await buyer.getByRole('link', { name: /发起同类定制/ }).click()
+    await fillRequest(buyer, rootId, '根据存量木杯垫另行制作')
+    await buyer.getByRole('button', { name: '保存草稿', exact: true }).click()
+    await expect(buyer).toHaveURL(/\/my-requests\/\d+\/edit$/)
+    const editPath = new URL(buyer.url()).pathname
+
+    const child = await mutate(admin, '/admin/categories', { name: '手工杯垫', parentId: rootId, enabled: true, sortOrder: 1 })
+    expect(child.status()).toBe(201)
+    const childId = (await child.json()).data.id as string
+    expect((await mutate(admin, '/admin/categories', { name: '暂停的杯垫类', parentId: rootId, enabled: false, sortOrder: 2 })).status()).toBe(201)
+
+    // 已打开的编辑页收到明确拒绝后可直接重选，未保存的文字与来源仍保留。
+    const requestTitle = buyer.getByLabel('需求标题', { exact: true })
+    await requestTitle.fill('根据存量木杯垫另行制作并刻印')
+    const rejectedPublication = buyer.waitForResponse(response =>
+      response.request().method() === 'PUT' && response.url().endsWith('/publication'),
+    )
+    await buyer.getByRole('button', { name: '发布需求', exact: true }).click()
+    expect((await rejectedPublication).status()).toBe(400)
+    await expect(requestTitle).toHaveValue('根据存量木杯垫另行制作并刻印')
+    const categories = buyer.getByLabel('需求品类', { exact: true })
+    await expect(categories.getByRole('option', { name: '请选择末级品类', exact: true })).toHaveJSProperty('selected', true)
+    await expect(categories.locator('option')).toHaveCount(2)
+    await expect(buyer.getByText('请选择原作品主品类下启用的末级品类', { exact: true })).toBeVisible()
+    await expect(buyer.getByText(`参考作品：${title}`, { exact: false })).toBeVisible()
+    await expect(buyer.getByText('指定创作者：', { exact: false })).toContainText('山间器物')
+    await categories.selectOption(childId)
+    await buyer.getByRole('button', { name: '保存草稿', exact: true }).click()
+    await expect(buyer.getByText('草稿已保存', { exact: true })).toBeVisible()
+    await buyer.reload()
+    await expect(buyer).toHaveURL(editPath)
+    await expect(categories).toHaveValue(childId)
+    await buyer.getByRole('button', { name: '发布需求', exact: true }).click()
+    await expect(buyer).toHaveURL(/\/requests\/\d+$/)
+    const published = await buyer.request.get(`${api}/custom-requests/${new URL(buyer.url()).pathname.split('/').at(-1)}`)
+    expect(published.status()).toBe(200)
+    expect((await published.json()).data).toMatchObject({
+      categoryId: childId, sourceWorkId: draft.id, invitedCreatorId: draft.creatorId, visibility: 'DIRECTED',
+    })
+
+    await buyer.goto(`${requestPath}/quotes`)
+    await buyer.getByRole('button', { name: '选择此方案', exact: true }).click()
+    await buyer.getByRole('button', { name: '确认定标并生成订单', exact: true }).click()
+    await expect(buyer).toHaveURL(/\/orders\/\d+$/)
+
+    await buyer.goto(`/?purchasable=true&customizable=true&categoryId=${rootId}`)
+    await buyer.getByRole('link', { name: title, exact: true }).click()
+    await expect(buyer).toHaveURL(url => url.pathname === `/works/${draft.id}`)
+    await buyer.getByRole('link', { name: /发起同类定制/ }).click()
+    await expect(categories.getByRole('option', { name: '请选择末级品类', exact: true })).toHaveJSProperty('selected', true)
+    await expect(categories.locator('option')).toHaveCount(2)
+    await buyer.goto(`/works/${draft.id}`)
+    await buyer.getByRole('button', { name: '立即购买现货', exact: true }).click()
+    await buyer.getByRole('dialog', { name: '确认现货直购订单' }).getByRole('button', { name: /^确认购买/ }).click()
+    await expect(buyer).toHaveURL(/\/orders\/\d+$/)
+    const stockOrder = await buyer.request.get(`${api}${new URL(buyer.url()).pathname}`)
+    expect(stockOrder.status()).toBe(200)
+    expect((await stockOrder.json()).data.orderType).toBe('STOCK')
+  } finally { await adminContext.close(); await creatorContext.close() }
+})
+
 test('买家保存不完整草稿、恢复、发布、关闭复制，普通买家无大厅权限', async ({ page, browser, mailbox }) => {
   test.setTimeout(180_000)
   const adminContext = await browser.newContext()

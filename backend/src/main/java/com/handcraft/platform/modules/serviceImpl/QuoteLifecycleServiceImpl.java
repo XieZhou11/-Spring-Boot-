@@ -6,6 +6,8 @@ import com.handcraft.platform.modules.entity.*;
 import com.handcraft.platform.modules.mapper.*;
 import com.handcraft.platform.modules.security.NotificationSocketHandler;
 import com.handcraft.platform.modules.service.*;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import org.slf4j.*;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -38,22 +40,35 @@ public class QuoteLifecycleServiceImpl implements QuoteLifecycleService {
     @Transactional(propagation=Propagation.MANDATORY)
     public List<Quote> reconcile(CustomRequest request) {
         var history=quotes.lockForRequest(request.getId());
-        for(var quote:history)if("ACTIVE".equals(quote.getStatus())&&!policy.now().isBefore(quote.getExpiresAt()))
-            invalidate(request,quote,"TIMEOUT",null);
+        var now=policy.now().truncatedTo(ChronoUnit.MILLIS);
+        expireLockedQuotes(request,history,now);
         if(Set.of("OPEN","QUOTING").contains(request.getStatus())) {
             boolean active=history.stream().anyMatch(quote->"ACTIVE".equals(quote.getStatus()));
-            if(active)state(request,"QUOTING",null);
-            else if(!policy.now().isBefore(request.getNoQuoteExpireAt()))terminate(request,"EXPIRED",null);
-            else state(request,"OPEN",null);
+            if(active)state(request,"QUOTING",null,now);
+            else if(!now.isBefore(request.getNoQuoteExpireAt()))terminate(request,"EXPIRED",null,history,now);
+            else state(request,"OPEN",null,now);
         }
         return history;
     }
 
     @Transactional(propagation=Propagation.MANDATORY)
+    public void expireLockedQuotes(CustomRequest request,List<Quote> history,LocalDateTime now) {
+        for (var quote : history) {
+            if ("ACTIVE".equals(quote.getStatus()) && !now.isBefore(quote.getExpiresAt())) {
+                invalidate(request,quote,"TIMEOUT",null,now);
+            }
+        }
+    }
+
+    @Transactional(propagation=Propagation.MANDATORY)
     public void invalidate(CustomRequest request,Quote quote,String reason,Long actorId) {
+        invalidate(request,quote,reason,actorId,policy.now());
+    }
+
+    private void invalidate(CustomRequest request,Quote quote,String reason,Long actorId,LocalDateTime now) {
         if(!"ACTIVE".equals(quote.getStatus()))return;
         quote.setStatus("EXPIRED");quote.setInvalidReason(reason);
-        quote.setInvalidatedAt(policy.now());quote.setUpdatedAt(policy.now());
+        quote.setInvalidatedAt(now);quote.setUpdatedAt(now);
         if(quotes.transition(quote)!=1)throw new BusinessException(CommonErrorCode.CONFLICT,"报价状态已变化");
         logs.record(actorId,false,"QUOTE",quote.getId(),"EXPIRED","ACTIVE","EXPIRED",reason);
         String event="WITHDRAWN".equals(reason)?"QUOTE_WITHDRAWN":"QUOTE_EXPIRED";
@@ -64,9 +79,14 @@ public class QuoteLifecycleServiceImpl implements QuoteLifecycleService {
 
     @Transactional(propagation=Propagation.MANDATORY)
     public void state(CustomRequest request,String status,Long actorId) {
+        state(request,status,actorId,policy.now());
+    }
+
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void state(CustomRequest request,String status,Long actorId,LocalDateTime now) {
         if(status.equals(request.getStatus()))return;
-        String before=request.getStatus();request.setStatus(status);request.setUpdatedAt(policy.now());
-        if(Set.of("CLOSED","EXPIRED").contains(status))request.setClosedAt(policy.now());
+        String before=request.getStatus();request.setStatus(status);request.setUpdatedAt(now);
+        if(Set.of("CLOSED","EXPIRED").contains(status))request.setClosedAt(now);
         if(requests.update(request)!=1)throw new BusinessException(CommonErrorCode.CONFLICT,"需求状态已变化");
         request.setVersion(request.getVersion()+1);
         logs.record(actorId,false,"CUSTOM_REQUEST",request.getId(),status,before,status,null);
@@ -76,14 +96,17 @@ public class QuoteLifecycleServiceImpl implements QuoteLifecycleService {
     @Transactional(propagation=Propagation.MANDATORY)
     public void terminate(CustomRequest request,String status,Long actorId) {
         var history=quotes.lockForRequest(request.getId());
-        var now=policy.now();
+        terminate(request,status,actorId,history,policy.now());
+    }
+
+    private void terminate(CustomRequest request,String status,Long actorId,List<Quote> history,LocalDateTime now) {
         // 扫描尚未持久化的到期报价仍按超时失效，关闭不能改写其真实原因。
-        for(var quote:history)invalidate(request,quote,"EXPIRED".equals(status)||!now.isBefore(quote.getExpiresAt())?"TIMEOUT":"REQUEST_CLOSED",actorId);
-        state(request,status,actorId);
+        for(var quote:history)invalidate(request,quote,"EXPIRED".equals(status)||!now.isBefore(quote.getExpiresAt())?"TIMEOUT":"REQUEST_CLOSED",actorId,now);
+        state(request,status,actorId,now);
         String event="EXPIRED".equals(status)?"REQUEST_EXPIRED":"REQUEST_CLOSED";
         var related=conversations.forRequest(request.getId());
         related.forEach(conversation->conversations.lock(conversation.getId()));
-        conversations.archive(request.getId(),event,policy.now());
+        conversations.archive(request.getId(),event,now);
         Set<Long> recipients=new TreeSet<>();recipients.add(request.getBuyerId());
         if(request.getInvitedCreatorId()!=null)recipients.add(request.getInvitedCreatorId());
         history.forEach(quote->recipients.add(quote.getCreatorId()));

@@ -7,7 +7,7 @@ import { getCategories } from '@/api/creator'
 import { getCreator, getWork } from '@/api/work'
 import { createRequest, getCandidateCreators, getCustomRequest, getRequestQuota, publishRequest, saveRequest } from '@/api/customRequest'
 import type { CategoryVO } from '@/types/creator'
-import type { CreatorPublicVO } from '@/types/work'
+import type { CreatorPublicVO, WorkVO } from '@/types/work'
 import type { CustomRequestVO, RequestContent, RequestQuotaVO } from '@/types/customRequest'
 import { requestContent, requestListPaths, requestListReturn } from '@/utils/customRequest'
 import { ApiError } from '@/utils/request'
@@ -18,7 +18,7 @@ import '@/assets/styles/craftflow-demand.css'
 const route = useRoute(); const router = useRouter(); const auth = useAuthStore()
 const form = reactive(requestContent()); const current = ref<CustomRequestVO>(); const quota = ref<RequestQuotaVO>()
 const categories = ref<CategoryVO[]>([]); const selectedCreator = ref<CreatorPublicVO>(); const candidates = ref<CreatorPublicVO[]>([])
-const keyword = ref(''); const searching = ref(false); const sourceTitle = ref('')
+const keyword = ref(''); const searching = ref(false); const sourceWork = ref<WorkVO>()
 const loading = ref(true); const ready = ref(false); const busy = ref(false); const uploading = ref(false); const unresolved = ref(false)
 const error = ref(''); const notice = ref(''); const fields = ref<Record<string, string>>({})
 const baseline = ref(''); const dirty = computed(() => ready.value && JSON.stringify(form) !== baseline.value)
@@ -27,11 +27,23 @@ const returnTo = computed(() => {
   return router.resolve(source).path === requestListPaths.mine ? source : requestListPaths.mine
 })
 const returnQuery = computed(() => returnTo.value === requestListPaths.mine ? {} : { returnTo: returnTo.value })
-let requestKey = crypto.randomUUID(); let creation: RequestContent | undefined; let disposed = false; let candidateRevision = 0
+let requestKey = crypto.randomUUID(); let creation: RequestContent | undefined; let initializationRevision = 0; let candidateRevision = 0
+/** 来源品类仍是末级时沿用。原一级新增子类后，只能选择该一级下的启用末级。 */
+const sourceRoot = computed(() => categories.value.find(root =>
+  root.id === sourceWork.value?.categoryId || root.children.some(child => child.id === sourceWork.value?.categoryId),
+))
+const sourceNeedsChild = computed(() => sourceRoot.value?.id === sourceWork.value?.categoryId && sourceRoot.value?.selectableForWork === false)
 const selectable = computed(() => categories.value.flatMap(root => {
+  if (form.sourceWorkId && (!sourceWork.value?.customizable || !selectedCreator.value || sourceWork.value.creatorId !== form.invitedCreatorId || root.id !== sourceRoot.value?.id)) return []
   if (form.visibility === 'DIRECTED' && selectedCreator.value && !selectedCreator.value.categories.some(c => c.id === root.id)) return []
-  return root.children.length ? root.children.filter(c => c.enabled && c.selectableForWork).map(c => ({ id: c.id, name: `${root.name} / ${c.name}` })) : root.enabled && root.selectableForWork ? [{ id: root.id, name: root.name }] : []
+  const options = root.children.length ? root.children.filter(c => c.enabled && c.selectableForWork).map(c => ({ id: c.id, name: `${root.name} / ${c.name}` })) : root.enabled && root.selectableForWork ? [{ id: root.id, name: root.name }] : []
+  return form.sourceWorkId && !sourceNeedsChild.value ? options.filter(option => option.id === sourceWork.value?.categoryId) : options
 }))
+const sourceCategoryHint = computed(() => {
+  if (!form.sourceWorkId) return ''
+  if (!selectable.value.length) return '来源作品当前无法发起同类定制。可调整需求范围或稍后重试。'
+  return sourceNeedsChild.value && !form.categoryId ? '请选择原作品主品类下启用的末级品类' : ''
+})
 /** 按北京时间自然日给出提示，最终日期以实际发布时的服务端校验为准。 */
 function dateAfter(days: number) {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
@@ -40,30 +52,88 @@ function dateAfter(days: number) {
   value.setUTCDate(value.getUTCDate() + days)
   return new Date(value.getTime() + 8 * 3600000).toISOString().slice(0, 10)
 }
+/** 下架作品或失去认证的作者仍可留在草稿中，买家可调整范围后继续编辑。 */
+function missingDraftReference(failure: unknown) {
+  if (!(failure instanceof ApiError) || failure.status !== 404) throw failure
+}
+function syncSourceCategory() {
+  if (!form.sourceWorkId || !selectable.value.length || selectable.value.some(option => option.id === form.categoryId)) return
+  form.categoryId = selectable.value.find(option => option.id === sourceWork.value?.categoryId)?.id ?? null
+}
+/** 发布被明确拒绝后更新来源及品类选项，保留仍有效的输入。 */
+async function refreshSourceCategory() {
+  const { sourceWorkId, invitedCreatorId } = form
+  if (!sourceWorkId || !invitedCreatorId) return
+  const revision = initializationRevision
+  try {
+    const [available, work, creator] = await Promise.all([
+      getCategories(),
+      getWork(sourceWorkId).catch(missingDraftReference),
+      getCreator(invitedCreatorId).catch(missingDraftReference),
+    ])
+    if (revision !== initializationRevision || form.sourceWorkId !== sourceWorkId || form.invitedCreatorId !== invitedCreatorId) return
+    categories.value = available
+    sourceWork.value = work || undefined
+    selectedCreator.value = creator || undefined
+    syncSourceCategory()
+  } catch {
+    // 保留原发布错误和草稿输入，可再次提交或重新打开草稿。
+  }
+}
 async function initialize() {
+  const revision = ++initializationRevision
+  const draftId = route.params.id
+  const { sourceWorkId, creatorId } = route.query
   loading.value = true; error.value = ''
   try {
     const [available, limits] = await Promise.all([getCategories(), getRequestQuota()])
-    if (disposed) return
-    categories.value = available; quota.value = limits
-    if (route.params.id) {
-      current.value = await getCustomRequest(String(route.params.id), true)
-      Object.assign(form, requestContent(current.value))
-      if (form.invitedCreatorId) selectedCreator.value = await getCreator(form.invitedCreatorId)
-    } else if (typeof route.query.sourceWorkId === 'string') {
-      const work = await getWork(route.query.sourceWorkId)
-      const creator = await getCreator(work.creatorId)
+    if (revision !== initializationRevision) return
+    let draft: CustomRequestVO | undefined
+    let source: WorkVO | undefined
+    let creator: CreatorPublicVO | undefined
+    let content = requestContent()
+    if (draftId) {
+      draft = await getCustomRequest(String(draftId), true)
+      if (revision !== initializationRevision) return
+      content = requestContent(draft)
+      if (draft.canEdit) {
+        const invited = content.invitedCreatorId ? getCreator(content.invitedCreatorId) : undefined
+        if (content.sourceWorkId) {
+          const [workResult, creatorResult] = await Promise.all([
+            getWork(content.sourceWorkId).catch(missingDraftReference),
+            invited?.catch(missingDraftReference),
+          ])
+          source = workResult || undefined
+          creator = creatorResult || undefined
+        } else {
+          creator = await invited
+        }
+      }
+    } else if (typeof sourceWorkId === 'string') {
+      const work = await getWork(sourceWorkId)
+      if (revision !== initializationRevision) return
       if (!work.customizable || work.creatorId === auth.session?.userId) throw new Error('此作品当前不能发起定制')
-      selectedCreator.value = creator; sourceTitle.value = work.title
-      Object.assign(form, { visibility: 'DIRECTED', sourceWorkId: work.id, invitedCreatorId: work.creatorId, categoryId: work.categoryId })
-    } else if (typeof route.query.creatorId === 'string') {
-      const creator = await getCreator(route.query.creatorId)
+      creator = await getCreator(work.creatorId)
+      source = work
+      Object.assign(content, { visibility: 'DIRECTED', sourceWorkId: work.id, invitedCreatorId: work.creatorId, categoryId: work.categoryId })
+    } else if (typeof creatorId === 'string') {
+      creator = await getCreator(creatorId)
       if (creator.paused || creator.id === auth.session?.userId) throw new Error('此创作者当前不能接受定向邀约')
-      selectedCreator.value = creator; form.visibility = 'DIRECTED'; form.invitedCreatorId = creator.id
+      content.visibility = 'DIRECTED'
+      content.invitedCreatorId = creator.id
     }
+    // 一次提交当前路由的读取结果，避免较早的品类或来源覆盖新表单。
+    if (revision !== initializationRevision) return
+    categories.value = available; quota.value = limits; current.value = draft
+    sourceWork.value = source; selectedCreator.value = creator
+    Object.assign(form, content)
+    syncSourceCategory()
     baseline.value = JSON.stringify(form); ready.value = true
-  } catch (failure) { error.value = failure instanceof Error ? failure.message : '表单读取失败' }
-  finally { loading.value = false }
+  } catch (failure) {
+    if (revision === initializationRevision) error.value = failure instanceof Error ? failure.message : '表单读取失败'
+  } finally {
+    if (revision === initializationRevision) loading.value = false
+  }
 }
 async function searchCreators() {
   if (!form.categoryId) return
@@ -73,12 +143,12 @@ async function searchCreators() {
   finally { if (revision === candidateRevision) searching.value = false }
 }
 watch(() => form.categoryId, () => { candidates.value = []; candidateRevision++ })
-function rangeChanged() { form.invitedCreatorId = null; selectedCreator.value = undefined; form.sourceWorkId = null; sourceTitle.value = ''; candidates.value = [] }
-function chooseCreator(id: string) { selectedCreator.value = candidates.value.find(c => c.id === id); form.invitedCreatorId = id || null; form.sourceWorkId = null; sourceTitle.value = '' }
+function rangeChanged() { form.invitedCreatorId = null; selectedCreator.value = undefined; form.sourceWorkId = null; sourceWork.value = undefined; candidates.value = [] }
+function chooseCreator(id: string) { selectedCreator.value = candidates.value.find(c => c.id === id); form.invitedCreatorId = id || null; form.sourceWorkId = null; sourceWork.value = undefined }
 function validate() {
   const result: Record<string, string> = {}
   if (form.title.trim().length < 5 || form.title.trim().length > 30) result.title = '标题需为 5—30 字'
-  if (!form.categoryId) result.categoryId = '请选择启用的末级品类'
+  if (!selectable.value.some(option => option.id === form.categoryId)) result.categoryId = sourceCategoryHint.value || '请选择启用的末级品类'
   for (const key of ['purpose', 'materialPreference', 'specification'] as const) if (!form[key].trim()) result[key] = '请填写；没有偏好可注明无特殊要求'
   if (form.description.trim().length < 20 || form.description.trim().length > 2000) result.description = '描述需为 20—2000 字'
   const money = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/
@@ -111,6 +181,9 @@ async function persist(publication: boolean) {
     if (!current.value && failure instanceof ApiError && [400, 403, 404, 422].includes(failure.status)) { creation = undefined; requestKey = crypto.randomUUID() }
     if (failure instanceof ApiError) fields.value = failure.fieldErrors
     error.value = failure instanceof Error ? failure.message : '请求失败'
+    if (publication && current.value && failure instanceof ApiError && failure.status === 400) {
+      await refreshSourceCategory()
+    }
     if (!(failure instanceof ApiError) || !failure.status || failure.status === 409) {
       unresolved.value = true; error.value += '。输入已保留，请核验最新状态后继续。'
     }
@@ -141,12 +214,12 @@ onBeforeRouteUpdate(to => {
 // 同一编辑组件切换需求时重新加载；首次保存替换URL则保留当前已核验结果。
 watch(() => route.fullPath, () => {
   if (current.value && route.params.id === current.value.id) return
-  current.value = undefined; selectedCreator.value = undefined; sourceTitle.value = ''; creation = undefined; requestKey = crypto.randomUUID()
+  current.value = undefined; selectedCreator.value = undefined; sourceWork.value = undefined; creation = undefined; requestKey = crypto.randomUUID()
   ready.value = false; unresolved.value = false; fields.value = {}; notice.value = ''; candidates.value = []; candidateRevision++
   Object.assign(form, requestContent()); void initialize()
 })
 onMounted(() => { void initialize(); window.addEventListener('beforeunload', beforeUnload) })
-onBeforeUnmount(() => { disposed = true; candidateRevision++; window.removeEventListener('beforeunload', beforeUnload) })
+onBeforeUnmount(() => { initializationRevision++; candidateRevision++; window.removeEventListener('beforeunload', beforeUnload) })
 </script>
 <template>
   <WorkLayout>
@@ -234,7 +307,10 @@ onBeforeUnmount(() => { disposed = true; candidateRevision++; window.removeEvent
               v-for="item in selectable"
               :key="item.id"
               :value="item.id"
-            >{{ item.name }}</option></select><small class="field-error">{{ fields.categoryId }}</small></label>
+            >{{ item.name }}</option></select><small
+              v-if="fields.categoryId || sourceCategoryHint"
+              :class="fields.categoryId ? 'field-error' : 'field-help'"
+            >{{ fields.categoryId || sourceCategoryHint }}</small></label>
             <div
               v-if="form.visibility === 'DIRECTED'"
               class="request-invite-picker"
@@ -249,7 +325,7 @@ onBeforeUnmount(() => { disposed = true; candidateRevision++; window.removeEvent
                   重新选择
                 </button>
               </p>
-              <template v-else>
+              <template v-else-if="!form.sourceWorkId">
                 <label class="work-field">创作者昵称<input
                   v-model="keyword"
                   aria-label="创作者昵称"
@@ -281,10 +357,10 @@ onBeforeUnmount(() => { disposed = true; candidateRevision++; window.removeEvent
                 </p>
               </template>
               <small class="field-error">{{ fields.invitedCreatorId }}</small><p
-                v-if="sourceTitle"
+                v-if="sourceWork"
                 class="field-help"
               >
-                参考作品：{{ sourceTitle }}。仅作定制参考，不占用现货。
+                参考作品：{{ sourceWork.title }}。仅作定制参考，不占用现货。
               </p>
             </div>
             <label

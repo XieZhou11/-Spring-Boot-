@@ -43,9 +43,13 @@ public class CustomRequestServiceImpl implements CustomRequestService {
     public CustomRequestVO publish(Long userId,Long id,CustomRequestPublicationDTO in){return BusinessLog.run(LOGGER,"定制需求发布",userId,()->{
         var fields=json.convertValue(in,CustomRequestFieldsDTO.class);var candidate=new CustomRequest();apply(candidate,fields);
         // 先锁定品类并保留新业务校验结果，成功发布的幂等重试不受后来停用影响。
-        BusinessException categoryFailure=null;try{policy.lockCategory(candidate.getCategoryId());}catch(BusinessException failure){categoryFailure=failure;}policy.lockUsers(userId,candidate.getInvitedCreatorId());var buyer=policy.user(userId);var r=ownLocked(userId,id);
+        BusinessException categoryFailure = null;
+        Long publicationRoot = null;
+        try { publicationRoot = policy.lockPublicationCategory(candidate.getCategoryId()); }
+        catch (BusinessException failure) { categoryFailure = failure; }
+        policy.lockUsers(userId,candidate.getInvitedCreatorId());var buyer=policy.user(userId);var r=ownLocked(userId,id);
         if(!"DRAFT".equals(r.getStatus())){if(Set.of("OPEN","QUOTING").contains(r.getStatus())&&Objects.equals(r.getVersion(),in.getVersion()+1)&&fingerprint(r).equals(fingerprint(candidate)))return view(r,userId);throw conflict("需求已发布或关闭，正文和范围不可修改");}
-        if(categoryFailure!=null)throw categoryFailure;version(r,in.getVersion());if(buyer.isAdminBusinessPaused())throw forbidden("账号新业务已暂停，不能发布需求");apply(r,fields);validatePublication(userId,r);checkImages(userId,r);
+        if(categoryFailure!=null)throw categoryFailure;version(r,in.getVersion());if(buyer.isAdminBusinessPaused())throw forbidden("账号新业务已暂停，不能发布需求");apply(r,fields);validatePublication(userId,r,publicationRoot);checkImages(userId,r);
         if(requests.used(userId,policy.now())>=5)throw conflict("同时待响应或报价中的需求最多五条");r.setStatus("OPEN");r.setPublishedAt(policy.now());r.setNoQuoteExpireAt(policy.now().plusDays(7));update(r);record(userId,r,"PUBLISH","DRAFT",null);
         if("DIRECTED".equals(r.getVisibility()))notifications.customRequestChanged(r.getInvitedCreatorId(),id,"REQUEST_INVITED");LOGGER.info("需求发布校验通过，等待事务提交：userId={}, requestId={}, visibility={}",userId,id,r.getVisibility());return view(requests.find(id),userId);
     });}
@@ -72,13 +76,24 @@ public class CustomRequestServiceImpl implements CustomRequestService {
     @Scheduled(fixedDelay=60000,initialDelay=60000)
     public void expireDue(){try{for(var id:requests.due(policy.now()))try{tx.executeWithoutResult(s->BusinessLog.run(LOGGER,"定制需求过期归档",null,()->{var initial=requests.find(id);if(initial==null)return null;policy.lockUsers(initial.getBuyerId(),initial.getInvitedCreatorId());var r=requests.lock(id);if("EXPIRED".equals(policy.effectiveStatus(r))&&Set.of("OPEN","QUOTING").contains(r.getStatus()))terminate(r,"EXPIRED",null);return null;}));}catch(RuntimeException e){LOGGER.error("定制需求过期失败：stage=单条归档事务, requestId={}",id,SafeLog.exception(e));}}catch(RuntimeException e){LOGGER.error("定制需求过期失败：stage=扫描到期需求",SafeLog.exception(e));}}
     private void terminate(CustomRequest r,String status,Long actor){lifecycle.terminate(r,status,actor);}
-    private void validatePublication(Long userId,CustomRequest r){
+    private void validatePublication(Long userId,CustomRequest r,Long publicationRoot){
         // Bean Validation检查原始字段；去除首尾空白后仍须满足实际标题与描述的字数。
         int titleLength=r.getTitle().codePointCount(0,r.getTitle().length()),descriptionLength=r.getDescription().codePointCount(0,r.getDescription().length());if(titleLength<5||titleLength>30)throw invalid("标题应为五至三十字");if(descriptionLength<20||descriptionLength>2000)throw invalid("需求描述应为二十至二千字");
         if(r.getBudgetMin().compareTo(r.getBudgetMax())>0)throw invalid("预算上限不能低于下限");LocalDate today=policy.now().toLocalDate();if(r.getExpectedShipDate().isBefore(today.plusDays(7))||r.getExpectedShipDate().isAfter(today.plusDays(180)))throw invalid("期望发货日须在发布后七至一百八十天之间");
         for(var t:List.of(r.getTitle(),r.getPurpose(),r.getMaterialPreference(),r.getSpecification(),r.getDescription()))if(!PlainTextPolicy.safe(t))throw invalid("需求文本不能包含脚本、联系方式、外链、站外引流或不当内容");
         if("DIRECTED".equals(r.getVisibility())){if(r.getInvitedCreatorId()==null||userId.equals(r.getInvitedCreatorId()))throw invalid("定向需求须选择一名非本人的创作者");String reason=policy.creatorReason(users.findById(r.getInvitedCreatorId()),r.getCategoryId());if(reason!=null)throw forbidden(reason);}else if(r.getInvitedCreatorId()!=null)throw invalid("公开需求不能指定受邀者");
-        if(r.getSourceWorkId()!=null){var w=works.lock(r.getSourceWorkId());if(!"DIRECTED".equals(r.getVisibility())||w==null||w.getDeletedAt()!=null||!Objects.equals(w.getCreatorId(),r.getInvitedCreatorId())||!"ONLINE".equals(w.getReviewStatus())||!w.isCustomEnabled())throw invalid("来源作品须为受邀创作者已上架且接受定制的作品");}
+        if (r.getSourceWorkId() != null) {
+            var work = works.lock(r.getSourceWorkId());
+            if (!"DIRECTED".equals(r.getVisibility()) || work == null || work.getDeletedAt() != null
+                    || !Objects.equals(work.getCreatorId(), r.getInvitedCreatorId())
+                    || !"ONLINE".equals(work.getReviewStatus()) || !work.isCustomEnabled()) {
+                throw invalid("来源作品须为受邀创作者已上架且接受定制的作品");
+            }
+            // 来源沿用原末级，旧一级新增子类后取该一级下的启用末级。两种情况都已锁定对应品类。
+            if (!Objects.equals(work.getCategoryId(), r.getCategoryId()) && !Objects.equals(work.getCategoryId(), publicationRoot)) {
+                throw invalid("请选择来源作品的品类，或该作品原一级品类下启用的末级品类");
+            }
+        }
     }
     private CustomRequestVO view(CustomRequest r,Long userId){var buyer=users.findById(r.getBuyerId());var invited=r.getInvitedCreatorId()==null?null:users.findById(r.getInvitedCreatorId());var path=new ArrayList<String>();if(r.getCategoryId()!=null){var c=categories.find(r.getCategoryId());if(c!=null){if(c.getParentId()!=null){var p=categories.find(c.getParentId());if(p!=null)path.add(p.getName());}path.add(c.getName());}}String status=policy.effectiveStatus(r);boolean own=userId.equals(r.getBuyerId());boolean draft="DRAFT".equals(status);boolean open=Set.of("OPEN","QUOTING").contains(status);String reason=null;
         Long creator=own?r.getInvitedCreatorId():userId;var existing=creator==null?null:conversations.byRequest(r.getId(),creator);

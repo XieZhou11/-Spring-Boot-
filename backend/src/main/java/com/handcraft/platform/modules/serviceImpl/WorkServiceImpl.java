@@ -95,7 +95,7 @@ public class WorkServiceImpl implements WorkService {
             if(!stockOrderMatches(initial,initialOrder))throw conflict("作品与原售出订单关联不一致");
 
             // 与现货建单、付款同序，原买家和创作者的账号锁也与退款裁定串行化。
-            policy.lockCategory(initial.getCategoryId());
+            policy.lockTradingCategory(initial.getCategoryId());
             policy.lockUsers(userId,initialOrder.getBuyerId());
             Work work=own(userId,id);
             version(work,input.getVersion());
@@ -275,9 +275,7 @@ public class WorkServiceImpl implements WorkService {
         if(eligibilityReason(owner)!=null)return Map.of();
         var candidates=worksOnPage.stream().filter(this::stockRecoveryCandidate).toList();
         if(candidates.isEmpty())return Map.of();
-        Set<Long> parentIds=categories.all().stream().map(Category::getParentId).filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        var workIds=candidates.stream().filter(work->!parentIds.contains(work.getCategoryId()))
+        var workIds=candidates.stream()
                 .filter(work->policy.creatorReason(owner,work.getCategoryId())==null).map(Work::getId).toList();
         if(workIds.isEmpty())return Map.of();
         return works.stockRecoveryOrders(workIds).stream().collect(Collectors.toMap(TradeOrder::getWorkId,order->order));
@@ -299,10 +297,17 @@ public class WorkServiceImpl implements WorkService {
 
     private WorkVO view(Work work,boolean publicView){return view(work,publicView,null);}
     private WorkVO view(Work w,boolean publicView,TradeOrder recoveryOrder){var u=users.findById(w.getCreatorId());var avatar=avatars.view(w.getCreatorId(),u.getAvatarFileId());List<String> main=ids(w.getMainImageIds());List<String> spec=ids(w.getSpecificationImageIds());var category=w.getCategoryId()==null?null:categories.find(w.getCategoryId());var path=new ArrayList<String>();if(category!=null){if(category.getParentId()!=null){var parent=categories.find(category.getParentId());if(parent!=null)path.add(parent.getName());}path.add(category.getName());}
-        boolean eligible=eligibilityReason(u)==null&&"ONLINE".equals(w.getReviewStatus());ImageVO cover=main.isEmpty()?null:images.view(w.getCreatorId(),Long.valueOf(main.getFirst()));
+        boolean eligible = "ONLINE".equals(w.getReviewStatus()) && category != null
+                && policy.creatorReason(u, category.getId()) == null;
+        boolean purchasable = eligible && w.isSaleEnabled() && "AVAILABLE".equals(w.getStockStatus())
+                && w.getSourceOrderId() == null && w.getStockPrice() != null;
+        // 原一级新增子类后继续展示原作品，新定向需求从启用的末级品类中选择。
+        boolean customizable = eligible && w.isCustomEnabled()
+                && (category.getParentId() != null || categories.rootHasSelectableLeaf(category.getId()));
+        ImageVO cover=main.isEmpty()?null:images.view(w.getCreatorId(),Long.valueOf(main.getFirst()));
         StockRecoveryVO recovery=recoveryOrder==null?null:new StockRecoveryVO(text(recoveryOrder.getId()),
                 recoveryOrder.getOrderNo(),stockConfirmation(recoveryOrder));
-        return new WorkVO(w.getId().toString(),w.getCreatorId().toString(),u.getNickname(),avatar==null?null:avatar.url(),avatar==null?null:avatar.expiresAt(),text(w.getCategoryId()),path,w.getTitle(),main,spec,w.getMaterial(),w.getSpecification(),w.getDescription(),w.getProcessDescription(),w.isSaleEnabled(),w.isCustomEnabled(),w.getStockPrice()==null?null:w.getStockPrice().setScale(2).toPlainString(),w.getCustomReferenceDays(),w.getReviewStatus(),w.getStockStatus(),w.getVersion().toString(),time(w.getFirstSubmittedAt()),time(w.getSubmittedAt()),time(w.getOnlineAt()),time(w.getCreatedAt()),time(w.getUpdatedAt()),publicView?null:works.reviewReason(w.getId()),eligible&&w.isSaleEnabled()&&"AVAILABLE".equals(w.getStockStatus())&&w.getSourceOrderId()==null,eligible&&w.isCustomEnabled(),cover,text(w.getSourceOrderId()),recovery);
+        return new WorkVO(w.getId().toString(),w.getCreatorId().toString(),u.getNickname(),avatar==null?null:avatar.url(),avatar==null?null:avatar.expiresAt(),text(w.getCategoryId()),path,w.getTitle(),main,spec,w.getMaterial(),w.getSpecification(),w.getDescription(),w.getProcessDescription(),w.isSaleEnabled(),w.isCustomEnabled(),w.getStockPrice()==null?null:w.getStockPrice().setScale(2).toPlainString(),w.getCustomReferenceDays(),w.getReviewStatus(),w.getStockStatus(),w.getVersion().toString(),time(w.getFirstSubmittedAt()),time(w.getSubmittedAt()),time(w.getOnlineAt()),time(w.getCreatedAt()),time(w.getUpdatedAt()),publicView?null:works.reviewReason(w.getId()),purchasable,customizable,cover,text(w.getSourceOrderId()),recovery);
     }
     private void copy(Work w,WorkFieldsDTO in){w.setCategoryId(in.getCategoryId()==null?null:number(in.getCategoryId()));w.setTitle(trim(in.getTitle()));w.setMainImageIds(json.writeValueAsString(in.getMainImageIds()));w.setSpecificationImageIds(json.writeValueAsString(in.getSpecificationImageIds()));w.setMaterial(trim(in.getMaterial()));w.setSpecification(trim(in.getSpecification()));w.setDescription(trim(in.getDescription()));w.setProcessDescription(trim(in.getProcessDescription()));w.setSaleEnabled(Boolean.TRUE.equals(in.getSaleEnabled()));w.setCustomEnabled(Boolean.TRUE.equals(in.getCustomEnabled()));w.setStockPrice(in.getStockPrice());w.setCustomReferenceDays(in.getCustomReferenceDays());w.setSourceOrderId(in.getSourceOrderId()==null?null:number(in.getSourceOrderId()));}
     /** 案例来源只能在创建作品时选择一次，之后不可清除或换绑；授权依据始终从锁定订单读取。 */

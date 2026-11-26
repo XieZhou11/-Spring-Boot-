@@ -12,8 +12,10 @@ public interface CustomRequestPolicyService {
     List<Long> mainCategories(UserAccount user);
     /** 返回创作者认证、暂停和品类资格的拒绝原因，合格返回空。 */
     String creatorReason(UserAccount user,Long categoryId);
-    /** 锁定并验证启用末级品类，返回一级主品类。 */
-    Long lockCategory(Long categoryId);
+    /** 锁定待发布需求的启用末级品类，返回一级主品类。 */
+    Long lockPublicationCategory(Long categoryId);
+    /** 锁定存量业务引用的启用品类，允许原一级已新增子类，返回一级主品类。 */
+    Long lockTradingCategory(Long categoryId);
     /** 在当前服务器时刻计算有效状态，不写数据库。 */
     String effectiveStatus(CustomRequest request);
     /** 校验本人或公开/定向可见性；隐藏资源统一返回404。 */

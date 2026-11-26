@@ -8,6 +8,7 @@ import com.handcraft.platform.modules.mapper.*;
 import com.handcraft.platform.modules.service.*;
 import com.handcraft.platform.modules.vo.*;
 import java.time.*;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import org.slf4j.*;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -61,7 +62,7 @@ public class OrderServiceImpl implements OrderService {
     public Creation createStock(Long userId,Long workId,StockOrderDTO input){
         return BusinessLog.run(LOGGER,"现货直购建单",userId,()->{
             var initial=works.find(workId);if(initial==null)throw missing();
-            BusinessException categoryFailure=null;try{policy.lockCategory(initial.getCategoryId());}catch(BusinessException failure){categoryFailure=failure;}
+            BusinessException categoryFailure=null;try{policy.lockTradingCategory(initial.getCategoryId());}catch(BusinessException failure){categoryFailure=failure;}
             policy.lockUsers(userId,initial.getCreatorId());
             var buyer=policy.user(userId);var creator=users.findById(initial.getCreatorId());var work=works.lock(workId);
             if(work==null||work.getDeletedAt()!=null)throw missing();
@@ -70,6 +71,8 @@ public class OrderServiceImpl implements OrderService {
                 if(!sameStock(previous,workId,input))throw conflict("同一请求键不能更改作品或收货地址");
                 return new Creation(view(previous,userId,true),false);
             }
+            // 作品审核可能在获得作品锁前换类，当前事务只持有初读品类的锁。
+            if(!Objects.equals(initial.getCategoryId(),work.getCategoryId()))throw conflict("作品品类已变化，请刷新作品状态");
             if(categoryFailure!=null)throw categoryFailure;
             if(buyer.isAdminBusinessPaused())throw forbidden("账号新业务已暂停，不能购买现货");
             if(userId.equals(work.getCreatorId()))throw forbidden("不能购买自己的作品");
@@ -77,7 +80,7 @@ public class OrderServiceImpl implements OrderService {
             if(!"ONLINE".equals(work.getReviewStatus())||!work.isSaleEnabled()||!"AVAILABLE".equals(work.getStockStatus())||work.getSourceOrderId()!=null||work.getStockPrice()==null)
                 throw conflict("作品当前不可购买，请刷新作品状态");
             var address=addresses.lockOwned(userId,number(input.getAddressId()));if(address==null)throw missing();
-            LocalDateTime createdAt=policy.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+            LocalDateTime createdAt=policy.now().truncatedTo(ChronoUnit.MILLIS);
             var order=new TradeOrder();order.setOrderNo(UUID.randomUUID().toString().replace("-",""));order.setOrderType("STOCK");
             order.setBuyerId(userId);order.setCreatorId(work.getCreatorId());order.setWorkId(workId);order.setStatus("PENDING_PAY");
             order.setTitleSnapshot(work.getTitle());order.setTotalAmount(work.getStockPrice());order.setAgreementSnapshot(json.writeValueAsString(stockAgreement(work)));
@@ -114,50 +117,58 @@ public class OrderServiceImpl implements OrderService {
     public Creation award(Long userId,Long requestId,AwardDTO input) {
         return BusinessLog.run(LOGGER,"需求定标建单",userId,()->{
             var initial=requests.find(requestId);if(initial==null||!userId.equals(initial.getBuyerId()))throw missing();
-            Long quoteId=number(input.getQuoteId());var selected=quotes.find(quoteId);if(selected==null)throw missing();
+            Long quoteId=number(input.getQuoteId());var initialQuote=quotes.find(quoteId);if(initialQuote==null)throw missing();
             BusinessException categoryFailure=null;
-            try{policy.lockCategory(initial.getCategoryId());}catch(BusinessException failure){categoryFailure=failure;}
-            policy.lockUsers(userId,selected.getCreatorId());var request=requests.lock(requestId);
+            try{policy.lockTradingCategory(initial.getCategoryId());}catch(BusinessException failure){categoryFailure=failure;}
+            policy.lockUsers(userId,initialQuote.getCreatorId());var request=requests.lock(requestId);
             var previous=orders.findKey(userId,input.getRequestKey());
             if(previous!=null) {
                 if(!same(previous,requestId,input))throw conflict("同一请求键不能更改定标方案、地址或确认日期");
                 return new Creation(view(previous,userId,true),false);
             }
+            if(request==null||request.getDeletedAt()!=null||!requestId.equals(initialQuote.getRequestId()))throw missing();
+            // 确认锁内需求仍使用初读品类，避免按已更换品类的旧锁继续定标。
+            if(!Objects.equals(initial.getCategoryId(),request.getCategoryId()))throw conflict("需求品类已变化，请刷新后重试");
             if(categoryFailure!=null)throw categoryFailure;
-            policy.user(userId);if(!requestId.equals(selected.getRequestId()))throw missing();
-            var history=lifecycle.reconcile(request);policy.open(request);
-            selected=history.stream().filter(quote->quoteId.equals(quote.getId())).findFirst().orElseThrow(OrderServiceImpl::missing);
+            var buyer=policy.user(userId);
+            if(!Set.of("OPEN","QUOTING").contains(request.getStatus()))throw conflict("需求已关闭、过期或定标，不能选择报价");
+            var history=quotes.lockForRequest(requestId);
+            var selected=history.stream().filter(quote->quoteId.equals(quote.getId())).findFirst().orElseThrow(OrderServiceImpl::missing);
             if(!"ACTIVE".equals(selected.getStatus()))throw conflict("所选报价已失效或定标");
-            if(users.findById(userId).isAdminBusinessPaused())throw forbidden("账号新业务已暂停，不能定标建单");
+            if(buyer.isAdminBusinessPaused())throw forbidden("账号新业务已暂停，不能定标建单");
             String reason=policy.creatorReason(users.findById(selected.getCreatorId()),request.getCategoryId());
             if(reason!=null)throw forbidden(reason);
             if(userId.equals(selected.getCreatorId()))throw forbidden("不能向自己定标");
             if("DIRECTED".equals(request.getVisibility())&&!selected.getCreatorId().equals(request.getInvitedCreatorId()))throw missing();
-            var estimated=policy.now().toLocalDate().plusDays(selected.getDurationDays());
-            if(!estimated.equals(input.getConfirmedEstimatedShipDate()))throw conflict("预计发货日期已变化，请重新确认后定标");
             if(orders.byRequest(requestId)!=null)throw conflict("该需求已经生成订单");
             var address=addresses.lockOwned(userId,number(input.getAddressId()));if(address==null)throw missing();
+            // 地址锁也可能等待。锁齐后按数据库毫秒精度取时点，并用此时点判定整组报价。
+            var awardAt=policy.now().truncatedTo(ChronoUnit.MILLIS);
+            if(!awardAt.isBefore(selected.getExpiresAt()))throw conflict("所选报价已失效或定标");
+            var estimated=awardAt.toLocalDate().plusDays(selected.getDurationDays());
+            if(!estimated.equals(input.getConfirmedEstimatedShipDate()))throw conflict("预计发货日期已变化，请重新确认后定标");
+            lifecycle.expireLockedQuotes(request,history,awardAt);
+
             var order=new TradeOrder();order.setOrderNo(UUID.randomUUID().toString().replace("-",""));order.setOrderType("CUSTOM");
             order.setBuyerId(userId);order.setCreatorId(selected.getCreatorId());order.setRequestId(requestId);order.setQuoteId(quoteId);
             order.setStatus("PENDING_PAY");order.setTitleSnapshot(request.getTitle());order.setTotalAmount(selected.getGoodsAmount());
             order.setDurationDays(selected.getDurationDays());order.setAgreementSnapshot(json.writeValueAsString(agreement(request,selected,estimated)));
             order.setAddressSnapshot(json.writeValueAsString(addressSnapshot(address)));order.setCreateRequestKey(input.getRequestKey());
-            var createdAt=policy.now();order.setCreatedAt(createdAt);order.setUpdatedAt(createdAt);order.setPayDeadlineAt(createdAt.plusHours(24));
+            order.setCreatedAt(awardAt);order.setUpdatedAt(awardAt);order.setPayDeadlineAt(awardAt.plusHours(24));
             orders.insert(order);
             for(var quote:history)if("ACTIVE".equals(quote.getStatus())) {
                 String status=quoteId.equals(quote.getId())?"AWARDED":"LOST";
-                quote.setStatus(status);quote.setUpdatedAt(policy.now());
-                if(quotes.transition(quote)!=1)throw conflict("报价状态已变化，请刷新后重试");
+                if(quotes.resolveForAward(requestId,quote.getId(),status,awardAt)!=1)throw conflict("报价状态已变化，请刷新后重试");
                 logs.record(userId,false,"QUOTE",quote.getId(),status,"ACTIVE",status,null);
                 notifications.tradeChanged(quote.getCreatorId(),"QUOTE_"+status,"QUOTE",quote.getId(),requestId);
                 notifications.tradeChanged(userId,"QUOTE_"+status,"QUOTE",quote.getId(),requestId);
             }
-            lifecycle.state(request,"AWARDED",userId);conversations.linkOrder(request,order);
-            logs.record(userId,false,"ORDER",order.getId(),"CREATE",null,"PENDING_PAY",null,Map.of("occurredAt",policy.now().toString()));
+            lifecycle.state(request,"AWARDED",userId,awardAt);conversations.linkOrder(request,order);
+            logs.record(userId,false,"ORDER",order.getId(),"CREATE",null,"PENDING_PAY",null,Map.of("occurredAt",awardAt.toString()));
             notifications.tradeChanged(userId,"ORDER_CREATED","ORDER",order.getId(),requestId);
             notifications.tradeChanged(order.getCreatorId(),"ORDER_CREATED","ORDER",order.getId(),requestId);
             LOGGER.info("定标及订单快照已准备：requestId={}, quoteId={}, orderId={}",requestId,quoteId,order.getId());
-            return new Creation(view(order,userId,true),true);
+            return new Creation(view(order,userId,true,awardAt),true);
         });
     }
 

@@ -10,6 +10,8 @@
 
 现货订单双方可通过订单图片接口获取成交主图与规格图的短期签名。订单快照引用纳入作品图片回收校验。后台综合订单返回会话摘要，管理员在关联售后或评价举报内分页查阅正文和附件。 [T-029 现货快照图片与后台查证](../docs/development/tasks/T-029-stock-snapshot-evidence.md)
 
+新作品送审和新需求发布校验启用的末级品类。一级新增子类后，现有作品与需求仍按原品类和当前资格交易。定标在取得需求、报价及地址等锁后取同一个毫秒时点，到期报价返回 409。 [T-030 存量品类与定标截止](../docs/development/tasks/T-030-category-continuity-quote-deadline.md)
+
 - JDK 21；Maven Wrapper 固定 Maven 3.9.15，首次使用需联网下载。
 - Spring Boot 4.1.2，统一管理 Spring、Security、Jackson、数据库驱动及测试依赖。
 - MyBatis-Plus 3.5.18（Boot 4 starter 与分页 SQL 解析模块）、springdoc 3.2.0、阿里云 OSS SDK 3.18.5。

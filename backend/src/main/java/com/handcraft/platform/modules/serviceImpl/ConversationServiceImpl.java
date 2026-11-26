@@ -28,7 +28,14 @@ public class ConversationServiceImpl implements ConversationService {
         var initial=requests.find(requestId);policy.visible(userId,initial,false);Long creator=userId.equals(initial.getBuyerId())?initial.getInvitedCreatorId():userId;if(creator==null||creator.equals(initial.getBuyerId()))throw forbidden("公开需求由合资格创作者发起咨询，请在消息中心查看已建立的会话");
         // 已建关系优先返回，即使暂停或需求结束，也能进入历史和必要订单沟通。
         var prior=conversations.byRequest(requestId,creator);if(prior!=null){participant(userId,prior);return new Creation(view(prior,userId),false);}
-        policy.lockCategory(initial.getCategoryId());policy.lockUsers(initial.getBuyerId(),creator);var r=requests.lock(requestId);policy.visible(userId,r,false);var existing=conversations.byRequest(requestId,creator);if(existing!=null){participant(userId,existing);return new Creation(view(existing,userId),false);}policy.open(r);
+        BusinessException categoryFailure = null;
+        try { policy.lockTradingCategory(initial.getCategoryId()); }
+        catch (BusinessException failure) { categoryFailure = failure; }
+        policy.lockUsers(initial.getBuyerId(),creator);var r=requests.lock(requestId);policy.visible(userId,r,false);var existing=conversations.byRequest(requestId,creator);if(existing!=null){participant(userId,existing);return new Creation(view(existing,userId),false);}
+        // 如果等待账号锁时草稿换类并发布，重新提交以取得当前品类的锁。
+        if (!Objects.equals(initial.getCategoryId(), r.getCategoryId())) throw conflict("需求品类已变化，请刷新需求状态");
+        if (categoryFailure != null) throw categoryFailure;
+        policy.open(r);
         if("DIRECTED".equals(r.getVisibility())&&!creator.equals(r.getInvitedCreatorId()))throw missing();var buyer=policy.user(r.getBuyerId());if(buyer.isAdminBusinessPaused())throw forbidden("需求买家已暂停新业务，不能新建咨询");String reason=policy.creatorReason(users.findById(creator),r.getCategoryId());if(reason!=null)throw forbidden(reason);
         var c=new Conversation();c.setBuyerId(r.getBuyerId());c.setCreatorId(creator);c.setRequestId(requestId);c.setLastMessageAt(policy.now());c.setCreatedAt(policy.now());conversations.insert(c);var saved=conversations.find(c.getId());afterCommit(()->both(saved,Map.of("type","CONVERSATION_UPDATED","conversationId",saved.getId().toString())));LOGGER.info("会话关系已校验：requestId={}, conversationId={}",requestId,c.getId());return new Creation(view(saved,userId),true);
     });}

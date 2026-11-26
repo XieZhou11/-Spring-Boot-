@@ -14,6 +14,8 @@ Vue 3 + TypeScript + Vite 工程。前台提供作品发现、定制需求、订
 
 现货订单和关联售后详情可以查看并放大成交主图与规格图。后台订单页展示会话摘要，并在能明确定位申请时直达售后详情。售后及评价举报页可分页查阅会话，附件使用对应查证入口取得短期签名。 [T-029 现货快照图片与后台查证](../docs/development/tasks/T-029-stock-snapshot-evidence.md)
 
+从存量作品发起同类定制时，原品类已细分的，表单保留参考作品和受邀作者，并引导选择原主品类下启用的末级。编辑期间品类发生变化时，发布校验会提示重新选择并保留输入。 [T-030 存量品类与定标截止](../docs/development/tasks/T-030-category-continuity-quote-deadline.md)
+
 - Node.js 24.22.2、npm 11.19.1；`.node-version` 标记 Node 版本，`package.json` 限定 Node 24 和 npm 11。
 - Vue 3.5.45、TypeScript 5.9.3、Vite 8.3.7、Vue Router 4.6.4、Pinia 3.0.4、Axios 1.21.1、Element Plus 2.14.8。
 - Router、Pinia 已注册；Axios 已封装直连后端、Session Cookie 与 CSRF。Element Plus 的 Cascader 按需引入组件及样式，使用 `element-china-area-data` 6.1.0 的本地省市区数据。

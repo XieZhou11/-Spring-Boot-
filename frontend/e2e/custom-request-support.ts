@@ -19,14 +19,17 @@ export async function register(page: Page, codes: Map<string, string>, nickname:
   expect((await mutate(page, '/sessions', { email, password: 'CraftTest123' })).status()).toBe(201)
   return email
 }
-export async function prepareCreator(page: Page, admin: Page, codes: Map<string, string>, promote: (email: string) => Promise<void>, approve = true) {
+export async function prepareCreator(page: Page, admin: Page, codes: Map<string, string>, promote: (email: string) => Promise<void>, approve = true, withChild = true) {
   await promote(await register(admin, codes, '需求审核员'))
   const parent = await mutate(admin, '/admin/categories', { name: `器物${randomBytes(3).toString('hex')}`, enabled: true, sortOrder: 1 })
   expect(parent.status()).toBe(201)
   const parentId = (await parent.json()).data.id as string
-  const child = await mutate(admin, '/admin/categories', { name: '日用小物', parentId, enabled: true, sortOrder: 1 })
-  expect(child.status()).toBe(201)
-  const categoryId = (await child.json()).data.id as string
+  let categoryId = parentId
+  if (withChild) {
+    const child = await mutate(admin, '/admin/categories', { name: '日用小物', parentId, enabled: true, sortOrder: 1 })
+    expect(child.status()).toBe(201)
+    categoryId = (await child.json()).data.id as string
+  }
   await register(page, codes, '山间器物')
   const ids: string[] = []
   for (let i = 0; i < 6; i++) {

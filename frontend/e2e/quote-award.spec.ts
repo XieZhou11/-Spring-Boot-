@@ -4,6 +4,79 @@ import { anotherCreator, api, image, mutate, origin, prepareCreator, register } 
 
 test.use({ storageMode: 'receiver', actionTimeout: 15_000 })
 
+test('已选报价到期时定标返回冲突，刷新后仍能选择另一份有效报价', async ({ page: buyer, browser, mailbox }) => {
+  test.setTimeout(180_000)
+  const contexts = await Promise.all(Array.from({ length: 3 }, () => browser.newContext({ baseURL: origin })))
+  try {
+    const admin = await contexts[0]!.newPage()
+    const first = await contexts[1]!.newPage()
+    const second = await contexts[2]!.newPage()
+    const { categoryId, applicationId } = await prepareCreator(first, admin, mailbox.codes, mailbox.promoteAdmin)
+    const application = (await (await first.request.get(`${api}/me/creator-applications/${applicationId}`)).json()).data
+    await anotherCreator(second, admin, mailbox.codes, application.categoryIds[0])
+    await register(buyer, mailbox.codes, '到期定标买家')
+    const address = await mutate(buyer, '/me/addresses', {
+      recipientName: '到期测试收件人', phone: '13800138000', province: '北京市', city: '市辖区',
+      district: '东城区', detailAddress: '到期定标测试路一号', isDefault: true,
+    })
+    expect(address.status()).toBe(201)
+    const content = {
+      title: '两位创作者的书签方案', categoryId, purpose: '生日礼物', materialPreference: '天然原木',
+      specification: '十二厘米', budgetMin: '100.00', budgetMax: '300.00',
+      expectedShipDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+      description: '希望为朋友制作保留自然木纹的原木书签，边角打磨圆润，在木片正面刻上名字，制作前先确认文字排版。',
+      referenceImageIds: [], visibility: 'PUBLIC', invitedCreatorId: null, sourceWorkId: null,
+    }
+    const creation = await mutate(buyer, '/me/custom-requests', { ...content, requestKey: randomUUID() })
+    expect(creation.status()).toBe(201)
+    const draft = (await creation.json()).data
+    expect((await mutate(buyer, `/me/custom-requests/${draft.id}/publication`, { ...content, version: draft.version }, 'put')).status()).toBe(200)
+    const proposal = '选择颜色均匀且纹理清晰的原木，沿木纹切割并打磨圆角，先与买家确认尺寸和刻字排版，最后涂环保木蜡油。'
+    const expiredQuote = await mutate(first, `/custom-requests/${draft.id}/quotes`, {
+      requestKey: randomUUID(), goodsAmount: '150.00', durationDays: 10, proposal, additionalAgreement: '', imageIds: [],
+    })
+    expect(expiredQuote.status()).toBe(201)
+    const expiredQuoteId = (await expiredQuote.json()).data.id
+    const validQuote = await mutate(second, `/custom-requests/${draft.id}/quotes`, {
+      requestKey: randomUUID(), goodsAmount: '180.00', durationDays: 12, proposal, additionalAgreement: '', imageIds: [],
+    })
+    expect(validQuote.status()).toBe(201)
+    const validQuoteId = (await validQuote.json()).data.id
+
+    await buyer.goto(`/requests/${draft.id}/quotes`)
+    const table = buyer.getByRole('table', { name: '报价方案对比' })
+    const choose = table.getByRole('button', { name: '选择此方案', exact: true })
+    await expect(choose).toHaveCount(2)
+    await choose.first().click()
+    await expect(buyer.getByRole('region', { name: '定标确认' })).toContainText('山间器物')
+    const confirm = buyer.getByRole('button', { name: '确认定标并生成订单', exact: true })
+    await expect(confirm).toBeEnabled()
+
+    // 在浏览器已经展示有效报价后才推进截止时间，复现提交过期方案的入口。
+    await mailbox.expireQuote(expiredQuoteId)
+    const awardResponse = buyer.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === `/api/custom-requests/${draft.id}/award`)
+    await confirm.click()
+    expect((await awardResponse).status()).toBe(409)
+    await expect(buyer.getByText(/本次请求已被拒绝/)).toBeVisible()
+    await expect(choose).toHaveCount(1)
+    await expect(table).not.toContainText('山间器物')
+    await expect(buyer.locator('.quote-record')).toContainText('山间器物')
+    const rejectedOrders = await buyer.request.get(`${api}/me/orders`)
+    expect((await rejectedOrders.json()).data.total).toBe(0)
+    const rejectedNotices = await first.request.get(`${api}/me/notifications`)
+    expect((await rejectedNotices.json()).data.items.map((item: { eventType: string }) => item.eventType)).not.toContain('QUOTE_AWARDED')
+
+    await choose.click()
+    await expect(buyer.getByRole('region', { name: '定标确认' })).toContainText('木间新作')
+    await confirm.click()
+    await expect(buyer).toHaveURL(/\/orders\/\d+$/)
+    const order = await buyer.request.get(`${api}${new URL(buyer.url()).pathname}`)
+    expect((await order.json()).data).toMatchObject({ quoteId: validQuoteId, requestId: draft.id })
+    const orders = await buyer.request.get(`${api}/me/orders`)
+    expect((await orders.json()).data.total).toBe(1)
+  } finally { await Promise.all(contexts.map(context => context.close())) }
+})
+
 /** 捕获报价无法提交、撤回历史丢失、未知定标响应重复建单及取消后会话失效。 */
 test('报价撤回重报、地址定标未知响应重试、订单取消与历史沟通', async ({ page, browser, mailbox }, testInfo) => {
   test.setTimeout(240_000)
