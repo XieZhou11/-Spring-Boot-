@@ -6,6 +6,7 @@ import { getAdminRefundImage } from '@/api/refund'
 import { getAdminReviewReportImage, getReviewImage } from '@/api/review'
 import { getReportImage, getReportedCommentImage } from '@/api/report'
 import { useAuthStore } from '@/stores/auth'
+import { imageRenewalDelay } from '@/utils/imageExpiry'
 const props = defineProps<{
   imageId: string
   scope: 'request' | 'chat' | 'quote' | 'progress' | 'refund' | 'review' | 'report' | 'stock'
@@ -24,8 +25,10 @@ async function load() {
   try {
     const result = await read()
     if (current !== revision) return
+    const delay = imageRenewalDelay(result.expiresAt)
+    if (delay === undefined) throw new Error('图片有效期无法读取，请重新读取')
     url.value = result.url
-    timer = setTimeout(() => void load(), Math.max(5000, Date.parse(result.expiresAt) - Date.now() - 20_000))
+    timer = setTimeout(() => void load(), delay)
   } catch (failure) { if (current === revision) { url.value = ''; error.value = failure instanceof Error ? failure.message : '图片读取失败' } }
   finally { if (current === revision) loading.value = false }
 }

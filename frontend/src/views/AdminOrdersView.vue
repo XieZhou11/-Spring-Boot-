@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { validResourceId } from '@/router/routeFeedback'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AdminLayout from '@/layouts/AdminLayout.vue'
@@ -137,7 +138,7 @@ async function loadDetail() {
   detailError.value = ''
   detailLoading.value = false
   if (!userId || !id) return
-  if (!/^[1-9]\d{0,18}$/.test(id)) {
+  if (!validResourceId(id)) {
     detailError.value = '订单编号无效'
     return
   }

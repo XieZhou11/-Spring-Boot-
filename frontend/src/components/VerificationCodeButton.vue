@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onScopeDispose, ref, watch } from 'vue'
 import { sendVerificationCode } from '@/api/auth'
 import { normalizeEmail, validateEmail } from '@/utils/auth'
 
@@ -12,12 +12,12 @@ const emit = defineEmits<{
 }>()
 const sending = ref(false)
 const sent = ref(false)
-watch(
-  () => props.email,
-  () => {
-    sent.value = false
-  },
-)
+let generation = 0
+watch(() => normalizeEmail(props.email), () => {
+  generation++
+  sent.value = false
+}, { flush: 'sync' })
+onScopeDispose(() => generation++)
 
 /** 只有 SMTP 发送和落库成功才展示已发送，按钮锁防止重复点击。 */
 async function send() {
@@ -28,6 +28,7 @@ async function send() {
     return
   }
   const email = normalizeEmail(props.email)
+  const current = generation
   sending.value = true
   sent.value = false
   emit('sending')
@@ -35,12 +36,12 @@ async function send() {
   try {
     await sendVerificationCode(email)
     // 邮箱字段在发送期间仍可修改，避免把旧邮箱的结果显示给新邮箱。
-    if (normalizeEmail(props.email) === email) {
+    if (current === generation && normalizeEmail(props.email) === email) {
       sent.value = true
       emit('sent', email)
     }
   } catch (error) {
-    if (normalizeEmail(props.email) === email) {
+    if (current === generation && normalizeEmail(props.email) === email) {
       emit('error', error instanceof Error ? error.message : '发送失败，请稍后重试')
     }
   } finally {

@@ -6,6 +6,8 @@ import AddressRegion from '@/components/AddressRegion.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { deleteAddress, getAddresses, saveAddress, setDefaultAddress } from '@/api/account'
 import { useAuthForm } from '@/composables/useAuthForm'
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
+import { useAuthStore } from '@/stores/auth'
 import type { AddressDTO, AddressVO } from '@/types/account'
 
 const addresses = ref<AddressVO[]>([])
@@ -23,6 +25,19 @@ const editor = ref<HTMLElement>()
 const { errors, message, submitting, validate, showError } = useAuthForm()
 const blank = (): AddressDTO => ({ recipientName: '', phone: '', province: '', city: '', district: '', detailAddress: '', isDefault: false })
 const form = reactive<AddressDTO>(blank())
+const auth = useAuthStore()
+// 只比较可编辑字段，排除响应中附带的编号和时间。
+const snapshot = () => ({ recipientName: form.recipientName, phone: form.phone, province: form.province, city: form.city, district: form.district, detailAddress: form.detailAddress, isDefault: form.isDefault })
+const baseline = ref(snapshot())
+const allowDiscard = useUnsavedChanges({
+  active: () => !!auth.session && editorOpen.value,
+  busy: () => submitting.value || !!busyId.value,
+  dirty: () => JSON.stringify(snapshot()) !== JSON.stringify(baseline.value),
+})
+
+async function closeEditor() {
+  if (await allowDiscard()) editorOpen.value = false
+}
 
 async function load() {
   loading.value = true
@@ -37,10 +52,11 @@ async function load() {
 }
 
 async function edit(address?: AddressVO) {
-  if (submitting.value || busyId.value) return
+  if (submitting.value || busyId.value || !(await allowDiscard())) return
   editingId.value = address?.id
   editingDefault.value = address?.isDefault || false
   Object.assign(form, address || blank())
+  baseline.value = snapshot()
   await validate({})
   notice.value = ''
   editorOpen.value = true
@@ -56,7 +72,10 @@ async function refreshList() {
     const current = addresses.value.find((address) => address.id === editingId.value)
     if (editorOpen.value && current) {
       editingDefault.value = current.isDefault
-      if (current.isDefault) form.isDefault = true
+      if (current.isDefault) {
+        form.isDefault = true
+        baseline.value.isDefault = true
+      }
     }
   } catch {
     listError.value = '操作已保存，但列表刷新失败，请重新读取地址。'
@@ -315,7 +334,7 @@ onMounted(() => void load())
               class="button-secondary"
               type="button"
               :disabled="submitting"
-              @click="editorOpen = false"
+              @click="closeEditor"
             >
               取消
             </button>

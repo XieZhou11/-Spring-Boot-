@@ -10,11 +10,20 @@ export const requestListPaths = { mine: '/my-requests', hall: '/requests', invit
 const requestReturnPaths = [...Object.values(requestListPaths), '/creator/quotes'] as readonly string[]
 
 /** 回跳只接受现有需求列表路径，保留来源页的筛选与页码。 */
-export function requestListReturn(value: unknown): string {
-  if (typeof value !== 'string' || /[\r\n]/.test(value)) return requestListPaths.mine
+export function parseRequestListReturn(value: unknown): string | undefined {
+  if (typeof value !== 'string' || /[\r\n]/.test(value)) return
   const [path = ''] = value.split(/[?#]/, 1)
   if (requestReturnPaths.includes(path)) return value
-  return requestListPaths.mine
+}
+
+/** 订单由买家定标时只可携带其本人需求列表的来路。 */
+export function buyerRequestListReturn(value: unknown): string | undefined {
+  const source = parseRequestListReturn(value)
+  return source?.split(/[?#]/, 1)[0] === requestListPaths.mine ? source : undefined
+}
+
+export function requestListReturn(value: unknown): string {
+  return parseRequestListReturn(value) ?? requestListPaths.mine
 }
 
 /** 草稿可只有一侧预算，按已保存的金额展示。 */

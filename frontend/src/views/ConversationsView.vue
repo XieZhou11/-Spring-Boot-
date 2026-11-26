@@ -4,6 +4,7 @@ import MessageLayout from '@/layouts/MessageLayout.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { useRoute } from 'vue-router'
 import WorkPagination from '@/components/WorkPagination.vue'
+import { useListQuery } from '@/composables/useListQuery'
 import { getConversations } from '@/api/customRequest'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -15,26 +16,45 @@ const route = useRoute()
 const auth = useAuthStore()
 const notifications = useNotificationsStore()
 const rows = ref<ConversationVO[]>([])
-const page = ref(1)
+const { page, changePage, replaceLastPage } = useListQuery()
 const total = ref(0)
 const error = ref('')
 const loading = ref(false)
 let revision = 0
 let pending = false
 let disposed = false
-async function load(next = page.value) {
-  if (disposed) return
-  page.value = next
+async function load() {
+  if (disposed || !auth.session) return
+  const next = page.value
   // 在途期间收到推送只补做一次，翻页仍采用最后一次选择的页码。
   if (loading.value) { pending = true; return }
   const current = ++revision; loading.value = true; error.value = ''
-  try { const result = await getConversations(next); if (current === revision && page.value === next) { rows.value = result.items; total.value = result.total } }
+  try {
+    const result = await getConversations(next)
+    if (current !== revision || page.value !== next || replaceLastPage(result, next)) return
+    rows.value = result.items
+    total.value = result.total
+  }
   catch (failure) { if (current === revision) error.value = failure instanceof Error ? failure.message : '会话读取失败' }
   finally { if (current === revision) { loading.value = false; if (pending) { pending = false; void load() } } }
 }
 function focus() { void load(); void notifications.refreshChatUnread(); if (!notifications.connected) void notifications.reconnect() }
 function manualRefresh() { void load(); void notifications.refreshChatUnread() }
 watch(() => notifications.chatRevision, () => void load())
+watch(page, () => {
+  rows.value = []
+  total.value = 0
+  void load()
+})
+watch(() => auth.session?.userId, () => {
+  revision++
+  pending = false
+  rows.value = []
+  total.value = 0
+  error.value = ''
+  loading.value = false
+  void load()
+}, { flush: 'sync' })
 onMounted(() => { focus(); window.addEventListener('focus', focus) })
 onBeforeUnmount(() => { disposed = true; revision++; window.removeEventListener('focus', focus) })
 
@@ -111,7 +131,7 @@ function businessStatus(row: ConversationVO) {
           <RouterLink
             v-for="row in rows"
             :key="row.id"
-            :to="`/messages/conversations/${row.id}`"
+            :to="{ path: `/messages/conversations/${row.id}`, query: page > 1 ? { page: String(page) } : undefined }"
             class="conversation-row"
             active-class="selected"
           >
@@ -143,11 +163,11 @@ function businessStatus(row: ConversationVO) {
           </RouterLink>
         </div>
         <WorkPagination
-          aria-label="会话分页"
+          label="会话分页"
           :page="page"
           :total="total"
           :loading="loading"
-          @change="load"
+          @change="changePage"
         />
       </aside>
       <section

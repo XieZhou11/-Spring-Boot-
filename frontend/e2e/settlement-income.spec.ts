@@ -116,8 +116,12 @@ test('创作者与管理员按角色查询待结算、已结算与退款取消�
     await expect(admin.getByLabel('结算状态', { exact: true })).toHaveValue('PENDING')
     await expect(adminRow).toBeVisible()
     await admin.goto('/admin/orders')
+    // 等待首屏读取结束，避免按下鼠标时查询按钮仍处于禁用状态。
+    const searchOrders = admin.getByRole('button', { name: '查询订单' })
+    await expect(searchOrders).toBeEnabled()
     await admin.getByRole('spinbutton', { name: '金额至', exact: true }).fill('0')
-    await admin.getByRole('button', { name: '查询订单' }).click()
+    await searchOrders.click()
+    await expect(admin).toHaveURL(url => url.searchParams.get('maxAmount') === '0')
     await expect(admin.getByRole('heading', { name: '没有匹配订单' })).toBeVisible()
     await admin.goBack()
     await expect(adminRow).toBeVisible()
@@ -231,8 +235,8 @@ test('定向订单取消后双方可从关闭通知回到原需求和会话', as
     const { userId } = (await (await creator.request.get(`${api}/sessions/current`)).json()).data
     const order = await pendingOrder(buyer, creator, categoryId, '定向书签取消验收', userId)
     await buyer.goto(`/orders/${order.id}`)
-    buyer.once('dialog', dialog => dialog.accept())
     await buyer.getByRole('button', { name: '取消订单', exact: true }).click()
+    await buyer.getByRole('dialog').getByRole('button', { name: '确认取消订单', exact: true }).click()
     await expect(buyer.locator('.work-section-heading .work-status')).toHaveText('已取消')
 
     for (const participant of [buyer, creator]) {

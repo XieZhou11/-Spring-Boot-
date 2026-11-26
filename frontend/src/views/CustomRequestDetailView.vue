@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useActivationRead } from '@/utils/pageActivation'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import WorkLayout from '@/layouts/WorkLayout.vue'
@@ -8,28 +9,44 @@ import RequestCollection from '@/components/RequestCollection.vue'
 import RequestQuotePanel from '@/components/RequestQuotePanel.vue'
 import { closeRequest, copyRequest, deleteRequest, getCustomRequest, openConversation } from '@/api/customRequest'
 import type { CustomRequestVO } from '@/types/customRequest'
-import { requestBudget, requestListPaths, requestListReturn, requestStatus } from '@/utils/customRequest'
+import { parseRequestListReturn, requestBudget, requestListPaths, requestStatus } from '@/utils/customRequest'
 import { formatTime } from '@/utils/creator'
 import { ApiError } from '@/utils/request'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
+import { stickyHeaderOffset } from '@/router/scroll'
 import '@/assets/styles/custom-request.css'
 import '@/assets/styles/craftflow-demand.css'
 import '@/assets/styles/craftflow-publication.css'
+import { useConfirmation } from '@/composables/useConfirmation'
+
+const confirm = useConfirmation()
 const route = useRoute(); const router = useRouter(); const value = ref<CustomRequestVO>()
 const auth = useAuthStore(); const notifications = useNotificationsStore()
 const loading = ref(false); const busy = ref(false); const error = ref(''); let copyKey = crypto.randomUUID()
 const refreshVersion = ref(0)
 const quotes = ref<HTMLElement>()
-const source = computed(() => requestListReturn(route.query.returnTo))
-const sourcePath = computed(() => router.resolve(source.value).path)
-const creatorWorkspace = computed(() => sourcePath.value !== requestListPaths.mine && auth.session?.roles.includes('CREATOR'))
-const returnTo = computed(() => creatorWorkspace.value ? source.value : sourcePath.value === requestListPaths.mine ? source.value : requestListPaths.mine)
-const buyerWorkspace = computed(() => !creatorWorkspace.value && (value.value?.owned ?? (source.value === route.query.returnTo && sourcePath.value === requestListPaths.mine)))
+const source = computed(() => parseRequestListReturn(route.query.returnTo))
+const sourcePath = computed(() => source.value && router.resolve(source.value).path)
+const creator = computed(() => auth.session?.roles.includes('CREATOR'))
+/** 按服务端返回的需求关系校验来路，保留匹配列表的已应用筛选。 */
+const returnTo = computed(() => {
+  if (value.value?.owned) return sourcePath.value === requestListPaths.mine ? source.value! : requestListPaths.mine
+  if (sourcePath.value === '/creator/quotes') return source.value!
+  if (!creator.value) return requestListPaths.mine
+  if (!value.value) return source.value ?? requestListPaths.mine
+  const list = value.value.visibility === 'DIRECTED' && value.value.invitedCreatorId === auth.session?.userId
+    ? requestListPaths.invitations
+    : requestListPaths.hall
+  return sourcePath.value === list ? source.value! : list
+})
+const returnPath = computed(() => router.resolve(returnTo.value).path)
+const creatorWorkspace = computed(() => returnPath.value !== requestListPaths.mine && creator.value)
+const buyerWorkspace = computed(() => value.value?.owned ?? (sourcePath.value === requestListPaths.mine))
 const returnLabel = computed(() => {
-  if (!creatorWorkspace.value) return '我的需求'
-  if (sourcePath.value === requestListPaths.hall) return '需求大厅'
-  if (sourcePath.value === requestListPaths.invitations) return '收到的定向邀约'
+  if (returnPath.value === requestListPaths.mine) return '我的需求'
+  if (returnPath.value === requestListPaths.hall) return '需求大厅'
+  if (returnPath.value === requestListPaths.invitations) return '收到的定向邀约'
   return '我的报价'
 })
 const editorQuery = computed(() => returnTo.value === requestListPaths.mine ? {} : { returnTo: returnTo.value })
@@ -56,11 +73,18 @@ async function load() {
 }
 /** 状态写入结果未知时保留当前详情，重新读取确认；复制始终复用当前请求键。 */
 async function act(action: 'close' | 'copy' | 'chat' | 'delete') {
-  if (!value.value || busy.value) return
-  if (action === 'close' && !window.confirm('关闭后不能继续报价或在未成单会话发送消息。确定关闭？')) return
-  if (action === 'delete' && !window.confirm('确定删除此草稿？')) return
+  const request = value.value
+  const actor = auth.session?.userId
+  if (!request || busy.value) return
+  if (action === 'close' || action === 'delete') {
+    const closing = action === 'close'
+    const title = closing ? '关闭定制需求？' : '删除需求草稿？'
+    const message = closing ? '关闭后不能继续报价或在未成单会话发送消息。' : '删除后无法恢复。'
+    if (!(await confirm({ title, message: request.title + '。' + message, confirmLabel: closing ? '确认关闭' : '确认删除' }))) return
+    if (auth.session?.userId !== actor || currentRequestId() !== request.id || value.value?.version !== request.version || busy.value) return
+  }
   revision++; busy.value = true; error.value = ''
-  const expected = revision; const requestId = value.value.id; const version = value.value.version
+  const expected = revision; const requestId = request.id; const version = request.version
   const stillCurrent = () => expected === revision && requestId === currentRequestId()
   try {
     if (action === 'close') {
@@ -75,16 +99,20 @@ async function act(action: 'close' | 'copy' | 'chat' | 'delete') {
 }
 /** 提交期间合并恢复事件，完成后再核验持久化状态。 */
 function updated() { void load() }
-function visible() { if (document.visibilityState === 'visible') updated() }
 function quoteChanged() { refreshVersion.value++; void load() }
 watch([() => route.name, () => route.params.id, () => auth.session?.userId], () => { revision++; copyKey = crypto.randomUUID(); value.value = undefined; void load() }, { immediate: true })
 watch(() => notifications.connected, (connected, previous) => { if (connected && !previous) updated() })
 // 对比页可通过锚点返回，等真实需求和对应报价区挂载后再滚动。
-watch([() => route.hash, quotes], ([hash, element]) => { if (hash === '#quotes') element?.scrollIntoView() }, { flush: 'post' })
+watch([() => route.hash, quotes], ([hash, element]) => {
+  if (hash !== '#quotes' || !element) return
+  element.style.scrollMarginTop = stickyHeaderOffset() + 'px'
+  element.scrollIntoView({ block: 'start' })
+}, { flush: 'post' })
 window.addEventListener('custom-request-updated', updated)
-window.addEventListener('focus', updated)
-document.addEventListener('visibilitychange', visible)
-onBeforeUnmount(() => { revision++; window.removeEventListener('custom-request-updated', updated); window.removeEventListener('focus', updated); document.removeEventListener('visibilitychange', visible) })
+
+
+onBeforeUnmount(() => { revision++; window.removeEventListener('custom-request-updated', updated) })
+useActivationRead(() => JSON.stringify([auth.session?.userId, currentRequestId()]), load)
 </script>
 <template>
   <component

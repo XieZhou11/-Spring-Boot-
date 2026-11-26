@@ -255,14 +255,20 @@ test('服务端字段错误回显到表单；网络中断可重试', async ({ pa
   await expect(page.getByRole('button', { name: '登录', exact: true })).toBeEnabled()
 })
 
-test('登录后会话查询断网时停留登录提示，不在首页与登录页循环', async ({ page, mailbox }) => {
+test('登录后会话查询断网时可原地重试，不在首页与登录页循环', async ({ page, mailbox }) => {
   const email = newEmail()
   await registerAccount(page, email, mailbox.codes)
+  const loginUrl = page.url()
   await page.route('**/api/sessions/current', (route) => route.abort('failed'))
   await signIn(page, email)
-  await expect(page.getByRole('status')).toContainText('暂时无法连接服务')
-  await expect(page).toHaveURL(/\/login\?redirect=.*reason=connection/)
-  await expect(page.getByRole('button', { name: '登录', exact: true })).toBeEnabled()
+  await expect(page.getByRole('region', { name: '页面导航反馈' })).toContainText('暂时无法连接服务')
+  await expect(page).toHaveURL(loginUrl)
+  await page.getByRole('button', { name: '重试打开页面' }).click()
+  await expect(page.getByRole('region', { name: '页面导航反馈' })).toContainText('暂时无法连接服务')
+  await expect(page).toHaveURL(loginUrl)
+  await page.unroute('**/api/sessions/current')
+  await page.getByRole('button', { name: '重试打开页面' }).click()
+  await expect(page.getByRole('heading', { name: '作品广场', exact: true })).toBeVisible()
 })
 
 test('退出后延迟到达的旧会话响应不能恢复登录缓存', async ({ page, mailbox }) => {

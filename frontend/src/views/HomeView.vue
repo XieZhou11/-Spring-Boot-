@@ -28,12 +28,12 @@ const error = ref('')
 let revision = 0
 let disposed = false
 
-/** 以网址为已应用条件，刷新、浏览器回退和分享链接都执行相同查询。 */
-function readFilters() {
+/** 网址保存已应用条件，输入框允许保留尚未应用的修改。 */
+const applied = computed<WorkQuery>(() => {
   const string = (key: string) => typeof route.query[key] === 'string' ? route.query[key] : ''
   const page = Number(string('page'))
   const sort = string('sort')
-  Object.assign(query, {
+  return {
     page: Number.isInteger(page) && page >= 1 && page <= 1_000_000 ? page : 1,
     keyword: string('keyword'),
     categoryId: string('categoryId'),
@@ -42,8 +42,8 @@ function readFilters() {
     purchasable: string('purchasable') === 'true',
     customizable: string('customizable') === 'true',
     sort: sort === 'PRICE_ASC' || sort === 'PRICE_DESC' ? sort : 'LATEST',
-  })
-}
+  }
+})
 
 /** 后发查询优先，慢响应不得覆盖已切换的筛选与页码。 */
 async function load() {
@@ -52,7 +52,7 @@ async function load() {
   error.value = ''
   try {
     const result = await getWorks(Object.fromEntries(
-      Object.entries(query).filter(([, value]) => value !== '' && value !== false),
+      Object.entries(applied.value).filter(([, value]) => value !== '' && value !== false),
     ))
     if (current !== revision) return
     rows.value = result.items
@@ -79,9 +79,9 @@ async function loadCategories() {
 }
 
 /** 提交或换品类时从第一页开始，翻页沿用已应用的条件。 */
-function apply(page = 1) {
+function apply(page = 1, filters = query) {
   const next = Object.fromEntries(
-    Object.entries({ ...query, keyword: query.keyword?.trim(), page })
+    Object.entries({ ...filters, keyword: filters.keyword?.trim(), page })
       .filter(([, value]) => value != null && value !== '' && value !== false)
       .map(([key, value]) => [key, String(value)]),
   )
@@ -96,12 +96,11 @@ function selectCategory(id: string) {
 }
 
 function changePage(page: number) {
-  readFilters()
-  apply(page)
+  apply(page, applied.value)
 }
 
-watch(() => route.query, () => {
-  readFilters()
+watch(applied, filters => {
+  Object.assign(query, filters)
   void load()
 }, { immediate: true })
 onMounted(loadCategories)
@@ -260,6 +259,7 @@ onBeforeUnmount(() => {
         class="cf-work-results"
         aria-label="搜索结果"
         :aria-busy="loading"
+        :data-scroll-route="!loading && !loadingCategories ? route.fullPath : undefined"
       >
         <div
           v-if="error"
@@ -270,7 +270,7 @@ onBeforeUnmount(() => {
           <button
             type="button"
             class="inline-button"
-            @click="apply(query.page)"
+            @click="load"
           >
             重新读取
           </button>
@@ -304,7 +304,7 @@ onBeforeUnmount(() => {
         </template>
         <WorkPagination
           v-if="!error"
-          :page="query.page || 1"
+          :page="applied.page || 1"
           :total="total"
           :loading="loading"
           @change="changePage"

@@ -6,6 +6,8 @@ import AccountField from '@/components/AccountField.vue'
 import { getCategories, saveCategory } from '@/api/creator'
 import type { CategoryVO } from '@/types/creator'
 import { useAuthForm } from '@/composables/useAuthForm'
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
+import { useAuthStore } from '@/stores/auth'
 
 const categories = ref<CategoryVO[]>([])
 const loading = ref(true)
@@ -18,6 +20,19 @@ const sortOrder = ref('0')
 const enabled = ref(true)
 const notice = ref('')
 const { errors, message, submitting, validate, showError } = useAuthForm()
+const auth = useAuthStore()
+const editing = ref(false)
+const snapshot = () => JSON.stringify([parentId.value, name.value, sortOrder.value, enabled.value])
+const baseline = ref(snapshot())
+const allowDiscard = useUnsavedChanges({
+  active: () => !!auth.session?.roles.includes('ADMIN') && editing.value,
+  busy: () => submitting.value,
+  dirty: () => snapshot() !== baseline.value,
+})
+
+async function closeEditor() {
+  if (await allowDiscard()) editor.value?.close()
+}
 
 async function load() {
   loading.value = true
@@ -36,6 +51,8 @@ function openEditor(category?: CategoryVO, parent?: string) {
   enabled.value = category?.enabled ?? true
   message.value = ''
   Object.keys(errors).forEach(key => delete errors[key])
+  baseline.value = snapshot()
+  editing.value = true
   editor.value?.showModal()
 }
 
@@ -171,7 +188,8 @@ onMounted(() => void load())
       ref="editor"
       class="delete-dialog category-dialog"
       aria-labelledby="category-editor-title"
-      @cancel="submitting && $event.preventDefault()"
+      @cancel.prevent="closeEditor"
+      @close="editing = false"
     >
       <h2 id="category-editor-title">
         {{ editingId ? '编辑品类' : parentId ? '新增二级品类' : '新增一级品类' }}
@@ -228,7 +246,7 @@ onMounted(() => void load())
             class="button-secondary"
             type="button"
             :disabled="submitting"
-            @click="editor?.close()"
+            @click="closeEditor"
           >
             取消
           </button><button

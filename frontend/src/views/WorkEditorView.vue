@@ -13,6 +13,9 @@ import type { PublicationOrderOptionVO, PublicationQuotaVO, WorkVO } from '@/typ
 import { ApiError } from '@/utils/request'
 import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/craftflow-publication.css'
+import { useConfirmation } from '@/composables/useConfirmation'
+
+const confirm = useConfirmation()
 
 const route = useRoute()
 const router = useRouter()
@@ -101,14 +104,20 @@ function validate() {
   if (!form.specification.trim()) errors.specification = '请填写尺寸规格'
   if (form.description.trim().length < 20 || form.description.length > 2000) errors.description = '作品描述需为 20—2000 字'
   if (form.processDescription.length > 1000) errors.processDescription = '制作过程不超过 1000 字'
-  if (form.saleEnabled && !validStockPrice(form.stockPrice)) errors.stockPrice = '现货售价为 0.01—99999 元，最多两位小数'
-  if (form.customEnabled && (!Number.isInteger(form.customReferenceDays) || form.customReferenceDays! < 3 || form.customReferenceDays! > 180)) errors.customReferenceDays = '参考周期为 3—180 个自然日'
+  Object.assign(errors, tradingErrors())
   fieldErrors.value = errors
   if (Object.keys(errors).length) {
     error.value = '请检查标记的字段'
     return false
   }
   return true
+}
+/** 交易即时更新与提交审核共用交易字段规则。 */
+function tradingErrors() {
+  const errors: Record<string, string> = {}
+  if (form.saleEnabled && !validStockPrice(form.stockPrice)) errors.stockPrice = '现货售价为 0.01—99999 元，最多两位小数'
+  if (form.customEnabled && (!Number.isInteger(form.customReferenceDays) || form.customReferenceDays! < 3 || form.customReferenceDays! > 180)) errors.customReferenceDays = '参考周期为 3—180 个自然日'
+  return errors
 }
 /** 关联订单后立即关闭现货销售；已保存来源由服务端禁止解除或替换。 */
 function sourceOrderChanged() { if (form.sourceOrderId) { form.saleEnabled = false; form.stockPrice = null } }
@@ -117,9 +126,13 @@ async function persist(submit: boolean) {
   if (!creatorId.value || busy.value || uploading.value || !ready.value || loading.value || unresolved.value) return
   error.value = ''; notice.value = ''; fieldErrors.value = {}
   if (submit && !validate()) return
-  if (submit && work.value?.reviewStatus === 'ONLINE' && !window.confirm('展示内容修改将重新审核，提交后立即停止公开展示。确定提交？')) return
-  busy.value = true
   const revision = editorRevision
+  if (submit && work.value?.reviewStatus === 'ONLINE') {
+    const original = work.value
+    if (!(await confirm({ title: '重新提交作品审核？', message: '展示内容修改将重新审核，提交后立即停止公开展示。', confirmLabel: '确认提交' }))) return
+    if (revision !== editorRevision || work.value !== original || busy.value || uploading.value || unresolved.value) return
+  }
+  busy.value = true
   const fields = workContent(form)
   const isCurrent = () => revision === editorRevision
   let attemptedSubmission = false
@@ -180,9 +193,14 @@ async function reconcile() {
 async function trading() {
   if (!creatorId.value || !work.value || busy.value || uploading.value || unresolved.value) return
   const revision = editorRevision
-  const errors = fieldErrors.value
-  if (!validate()) { fieldErrors.value = Object.fromEntries(Object.entries(fieldErrors.value).filter(([key]) => ['stockPrice', 'customReferenceDays'].includes(key))); if (Object.keys(fieldErrors.value).length) return }
-  fieldErrors.value = errors; error.value = ''; notice.value = ''; busy.value = true
+  const unrelated = { ...fieldErrors.value }
+  delete unrelated.stockPrice
+  delete unrelated.customReferenceDays
+  const errors = tradingErrors()
+  fieldErrors.value = { ...unrelated, ...errors }
+  notice.value = ''
+  if (Object.keys(errors).length) { error.value = '请检查交易设置中标记的字段'; return }
+  error.value = ''; busy.value = true
   try {
     const result = await updateTrading(work.value.id, { version: work.value.version, saleEnabled: form.saleEnabled, customEnabled: form.customEnabled, stockPrice: form.saleEnabled ? form.stockPrice : null, customReferenceDays: form.customEnabled ? form.customReferenceDays : null })
     if (revision !== editorRevision) return
@@ -193,14 +211,23 @@ async function trading() {
     baseline.value = JSON.stringify(saved); notice.value = '交易设置已即时更新，作品保持上架'
   } catch (failure) {
     if (revision === editorRevision) {
+      if (failure instanceof ApiError) {
+        const received = failure.fieldErrors
+        fieldErrors.value = { ...unrelated }
+        if (received.stockPrice) fieldErrors.value.stockPrice = received.stockPrice
+        if (received.customReferenceDays) fieldErrors.value.customReferenceDays = received.customReferenceDays
+      }
       error.value = failure instanceof Error ? failure.message : '更新结果未知，请核验'
-      unresolved.value = true
+      unresolved.value = !(failure instanceof ApiError) || !failure.status || failure.status === 409 || failure.status >= 500
     }
   } finally { if (revision === editorRevision) busy.value = false }
 }
 async function withdraw() {
-  if (!creatorId.value || !work.value || busy.value || !window.confirm('确定撤回本轮审核并返回草稿？')) return
+  const original = work.value
   const revision = editorRevision
+  if (!creatorId.value || original?.reviewStatus !== 'PENDING' || busy.value) return
+  if (!(await confirm({ title: '撤回作品审核？', message: original.title + '将返回草稿状态。', confirmLabel: '确认撤回' }))) return
+  if (revision !== editorRevision || work.value !== original || busy.value) return
   busy.value = true; error.value = ''; notice.value = ''
   try {
     const preserveInput = dirty.value
@@ -223,12 +250,12 @@ onBeforeRouteLeave(to => {
   if (!creatorId.value) return true
   if (!route.params.id && work.value && to.path === `/creator/works/${work.value.id}/edit`) return true
   if (busy.value || uploading.value) return false
-  if (dirty.value) return window.confirm('还有未保存的修改，确定离开？')
+  if (dirty.value) return confirm({ title: '离开作品编辑？', message: '还有未保存的修改。', confirmLabel: '确认离开' })
 })
 onBeforeRouteUpdate((to, from) => {
   if (!creatorId.value || to.path !== '/creator/works/new' || to.query.sourceOrderId === from.query.sourceOrderId) return
   if (busy.value || uploading.value || unresolved.value) return false
-  if (dirty.value) return window.confirm('还有未保存的修改，确定切换来源？')
+  if (dirty.value) return confirm({ title: '切换作品来源？', message: '还有未保存的修改。', confirmLabel: '确认切换' })
 })
 /** 账号或来源改变时立即隐藏旧表单，同时作废此前的异步响应。 */
 watch([creatorId, linkedSource], ([userId], [previousUser]) => {

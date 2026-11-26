@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import CreatorLayout from '@/layouts/CreatorLayout.vue'
 import WorkLayout from '@/layouts/WorkLayout.vue'
 import QuoteRecord from '@/components/QuoteRecord.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
+import { useListQuery } from '@/composables/useListQuery'
 import { getMyQuotes, getQuoteQuota } from '@/api/quote'
 import type { QuoteQuotaVO, QuoteVO } from '@/types/quote'
 import { quoteStatus } from '@/utils/quote'
@@ -11,21 +13,32 @@ import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/craftflow-publication.css'
 import '@/assets/styles/custom-request.css'
 import '@/assets/styles/quote.css'
-const rows = ref<QuoteVO[]>([]); const quota = ref<QuoteQuotaVO>(); const status = ref(''); const page = ref(1); const total = ref(0); const error = ref(''); const loading = ref(false)
+const rows = ref<QuoteVO[]>([]); const quota = ref<QuoteQuotaVO>(); const total = ref(0); const error = ref(''); const loading = ref(false)
+const { page, status, changePage, changeStatus, replaceLastPage } = useListQuery(quoteStatus)
+const route = useRoute()
 const auth = useAuthStore(); const canCreateQuote = computed(() => auth.session?.roles.includes('CREATOR'))
 let revision = 0
 /** 历史报价以本人资源查询，不读取或推断其他创作者的方案。 */
-async function load(next = page.value) {
-  const current = ++revision; page.value = next; loading.value = true; error.value = ''
+async function load() {
+  if (!auth.session) return
+  const next = page.value
+  const current = ++revision; loading.value = true; error.value = ''
   try {
     const [result, limits] = await Promise.all([getMyQuotes({ status: status.value || undefined, page: next }), getQuoteQuota()])
     if (current !== revision) return
+    if (replaceLastPage(result, next)) return
     rows.value = result.items; total.value = result.total; quota.value = limits
   } catch (failure) { if (current === revision) error.value = failure instanceof Error ? failure.message : '报价读取失败' }
   finally { if (current === revision) loading.value = false }
 }
 function refresh() { void load() }
-onMounted(() => { refresh(); window.addEventListener('quote-updated', refresh); window.addEventListener('focus', refresh) })
+watch([page, status], () => { rows.value = []; total.value = 0; refresh() })
+watch(() => auth.session?.userId, () => {
+  revision++
+  rows.value = []; quota.value = undefined; total.value = 0; loading.value = false; error.value = ''
+  refresh()
+}, { immediate: true, flush: 'sync' })
+onMounted(() => { window.addEventListener('quote-updated', refresh); window.addEventListener('focus', refresh) })
 onBeforeUnmount(() => { revision++; window.removeEventListener('quote-updated', refresh); window.removeEventListener('focus', refresh) })
 </script>
 <template>
@@ -43,12 +56,12 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('quote-updated', 
       </header>
       <form
         class="request-filters"
-        @submit.prevent="load(1)"
+        @submit.prevent="load()"
       >
         <label>报价状态<select
-          v-model="status"
+          :value="status"
           aria-label="报价状态"
-          @change="load(1)"
+          @change="changeStatus"
         ><option value="">全部状态</option><option
           v-for="(label, value) in quoteStatus"
           :key="value"
@@ -86,13 +99,14 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('quote-updated', 
         :key="quote.id"
         :quote="quote"
         show-request
-        request-return-to="/creator/quotes"
+        :request-return-to="route.fullPath"
         @changed="refresh"
       /><WorkPagination
+        label="我的报价分页"
         :page="page"
         :total="total"
         :loading="loading"
-        @change="load"
+        @change="changePage"
       />
     </div>
   </component>

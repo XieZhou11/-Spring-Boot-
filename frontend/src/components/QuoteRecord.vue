@@ -5,6 +5,9 @@ import { withdrawQuote } from '@/api/quote'
 import type { QuoteVO } from '@/types/quote'
 import { quoteStatus, invalidQuoteReason } from '@/utils/quote'
 import { formatTime } from '@/utils/creator'
+import { useConfirmation } from '@/composables/useConfirmation'
+
+const confirm = useConfirmation()
 const props = defineProps<{ quote: QuoteVO; showRequest?: boolean; requestReturnTo?: string }>()
 const emit = defineEmits<{ changed: [] }>()
 const busy = ref(false); const error = ref('')
@@ -19,7 +22,10 @@ function requestDetail(hash = '') {
 }
 /** 撤回是明确的业务动作；未知响应可按同一报价重试，服务端保证幂等。 */
 async function withdraw() {
-  if (busy.value || !window.confirm('撤回后原报价失效并保留历史；重报将计入当天报价次数。确认撤回？')) return
+  const id = props.quote.id
+  if (busy.value || !props.quote.canWithdraw) return
+  if (!(await confirm({ title: '撤回报价？', message: '报价 ' + id + ' 将失效并保留历史。重报将计入当天报价次数。', confirmLabel: '确认撤回' }))) return
+  if (busy.value || props.quote.id !== id || !props.quote.canWithdraw) return
   busy.value = true; error.value = ''
   try { await withdrawQuote(props.quote.id); emit('changed') }
   catch (failure) { error.value = `${failure instanceof Error ? failure.message : '撤回失败'}。请刷新核对，或重试撤回。` }

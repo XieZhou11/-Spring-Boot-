@@ -5,6 +5,7 @@ import type { WorkVO } from '@/types/work'
 import { priceLabel } from '@/utils/work'
 import { getCreator } from '@/api/work'
 import { useAuthStore } from '@/stores/auth'
+import { imageRenewalDelay } from '@/utils/imageExpiry'
 const auth = useAuthStore()
 const props = defineProps<{ work: WorkVO; presentation?: 'public' }>()
 // 缩略图切换只影响当前展示，不改变持久化图片顺序。
@@ -25,7 +26,8 @@ async function refreshAvatar() {
 }
 function scheduleAvatar(expiresAt: string | null) {
   clearTimeout(avatarTimer)
-  if (expiresAt) avatarTimer = setTimeout(() => void refreshAvatar(), Math.max(5000, Date.parse(expiresAt) - Date.now() - 20_000))
+  const delay = imageRenewalDelay(expiresAt)
+  if (delay !== undefined) avatarTimer = setTimeout(() => void refreshAvatar(), delay)
 }
 watch(() => [props.work.creatorId, props.work.creatorAvatarUrl], () => {
   avatarRevision++

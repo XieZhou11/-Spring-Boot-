@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { usePageActivation } from '@/utils/pageActivation'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
+import { useListQuery } from '@/composables/useListQuery'
 import PrivateImage from '@/components/PrivateImage.vue'
 import PrivateImagePicker from '@/components/PrivateImagePicker.vue'
 import { getConversation, getMessages, readConversation, sendMessage } from '@/api/customRequest'
@@ -15,7 +17,11 @@ import { readConversationDraft, saveConversationDraft } from '@/utils/conversati
 import { ApiError } from '@/utils/request'
 import type { ChatMessageVO, ConversationVO } from '@/types/customRequest'
 import '@/assets/styles/custom-request.css'
+import { useConfirmation } from '@/composables/useConfirmation'
+
+const confirm = useConfirmation()
 const route = useRoute(); const notifications = useNotificationsStore(); const auth = useAuthStore()
+const { page } = useListQuery()
 const conversation = ref<ConversationVO>(); const messages = ref<ChatMessageVO[]>([]); const hasOlder = ref(false)
 const loading = ref(false); const olderLoading = ref(false); const sending = ref(false); const uploading = ref(false); const uncertain = ref(false)
 const content = ref(''); const imageIds = ref<string[]>([]); const error = ref(''); const loadError = ref(''); const readError = ref(''); const transcript = ref<HTMLElement>()
@@ -140,22 +146,22 @@ watch([() => route.params.id, () => auth.session?.userId], () => {
   if (activeDraftUserId) void refresh(true)
 }, { immediate: true })
 watch(() => route.query.progressNodeId, () => { if (conversation.value) void resolveReference() })
-function canLeave() {
+async function canLeave() {
   if (!auth.session) return true
   if (sending.value || uploading.value) return false
-  const allowed = !(content.value || imageIds.value.length || uncertain.value) || window.confirm('还有未发送或结果未确认的消息，确定离开？草稿将在本次使用期间保留。')
+  const allowed = !(content.value || imageIds.value.length || uncertain.value) || await confirm({ title: '离开会话？', message: '还有未发送或结果未确认的消息。草稿将在本次使用期间保留。', confirmLabel: '确认离开' })
   if (allowed) keepDraft()
   return allowed
 }
 onBeforeRouteLeave(canLeave)
 onBeforeRouteUpdate(to => to.params.id === route.params.id || canLeave())
-onMounted(() => { window.addEventListener('focus', focused); document.addEventListener('visibilitychange', focused) })
-onBeforeUnmount(() => { keepDraft(); disposed = true; generation++; referenceRevision++; observer?.disconnect(); clearTimeout(readTimer); window.removeEventListener('focus', focused); document.removeEventListener('visibilitychange', focused) })
+onBeforeUnmount(() => { keepDraft(); disposed = true; generation++; referenceRevision++; observer?.disconnect(); clearTimeout(readTimer) })
+usePageActivation(focused)
 </script>
 <template>
   <div class="conversation-current">
     <RouterLink
-      to="/messages/conversations"
+      :to="{ path: '/messages/conversations', query: page > 1 ? { page: String(page) } : undefined }"
       class="conversation-back"
     >← 返回会话列表</RouterLink>
     <header class="conversation-header">

@@ -121,8 +121,6 @@ test('五节点图文制作、跳过打样、补充、发货更正到买家收�
       }
       await route.fulfill({ response })
     })
-    creator.on('dialog', dialog => dialog.accept())
-    page.on('dialog', dialog => dialog.accept())
     await page.goto(`/orders/${order.id}`)
     await creator.goto(`/orders/${order.id}`)
     await creator.getByRole('button', { name: '确认开工', exact: true }).click()
@@ -208,6 +206,7 @@ test('五节点图文制作、跳过打样、补充、发货更正到买家收�
     await creator.locator('.shipment-information').evaluate(element => element.scrollIntoView({ block: 'start' }))
     await creator.screenshot({ path: testInfo.outputPath('shipped-logistics.png') })
     await page.getByRole('button', { name: '确认收货', exact: true }).click()
+    await page.getByRole('dialog').getByRole('button', { name: '确认收货', exact: true }).click()
     await expect(page.locator('.work-section-heading .work-status')).toHaveText('已完成')
     await expect(creator.locator('.work-section-heading .work-status')).toHaveText('已完成')
     await expect(creator.getByRole('button', { name: /提交打卡|追加补充|包装并发货|更正运单号/ })).toHaveCount(0)
@@ -220,6 +219,7 @@ test('五节点图文制作、跳过打样、补充、发货更正到买家收�
     const orderLink = page.getByRole('link', { name: /^关联订单/ })
     await expect(orderLink).toHaveAttribute('href', `/orders/${order.id}`)
     await orderLink.click()
+    await page.getByRole('dialog', { name: '离开会话？' }).getByRole('button', { name: '确认离开', exact: true }).click()
     await page.locator('.order-progress > li[data-node-code="SHIPPING"]').getByRole('link', { name: '讨论此进度 ↗', exact: true }).click()
     await expect(page.getByLabel('沟通内容', { exact: true })).toHaveValue('收到作品，补充保留此次交付确认。')
     await expect(page.getByRole('button', { name: '移除引用', exact: true })).toBeVisible()
@@ -255,7 +255,6 @@ test('满48小时未开工申请无责全额退款，取消待结算且会话可
     const form = page.getByRole('form', { name: '申请未开工全额退款', exact: true })
     await form.getByLabel('退款说明', { exact: true }).fill('支付已经超过四十八小时仍未确认开工，申请按平台规则全额退款。')
     await form.getByLabel('退款凭证', { exact: true }).setInputFiles({ name: 'refund.png', mimeType: 'image/png', buffer: image })
-    page.on('dialog', async dialog => { expect(dialog.message()).toContain('180.00'); await dialog.accept() })
     let failReads = false
     await page.route(`**/api/orders/${order.id}`, async route => { if (failReads) await route.abort('failed'); else await route.continue() })
     await page.route(`**/api/orders/${order.id}/no-start-refund`, async route => {
@@ -263,6 +262,9 @@ test('满48小时未开工申请无责全额退款，取消待结算且会话可
     })
     await expect(form.getByRole('button', { name: '申请未开工全额退款', exact: true })).toBeEnabled()
     await form.getByRole('button', { name: '申请未开工全额退款', exact: true }).click()
+    const refundConfirmation = page.getByRole('dialog', { name: '确认无责退款？' })
+    await expect(refundConfirmation).toContainText('180.00')
+    await refundConfirmation.getByRole('button', { name: '确认退款', exact: true }).click()
     await expect(page.getByRole('alert').filter({ hasText: '退款结果尚未确认' })).toBeVisible()
     await page.reload()
     await expect(page.getByRole('button', { name: '重试确认操作结果', exact: true })).toBeDisabled()

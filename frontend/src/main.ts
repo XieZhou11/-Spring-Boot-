@@ -6,8 +6,11 @@ import './assets/styles/main.css'
 import './assets/styles/craftflow.css'
 import { useAuthStore } from '@/stores/auth'
 import { setUnauthorizedHandler } from '@/utils/request'
+import { trackCreatorDestination } from '@/router/creatorDestination'
+import { subscribePageActivation } from '@/utils/pageActivation'
 
 const pinia = createPinia()
+trackCreatorDestination(() => useAuthStore(pinia).session?.userId)
 setUnauthorizedHandler(() => {
   useAuthStore(pinia).clearSession()
   const current = router.currentRoute.value
@@ -19,7 +22,7 @@ setUnauthorizedHandler(() => {
 })
 
 // 切回已打开的业务页面时重查凭证，感知其他设备的密码重置。
-window.addEventListener('focus', () => {
+subscribePageActivation(() => {
   if (router.currentRoute.value.meta.requiresAuth) {
     void useAuthStore(pinia)
       .restoreSession(true)

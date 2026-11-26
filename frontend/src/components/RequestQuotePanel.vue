@@ -10,6 +10,9 @@ import type { CustomRequestVO } from '@/types/customRequest'
 import type { QuoteDTO, QuoteQuotaVO, QuoteVO } from '@/types/quote'
 import { ApiError } from '@/utils/request'
 import '@/assets/styles/quote.css'
+import { useConfirmation } from '@/composables/useConfirmation'
+
+const confirm = useConfirmation()
 const props = defineProps<{ request: CustomRequestVO; returnTo?: string }>()
 const emit = defineEmits<{ changed: [] }>()
 const auth = useAuthStore(); const creator = computed(() => !props.request.owned && auth.session?.roles.includes('CREATOR'))
@@ -57,7 +60,7 @@ async function submit() {
 function canLeave() {
   if (!auth.session) return true
   if (busy.value || uploading.value) return false
-  return !dirty.value || window.confirm('还有未提交或结果未知的报价。请先核对结果；确定离开？')
+  return !dirty.value || confirm({ title: '离开报价编辑？', message: '还有未提交或结果未知的报价，请核对结果。', confirmLabel: '确认离开' })
 }
 function beforeUnload(event: BeforeUnloadEvent) { if (auth.session && (dirty.value || busy.value || uploading.value)) { event.preventDefault(); event.returnValue = '' } }
 onBeforeRouteLeave(canLeave); onBeforeRouteUpdate(canLeave)
@@ -203,6 +206,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('beforeunload', b
           :quote="quote"
           @changed="changed"
         /><WorkPagination
+          label="报价分页"
           :page="page"
           :total="total"
           :loading="loading"

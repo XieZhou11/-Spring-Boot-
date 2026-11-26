@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useActivationRead } from '@/utils/pageActivation'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getOrders } from '@/api/quote'
@@ -51,7 +52,7 @@ async function load() {
       // 刷新后列表可能缩短。回到最后一页，同时保留详情及会话锚点。
       const nextQuery = getOrderListQuery({ ...route.query, page: String(lastPage) }, side.value)
       await router.replace(viewingDetail.value
-        ? { name: 'order-detail', params: route.params, query: nextQuery, hash: route.hash }
+        ? { name: 'order-detail', params: route.params, query: { ...route.query, ...nextQuery }, hash: route.hash }
         : { path: '/orders', query: nextQuery })
     }
   } catch (failure) {
@@ -96,18 +97,18 @@ watch(() => auth.session?.userId, reset, { flush: 'sync' })
 watch(() => props.refreshVersion, () => void load())
 watch(() => notifications.connected, (connected, previous) => { if (connected && !previous) void load() })
 function refresh() { void load() }
-function visible() { if (document.visibilityState === 'visible') refresh() }
 onMounted(() => {
   window.addEventListener('order-updated', refresh)
-  window.addEventListener('focus', refresh)
-  document.addEventListener('visibilitychange', visible)
+
+
 })
 onBeforeUnmount(() => {
   revision++
   window.removeEventListener('order-updated', refresh)
-  window.removeEventListener('focus', refresh)
-  document.removeEventListener('visibilitychange', visible)
+
+
 })
+useActivationRead(() => JSON.stringify([auth.session?.userId, side.value, status.value, page.value, waitingForSide.value]), load)
 </script>
 
 <template>
@@ -258,7 +259,7 @@ onBeforeUnmount(() => {
       :total="total"
       :size="size"
       :loading="loading"
-      aria-label="订单分页"
+      label="订单分页"
       @change="nextPage"
     />
   </section>

@@ -18,6 +18,7 @@ import type { CreatorReviewVO, ReviewReportVO } from '@/types/review'
 import { formatTime } from '@/utils/creator'
 import { prepareOwnReportVerification } from '@/utils/report'
 import '@/assets/styles/craftflow-works.css'
+import { imageRenewalDelay } from '@/utils/imageExpiry'
 const route = useRoute()
 const auth = useAuthStore()
 const creator = ref<CreatorPublicVO>()
@@ -38,6 +39,7 @@ const relatedReports = ref<Record<string, ReviewReportVO[]>>({})
 const evidenceText = ref<Record<string,string>>({})
 const evidenceImages = ref<Record<string,{id:string;url:string}[]>>({})
 const reportStatus = ref<Record<string,string>>({})
+const uploadingEvidence = ref<Record<string, boolean>>({})
 const page = ref(1)
 const total = ref(0)
 const error = ref('')
@@ -57,7 +59,8 @@ async function load(next = page.value) {
     const [profile, result] = await Promise.all([getCreator(String(route.params.id)), getWorks({ creatorId: String(route.params.id), page: next })])
     if (current !== revision) return
     creator.value = profile; works.value = result.items; total.value = result.total
-    if (profile.avatarExpiresAt) timer = setTimeout(() => void load(), Math.max(5000, Date.parse(profile.avatarExpiresAt) - Date.now() - 20_000))
+    const delay = imageRenewalDelay(profile.avatarExpiresAt)
+    if (delay !== undefined) timer = setTimeout(() => void load(), delay)
   } catch (failure) { if (current === revision) { creator.value = undefined; error.value = failure instanceof Error ? failure.message : '创作者资料读取失败' } }
   finally { if (current === revision) loading.value = false }
 }
@@ -112,33 +115,42 @@ async function loadRelatedReports(reviewId: string) {
     if (current === reportRevision) reviewError.value = failure instanceof Error ? failure.message : '当前账号没有该评价举报的查询权限'
   }
 }
-async function uploadEvidenceImage(reviewId: string, event: Event) {
+async function uploadEvidenceImage(reportId: string, event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
-  const list = evidenceImages.value[reviewId] ?? []
-  if (!file || list.length >= 6) return
+  input.value = ''
+  const list = evidenceImages.value[reportId] ?? []
+  if (!file || list.length >= 6 || uploadingEvidence.value[reportId]) return
+  // 先反馈文件问题，再向服务端上传并由服务端校验实际内容。
+  if (!file.size || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+    reportStatus.value[reportId] = '请选择非空且不超过 5 MiB 的 JPEG、PNG 或 WebP 图片'
+    return
+  }
   const current = reportRevision
+  uploadingEvidence.value[reportId] = true
+  reportStatus.value[reportId] = ''
   try {
     const image = await uploadReviewImage(file)
-    if (current === reportRevision) evidenceImages.value[reviewId] = [...list, image]
+    if (current === reportRevision) evidenceImages.value[reportId] = [...list, image]
   } catch (failure) {
-    if (current === reportRevision) reportStatus.value[reviewId] = failure instanceof Error ? failure.message : '证据图片上传失败'
+    if (current === reportRevision) reportStatus.value[reportId] = failure instanceof Error ? failure.message : '证据图片上传失败'
   } finally {
-    input.value = ''
+    if (current === reportRevision) uploadingEvidence.value[reportId] = false
   }
 }
 async function submitEvidence(reviewId: string, reportId: string) {
   const current = reportRevision
-  const list = evidenceImages.value[reviewId] ?? []
+  if (uploadingEvidence.value[reportId]) return
+  const list = evidenceImages.value[reportId] ?? []
   try {
-    await addReviewReportEvidence(reportId, { content: evidenceText.value[reviewId]?.trim() ?? '', imageIds: list.map(x => x.id) })
+    await addReviewReportEvidence(reportId, { content: evidenceText.value[reportId]?.trim() ?? '', imageIds: list.map(x => x.id) })
     if (current !== reportRevision) return
-    reportStatus.value[reviewId] = '材料已提交'
-    evidenceText.value[reviewId] = ''
-    evidenceImages.value[reviewId] = []
+    reportStatus.value[reportId] = '材料已提交'
+    evidenceText.value[reportId] = ''
+    evidenceImages.value[reportId] = []
     await loadRelatedReports(reviewId)
   } catch (failure) {
-    if (current === reportRevision) reportStatus.value[reviewId] = failure instanceof Error ? failure.message : '材料提交失败'
+    if (current === reportRevision) reportStatus.value[reportId] = failure instanceof Error ? failure.message : '材料提交失败'
   }
 }
 // 主页举报入口：管理员不显示，提交后收起表单并提示。
@@ -168,6 +180,7 @@ watch([() => route.params.id, () => auth.session?.userId, () => auth.session?.ac
   evidenceText.value = {}
   evidenceImages.value = {}
   reportStatus.value = {}
+  uploadingEvidence.value = {}
   profileReportOpen.value = false
   profileReportMessage.value = ''
   creator.value = undefined
@@ -364,28 +377,29 @@ onBeforeUnmount(() => { revision++; reviewsRevision++; reportRevision++; clearTi
             <RouterLink :to="`/review-reports/${item.id}`">查看举报详情</RouterLink>
             <template v-if="(item.status === 'PENDING' && item.reporterId === auth.session?.userId) || (item.status === 'PROCESSED' && item.reporterId !== auth.session?.userId)">
               <label>{{ item.status === 'PENDING' ? '补充证据' : '处置异议' }}<textarea
-                v-model="evidenceText[review.id]"
+                v-model="evidenceText[item.id]"
                 maxlength="1000"
               /></label>
               <label>图片<input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
-                :disabled="(evidenceImages[review.id] || []).length >= 6"
-                @change="uploadEvidenceImage(review.id,$event)"
+                :disabled="uploadingEvidence[item.id] || (evidenceImages[item.id] || []).length >= 6"
+                @change="uploadEvidenceImage(item.id, $event)"
               ></label>
               <button
                 class="button-primary"
-                :disabled="!evidenceText[review.id]?.trim() && !(evidenceImages[review.id] || []).length"
+                :disabled="uploadingEvidence[item.id] || (!evidenceText[item.id]?.trim() && !(evidenceImages[item.id] || []).length)"
                 @click="submitEvidence(review.id,item.id)"
               >
                 提交材料
               </button>
             </template>
             <p
-              v-if="reportStatus[review.id]"
+              v-if="reportStatus[item.id]"
               class="field-help"
+              role="status"
             >
-              {{ reportStatus[review.id] }}
+              {{ reportStatus[item.id] }}
             </p>
           </article>
         </article>

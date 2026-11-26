@@ -2,9 +2,11 @@
 
 本目录维护开发任务与专项修复入口。业务任务按可验收的结果划分，记录需求、实现、验证和交接。
 
-CraftFlow 前端后续修复按清单中的复现步骤、通过标准与回归检查开展。开始实现时在对应业务任务引用清单条目。 [CraftFlow 前端后续问题清单](<CraftFlow 前端后续问题清单.md>)
+CraftFlow 前端后续修复按清单中的复现步骤、通过标准与回归检查开展。 [CraftFlow 前端后续问题清单](<CraftFlow 前端后续问题清单.md>)
 
 ## 当前记录
+
+[T-033 CraftFlow 前端审查问题修复](tasks/T-033-craftflow-frontend-followup.md) 覆盖布局、交互、路由的修复和逐项验收。 [测试记录](../testing/T-033-craftflow-frontend-followup.md)
 
 [T-028 现货普通售后与恢复直购](tasks/T-028-stock-refund-recovery.md) 对应后端专项审查第一批。
 

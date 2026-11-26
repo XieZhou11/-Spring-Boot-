@@ -13,6 +13,7 @@ const route = useRoute()
 const keyword = ref('')
 const leaving = ref(false)
 const error = ref('')
+const logoutButton = ref<HTMLButtonElement>()
 const admin = computed(() => !!auth.session?.roles.includes('ADMIN'))
 const creator = computed(() => !!auth.session?.roles.includes('CREATOR'))
 const discover = computed(() => admin.value ? '/discover' : '/')
@@ -38,6 +39,12 @@ async function signOut() {
   } finally {
     leaving.value = false
   }
+}
+
+/** 关闭错误后回到退出入口，方便继续键盘操作或重试。 */
+function dismissError() {
+  error.value = ''
+  logoutButton.value?.focus()
 }
 </script>
 
@@ -119,6 +126,7 @@ async function signOut() {
           <span class="account-nickname">{{ auth.session?.nickname }}</span>
         </RouterLink>
         <button
+          ref="logoutButton"
           type="button"
           class="craft-logout"
           :disabled="leaving"
@@ -129,13 +137,22 @@ async function signOut() {
           <AppIcon name="logout" />
         </button>
       </div>
-      <p
-        v-if="error"
-        class="field-error craft-header-error"
-        role="alert"
-      >
+    </div>
+    <div
+      v-if="error"
+      class="craft-header-error"
+    >
+      <p role="alert">
         {{ error }}
       </p>
+      <button
+        type="button"
+        class="inline-button"
+        aria-label="关闭退出提示"
+        @click="dismissError"
+      >
+        关闭
+      </button>
     </div>
   </header>
 </template>

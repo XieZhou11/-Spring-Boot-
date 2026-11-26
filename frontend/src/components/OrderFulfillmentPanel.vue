@@ -7,6 +7,7 @@ import type { FulfillmentAttempt } from '@/utils/orderFulfillment'
 import { fulfillmentActionName } from '@/utils/orderFulfillment'
 import { progressNodeName, progressNodeStatus } from '@/utils/quote'
 import { formatTime } from '@/utils/creator'
+import { useConfirmation } from '@/composables/useConfirmation'
 
 const props = defineProps<{ order: OrderVO; busy: boolean; blocked: boolean; pending?: FulfillmentAttempt; reset: number }>()
 const emit = defineEmits<{ submit: [attempt: FulfillmentAttempt]; uploading: [value: boolean] }>()
@@ -47,21 +48,28 @@ watch(() => props.order.serverTime, value => {
 onMounted(() => { countdownTimer = setInterval(() => { elapsed.value = Math.max(0, performance.now() - monotonicBaseline) }, 1000) })
 onBeforeUnmount(() => clearInterval(countdownTimer))
 function resetForm() { mode.value = undefined; nodeId.value = ''; content.value = ''; imageIds.value = []; skipReason.value = ''; trackingNo.value = ''; expectedTrackingNo.value = ''; validation.value = '' }
-function begin(kind: NonNullable<typeof mode.value>, node?: OrderProgressNodeVO) {
+const confirm = useConfirmation()
+async function begin(kind: NonNullable<typeof mode.value>, node?: OrderProgressNodeVO) {
+  const orderId = props.order.id
   if (disabled.value) return
-  if (mode.value && (content.value || imageIds.value.length || trackingNo.value || skipReason.value) && !window.confirm('切换操作会清空尚未提交的输入，确认继续？')) return
+  if (mode.value && (content.value || imageIds.value.length || trackingNo.value || skipReason.value)
+    && !(await confirm({ title: '切换履约操作？', message: '未提交的输入将清空。', confirmLabel: '确认切换' }))) return
+  if (disabled.value || props.order.id !== orderId) return
   resetForm(); mode.value = kind; nodeId.value = node?.id || ''; expectedTrackingNo.value = props.order.trackingNo || ''
   void nextTick(() => { editor.value?.scrollIntoView({ block: 'nearest' }); editor.value?.querySelector<HTMLElement>('textarea, input')?.focus({ preventScroll: true }) })
 }
 function uploadState(value: boolean) { uploading.value = value; emit('uploading', value) }
 /** 首次图文、跳过、补充和发货分别校验，包装发货绝不拆成两次提交。 */
-function submit() {
+async function submit() {
   if (disabled.value || !mode.value) return
   validation.value = ''; const text = content.value.trim(); const images = [...imageIds.value]
   if (mode.value === 'refund') {
     if (!props.order.canRequestNoStartRefund) { validation.value = '退款资格已变化，请刷新订单核对'; return }
     if (text.length < 20 || text.length > 500 || images.length > 3) { validation.value = '退款说明需20—500字，凭证最多3张'; return }
-    if (!window.confirm(`退款成功将退还全部实付金额 ¥ ${props.order.paidAmount}、终止履约并取消待结算，确认继续？`)) return
+    const orderId = props.order.id
+    const message = `订单 ${props.order.orderNo} 将退还全部实付金额 ¥ ${props.order.paidAmount}、终止履约并取消待结算。`
+    if (!(await confirm({ title: '确认无责退款？', message, confirmLabel: '确认退款' }))) return
+    if (disabled.value || props.order.id !== orderId || mode.value !== 'refund' || !props.order.canRequestNoStartRefund) return
     emit('submit', { kind: 'refund', input: { description: text, imageIds: images } }); return
   }
   const tracking = trackingNo.value.trim()
@@ -88,9 +96,12 @@ function submit() {
   else if (mode.value === 'shipment') emit('submit', { kind: 'shipment', nodeId: node.id, input: { ...input, trackingNo: tracking } })
   else emit('submit', { kind: mode.value, nodeId: node.id, input })
 }
-function natural(kind: 'start' | 'receipt') {
-  if (disabled.value || !(kind === 'start' ? props.order.canStart : props.order.canConfirmReceipt)) return
-  if (kind === 'receipt' && !window.confirm('确认已经收到此订单的成品？确认后订单完成，制作节点将只读。')) return
+async function natural(kind: 'start' | 'receipt') {
+  const orderId = props.order.id
+  const allowed = () => !disabled.value && (kind === 'start' ? props.order.canStart : props.order.canConfirmReceipt)
+  if (!allowed()) return
+  if (kind === 'receipt' && !(await confirm({ title: '确认收到成品？', message: `订单 ${props.order.orderNo} 将完成，制作节点将只读。`, confirmLabel: '确认收货' }))) return
+  if (props.order.id !== orderId || !allowed()) return
   emit('submit', { kind })
 }
 function deviation(node: OrderProgressNodeVO) {

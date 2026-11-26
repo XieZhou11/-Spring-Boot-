@@ -40,8 +40,17 @@ export const useAuthStore = defineStore('auth', () => {
         const current = await api.getCurrentSession()
         // 登录、退出或重置期间到达的旧请求，不得覆盖之后的身份。
         if (startedRevision !== revision) return session.value
-        // 其他标签页换号或撤销后台资格后，不保留旧账号的售后意见与待确认输入。
-        if (session.value && (session.value.userId !== current.userId || (session.value.roles.includes('ADMIN') && !current.roles.includes('ADMIN')))) clearUserRefundState(session.value.userId)
+        const previous = session.value
+        if (previous?.userId !== current.userId) {
+          // 其他标签页换号后，旧请求的迟到响应不应清除新身份。
+          advanceRevision()
+          clearUserPaymentAttempts(previous?.userId)
+          clearUserFulfillmentAttempts(previous?.userId)
+          clearUserConversationDrafts(previous?.userId)
+          clearUserRefundState(previous?.userId)
+        } else if (previous.roles.includes('ADMIN') && !current.roles.includes('ADMIN')) {
+          clearUserRefundState(previous.userId)
+        }
         session.value = current
         initialized = true
         return session.value

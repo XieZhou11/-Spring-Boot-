@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { validResourceId } from '@/router/routeFeedback'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import WorkLayout from '@/layouts/WorkLayout.vue'
@@ -14,6 +15,9 @@ import { ApiError } from '@/utils/request'
 import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/custom-request.css'
 import '@/assets/styles/craftflow-demand.css'
+import { useConfirmation } from '@/composables/useConfirmation'
+
+const confirm = useConfirmation()
 
 const route = useRoute(); const router = useRouter(); const auth = useAuthStore()
 const form = reactive(requestContent()); const current = ref<CustomRequestVO>(); const quota = ref<RequestQuotaVO>()
@@ -86,6 +90,8 @@ async function initialize() {
   const { sourceWorkId, creatorId } = route.query
   loading.value = true; error.value = ''
   try {
+    if (!draftId && [sourceWorkId, creatorId].some(id => id !== undefined && !validResourceId(id)))
+      throw new Error('来源作品或创作者编号无效')
     const [available, limits] = await Promise.all([getCategories(), getRequestQuota()])
     if (revision !== initializationRevision) return
     let draft: CustomRequestVO | undefined
@@ -204,12 +210,12 @@ onBeforeRouteLeave(to => {
   if (!auth.session) return true
   if (current.value && (to.path === `/requests/${current.value.id}` || to.path === `/my-requests/${current.value.id}/edit`) && !dirty.value) return true
   if (busy.value || uploading.value) return false
-  return !dirty.value || window.confirm('还有未保存的修改，确定离开？')
+  return !dirty.value || confirm({ title: '离开需求编辑？', message: '还有未保存的修改。', confirmLabel: '确认离开' })
 })
 onBeforeRouteUpdate(to => {
   if (current.value && to.params.id === current.value.id) return true
   if (busy.value || uploading.value || loading.value) return false
-  return !dirty.value || window.confirm('还有未保存的修改，确定切换需求？')
+  return !dirty.value || confirm({ title: '切换需求？', message: '还有未保存的修改。', confirmLabel: '确认切换' })
 })
 // 同一编辑组件切换需求时重新加载；首次保存替换URL则保留当前已核验结果。
 watch(() => route.fullPath, () => {

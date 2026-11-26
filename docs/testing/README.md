@@ -1,5 +1,7 @@
 # 测试结果记录
 
+CraftFlow 前端审查后的 22 项修复和 11 项回归证据见 [T-033 测试记录](T-033-craftflow-frontend-followup.md)。
+
 CraftFlow 第 7 批全站联验、新版切换、V1.5 UC-01 至 UC-40 证据及遗留项见 [T-027 测试记录](T-027-craftflow-cutover.md)。
 
 当前开发分支的正面业务主流程、演示结论及 [T-012](../development/tasks/T-012-demo-feedback.md) 反馈修复复测见 [主流程演示检查报告](demo-main-flow.md)（2026-11-19，跳过登录注册专项，保留演示数据）。

@@ -2,6 +2,7 @@
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { getCommentImage } from '@/api/interaction'
 import { useAuthStore } from '@/stores/auth'
+import { imageRenewalDelay } from '@/utils/imageExpiry'
 import type { ImageVO } from '@/types/creator'
 const props = defineProps<{ image: ImageVO; label: string }>()
 const auth = useAuthStore()
@@ -15,8 +16,10 @@ async function load(initial = false) {
   try {
     const image = initial && Date.parse(props.image.expiresAt) > Date.now() + 25_000 ? props.image : await getCommentImage(props.image.id)
     if (current !== revision) return
+    const delay = imageRenewalDelay(image.expiresAt)
+    if (delay === undefined) throw new Error('图片有效期无法读取，请重新读取')
     url.value = image.url
-    timer = setTimeout(() => void load(), Math.max(5000, Date.parse(image.expiresAt) - Date.now() - 20_000))
+    timer = setTimeout(() => void load(), delay)
   } catch { if (current === revision) { url.value = ''; failed.value = true } }
 }
 // 只响应图片及身份值变化，避免同账号会话回读打断在途图片读取。

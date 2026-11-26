@@ -6,6 +6,7 @@ import AccountField from '@/components/AccountField.vue'
 import { getApplication, reviewApplication } from '@/api/creator'
 import type { ApplicationVO } from '@/types/creator'
 import { useAuthForm } from '@/composables/useAuthForm'
+import { useConfirmation } from '@/composables/useConfirmation'
 import { ApiError } from '@/utils/request'
 import { useAuthStore } from '@/stores/auth'
 
@@ -14,6 +15,8 @@ const route = useRoute()
 const auth = useAuthStore()
 const application = ref<ApplicationVO | null>(null)
 const previous = ref<ApplicationVO | null>(null)
+const comparisonLoading = ref(false)
+const confirm = useConfirmation()
 const loading = ref(true)
 const loadError = ref('')
 const comparisonError = ref('')
@@ -24,64 +27,98 @@ const notice = ref('')
 const { errors, message, submitting, validate, showError } = useAuthForm()
 let revision = 0
 
+const comparisonPending = () => comparisonLoading.value || !!comparisonError.value
+
+/** 单独重试历史材料，保留当前申请、意见及阅读位置。 */
+async function loadPrevious() {
+  const id = application.value?.previousApplicationId
+  const current = revision
+  if (!id || comparisonLoading.value || submitting.value) return
+  comparisonLoading.value = true
+  comparisonError.value = ''
+  try {
+    const result = await getApplication(id, true)
+    if (current === revision) previous.value = result
+  } catch (failure) {
+    if (current === revision) comparisonError.value = failure instanceof Error ? failure.message : '历史材料读取失败'
+  } finally {
+    if (current === revision) comparisonLoading.value = false
+  }
+}
+
 async function load() {
   const current = ++revision
   loading.value = true
   loadError.value = ''
   comparisonError.value = ''
+  comparisonLoading.value = false
   previous.value = null
   application.value = null
   try {
     const result = await getApplication(String(route.params.id), true)
     if (current !== revision) return
     application.value = result
-    if (result.previousApplicationId) {
-      try {
-        const previousResult = await getApplication(result.previousApplicationId, true)
-        if (current === revision) previous.value = previousResult
-      }
-      catch (failure) { if (current === revision) comparisonError.value = failure instanceof Error ? failure.message : '上次材料读取失败，请重新读取后审核' }
-    }
+    void loadPrevious()
   } catch (failure) { if (current === revision) loadError.value = failure instanceof Error ? failure.message : '申请读取失败' }
   finally { if (current === revision) loading.value = false }
 }
 
 async function prepareReview(value: 'APPROVED' | 'REJECTED') {
-  if (submitting.value || loading.value || !application.value) return
+  const current = revision
+  if (submitting.value || loading.value || comparisonPending() || application.value?.status !== 'PENDING' || !auth.session?.roles.includes('ADMIN')) return
   if (!(await validate({ reason: value === 'REJECTED' && !reason.value.trim() ? '驳回时请说明具体原因及需补正的材料' : '' }))) return
+  if (current !== revision || !auth.session?.roles.includes('ADMIN')) return
   decision.value = value
   confirmation.value?.showModal()
 }
 
 /** 审核响应未知时查询权威结论，冲突或他人抢先处理后禁止继续使用旧状态。 */
 async function review() {
-  if (!application.value || submitting.value) return
+  if (application.value?.status !== 'PENDING' || submitting.value || loading.value || comparisonPending() || !auth.session?.roles.includes('ADMIN')) return
+  const id = application.value.id
+  const current = revision
   submitting.value = true
   message.value = ''
   try {
-    application.value = await reviewApplication(application.value.id, decision.value, reason.value.trim())
+    const result = await reviewApplication(id, decision.value, reason.value.trim())
+    if (current !== revision) return
+    application.value = result
     confirmation.value?.close()
     reason.value = ''
     notice.value = '审核结论已保存，系统通知已生成。'
   } catch (failure) {
+    if (current !== revision) return
     showError(failure)
     if (failure instanceof ApiError && (failure.status === 409 || failure.status === 0 || failure.status >= 500)) {
       try {
-        const latest = await getApplication(application.value.id, true)
+        const latest = await getApplication(id, true)
+        if (current !== revision) return
         application.value = latest
         if (latest.status !== 'PENDING') {
           confirmation.value?.close()
           notice.value = '已重新查询最新结论，请以下方服务端记录为准。'
         } else message.value = '尚未保存审核结论，可保留当前意见后重试。'
-      } catch { message.value = '暂时无法确认审核结果，请重新读取材料后核对。' }
+      } catch { if (current === revision) message.value = '暂时无法确认审核结果，请重新读取材料后核对。' }
     }
-  } finally { submitting.value = false; emit('reviewed') }
+  } finally { if (current === revision) { submitting.value = false; emit('reviewed') } }
 }
 /** 阻止提交中换材料；会话已撤销时立即离开，避免草稿确认拦住退出。 */
-function canLeave() { return !auth.session || (!submitting.value && (!reason.value.trim() || window.confirm('审核意见尚未提交，确定离开？'))) }
+function canLeave() {
+  if (!auth.session?.roles.includes('ADMIN')) return true
+  if (submitting.value) return false
+  return !reason.value.trim() || confirm({ title: '离开申请审核？', message: '审核意见尚未提交。', confirmLabel: '确认离开' })
+}
 onBeforeRouteLeave(canLeave)
 onBeforeRouteUpdate(canLeave)
-watch(() => route.params.id, () => void load(), { immediate: true })
+watch([() => route.params.id, () => auth.session?.userId, () => auth.session?.roles.includes('ADMIN')], () => {
+  reason.value = ''
+  notice.value = ''
+  message.value = ''
+  confirmation.value?.close()
+  submitting.value = false
+  if (auth.session?.roles.includes('ADMIN')) void load()
+  else { revision++; application.value = null; previous.value = null }
+}, { immediate: true })
 onBeforeUnmount(() => revision++)
 </script>
 
@@ -93,7 +130,7 @@ onBeforeUnmount(() => revision++)
     <div class="detail-toolbar">
       <button
         class="button-secondary"
-        :disabled="loading || submitting"
+        :disabled="loading || comparisonLoading || submitting"
         @click="load"
       >
         重新读取材料
@@ -120,12 +157,24 @@ onBeforeUnmount(() => revision++)
       >
         ✓ {{ notice }}
       </p><p
-        v-if="comparisonError"
+        v-if="comparisonLoading"
+        role="status"
+      >
+        正在读取上次申请 {{ application.previousApplicationId }} 的材料…
+      </p><div
+        v-else-if="comparisonError"
         class="form-alert"
         role="alert"
       >
-        无法比较上次材料：{{ comparisonError }}
-      </p><div
+        <p>无法比较上次申请 {{ application.previousApplicationId }} 的材料。{{ comparisonError }}</p>
+        <button
+          type="button"
+          class="inline-button"
+          @click="loadPrevious"
+        >
+          重试读取历史材料
+        </button>
+      </div><div
         class="review-material-scroll"
         role="region"
         aria-label="入驻审核材料"
@@ -152,13 +201,13 @@ onBeforeUnmount(() => revision++)
         /><div class="review-actions">
           <button
             class="button-secondary reject-review"
-            :disabled="submitting || !!comparisonError"
+            :disabled="submitting || comparisonPending()"
             @click="prepareReview('REJECTED')"
           >
             驳回并说明原因
           </button><button
             class="button-primary"
-            :disabled="submitting || !!comparisonError"
+            :disabled="submitting || comparisonPending()"
             @click="prepareReview('APPROVED')"
           >
             通过入驻审核 ↗

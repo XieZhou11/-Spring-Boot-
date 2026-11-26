@@ -343,6 +343,8 @@
 .cf-publication-materials :is(.work-detail-info .eyebrow, .work-creator-link small, .work-specifications dt, .work-prose p) { color: var(--craft-muted); }
 .cf-publication-materials :is(.work-price, .work-specifications dd, .work-creator-link) { color: var(--craft-ink); }
 .cf-publication-materials :is(.work-specifications, .work-specifications > div, .trade-summary, .trade-summary > div, .work-prose section) { border-color: var(--craft-border); }
+.cf-publication-materials .trade-summary { border-radius: 10px; background: var(--craft-bg); }
+.cf-publication-materials .trade-summary h2 { font-family: var(--craft-font); }
 .cf-publication-materials .work-prose { margin-top: 20px; }
 
 .cf-publication .work-history {
@@ -357,6 +359,10 @@
 .cf-publication .work-history-row header strong,
 .cf-publication .work-history-row summary { color: var(--craft-ink); }
 .cf-publication .work-history-row :is(header span, time) { color: var(--craft-muted); }
+.cf-publication .history-dot { background: var(--craft-accent); outline-color: var(--craft-bg); }
+.cf-publication .history-comparison { border-radius: 8px; background: var(--craft-bg); }
+.cf-publication .history-comparison > div { border-color: var(--craft-border); }
+.cf-publication .history-comparison strong { color: var(--craft-muted); }
 
 @media (max-width: 600px) {
   .cf-publication > .cf-publication-heading,

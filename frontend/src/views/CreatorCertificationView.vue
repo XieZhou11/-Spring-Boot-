@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useListQuery } from '@/composables/useListQuery'
+import { creatorDestination } from '@/router/creatorDestination'
+import { validResourceId } from '@/router/routeFeedback'
 import AccountLayout from '@/layouts/AccountLayout.vue'
 import AccountField from '@/components/AccountField.vue'
 import AddressRegion from '@/components/AddressRegion.vue'
@@ -8,6 +11,7 @@ import ApplicationImagePicker from '@/components/ApplicationImagePicker.vue'
 import ApplicationMaterials from '@/components/ApplicationMaterials.vue'
 import { getApplication, getApplications, getCategories, getCertification, submitApplication, withdrawApplication } from '@/api/creator'
 import { useAuthForm } from '@/composables/useAuthForm'
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { useAuthStore } from '@/stores/auth'
 import { ApiError } from '@/utils/request'
 import { applicationStatusLabels, formatTime } from '@/utils/creator'
@@ -16,11 +20,14 @@ import type { ApplicationSummaryVO, ApplicationVO, CategoryVO, CertificationVO, 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const resumeDestination = computed(() => auth.session?.roles.includes('CREATOR')
+  ? creatorDestination(router, auth.session.userId)
+  : undefined)
 const certification = ref<CertificationVO | null>(null)
 const categories = ref<CategoryVO[]>([])
 const history = ref<ApplicationSummaryVO[]>([])
 const total = ref(0)
-const page = ref(1)
+const { page, changePage, replaceLastPage } = useListQuery()
 const selected = ref<ApplicationVO | null>(null)
 const loading = ref(true)
 const loadError = ref('')
@@ -33,6 +40,17 @@ const withdrawalDialog = ref<HTMLDialogElement>()
 const withdrawing = ref(false)
 const { errors, message, submitting, validate, showError } = useAuthForm()
 const form = reactive<CreatorApplicationDTO>(emptyForm())
+const draftSnapshot = () => JSON.stringify({ ...form, requestKey: undefined, years: years.value })
+const draftBaseline = ref(draftSnapshot())
+const allowDiscard = useUnsavedChanges({
+  active: () => !!auth.session && editing.value,
+  busy: () => submitting.value || uploads.value > 0,
+  dirty: () => draftSnapshot() !== draftBaseline.value || uncertain.value,
+})
+
+async function cancelEditing() {
+  if (await allowDiscard()) editing.value = false
+}
 let disposed = false
 let loadRevision = 0
 let baselineApplicationId: string | null = null
@@ -46,24 +64,32 @@ function emptyForm(): CreatorApplicationDTO {
 }
 
 /** 编辑材料后视为新提交；未知响应重试且未编辑时保留原请求键。 */
-watch(() => JSON.stringify({ ...form, requestKey: undefined, years: years.value }), () => {
+watch(draftSnapshot, () => {
   if (!editing.value) return
   form.requestKey = crypto.randomUUID()
   uncertain.value = false
 })
 
 async function load() {
+  if (!auth.session) return
+  const requestedPage = page.value
   const current = ++loadRevision
   loading.value = true
   loadError.value = ''
   try {
-    const [state, tree, list] = await Promise.all([getCertification(), getCategories(), getApplications(page.value)])
+    const [state, tree, list] = await Promise.all([getCertification(), getCategories(), getApplications(requestedPage)])
     if (disposed || current !== loadRevision) return
+    if (replaceLastPage(list, requestedPage)) return
     certification.value = state
     categories.value = tree
     history.value = list.items
     total.value = list.total
-    const requested = typeof route.query.applicationId === 'string' ? route.query.applicationId : null
+    const requested = route.query.applicationId
+    if (requested !== undefined && !validResourceId(requested)) {
+      selected.value = null
+      loadError.value = '入驻申请编号无效'
+      return
+    }
     const id = requested || state.approvedApplicationId || state.currentApplicationId || list.items[0]?.id
     const detail = id ? await getApplication(id) : null
     if (!disposed && current === loadRevision) selected.value = detail
@@ -81,7 +107,7 @@ async function refreshState() {
 }
 
 async function viewHistory(id: string) {
-  await router.replace({ query: { applicationId: id } })
+  await router.push({ query: { ...route.query, applicationId: id } })
 }
 
 /** 重提复制材料到内存形成新申请，历史材料不被覆盖。 */
@@ -101,6 +127,7 @@ function startApplication() {
   notice.value = ''
   message.value = ''
   Object.keys(errors).forEach(key => delete errors[key])
+  draftBaseline.value = draftSnapshot()
   editing.value = true
 }
 
@@ -129,7 +156,7 @@ async function acceptApplication(application: ApplicationVO) {
   editing.value = false
   uncertain.value = false
   notice.value = '申请已提交，可在下方查看审核进度。'
-  await router.replace({ query: { applicationId: application.id } })
+  await router.replace({ query: { ...route.query, applicationId: application.id } })
   await load()
 }
 
@@ -197,13 +224,27 @@ async function withdraw() {
   } finally { withdrawing.value = false }
 }
 
-watch(() => route.query.applicationId, () => { if (!editing.value) void load() })
+watch([page, () => route.query.applicationId], () => { if (!editing.value) void load() })
+watch(() => auth.session?.userId, () => {
+  loadRevision++
+  certification.value = null
+  categories.value = []; history.value = []; total.value = 0; selected.value = null
+  loading.value = false; loadError.value = ''; notice.value = ''; uncertain.value = false
+  editing.value = false
+  Object.assign(form, emptyForm())
+  void load()
+}, { flush: 'sync' })
 onMounted(() => { void load(); window.addEventListener('creator-certification-updated', refreshState); window.addEventListener('focus', refreshState) })
 onBeforeUnmount(() => { disposed = true; loadRevision++; window.removeEventListener('creator-certification-updated', refreshState); window.removeEventListener('focus', refreshState) })
 </script>
 
 <template>
   <AccountLayout title="创作者入驻">
+    <RouterLink
+      v-if="resumeDestination && !editing"
+      class="button-secondary"
+      :to="resumeDestination"
+    >继续前往</RouterLink>
     <p
       v-if="loading && !editing"
       class="account-loading"
@@ -459,7 +500,7 @@ onBeforeUnmount(() => { disposed = true; loadRevision++; window.removeEventListe
             class="inline-button"
             type="button"
             :disabled="submitting || uploads > 0"
-            @click="editing = false"
+            @click="cancelEditing"
           >
             取消填写
           </button>
@@ -513,14 +554,14 @@ onBeforeUnmount(() => { disposed = true; loadRevision++; window.removeEventListe
           >
             <button
               class="button-secondary"
-              :disabled="page <= 1"
-              @click="page--; load()"
+              :disabled="loading || page <= 1"
+              @click="changePage(page - 1)"
             >
               上一页
             </button><span>第 {{ page }} 页 · 共 {{ total }} 条</span><button
               class="button-secondary"
-              :disabled="page * 20 >= total"
-              @click="page++; load()"
+              :disabled="loading || page * 20 >= total"
+              @click="changePage(page + 1)"
             >
               下一页
             </button>

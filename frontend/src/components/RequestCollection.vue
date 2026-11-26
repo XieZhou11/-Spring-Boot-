@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useActivationRead } from '@/utils/pageActivation'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
@@ -120,19 +121,19 @@ watch(() => props.scope, scope => {
 
 /** 收到状态变化或实时重连时重新核验服务端结果。 */
 function refresh() { void load() }
-function visible() { if (document.visibilityState === 'visible') refresh() }
 watch(() => notifications.connected, (connected, previous) => { if (connected && !previous) refresh() })
 onMounted(() => {
   window.addEventListener('custom-request-updated', refresh)
-  window.addEventListener('focus', refresh)
-  document.addEventListener('visibilitychange', visible)
+
+
 })
 onBeforeUnmount(() => {
   revision++
   window.removeEventListener('custom-request-updated', refresh)
-  window.removeEventListener('focus', refresh)
-  document.removeEventListener('visibilitychange', visible)
+
+
 })
+useActivationRead(() => JSON.stringify([auth.session?.userId, props.scope, applied.value, page.value]), load)
 </script>
 
 <template>
@@ -333,6 +334,7 @@ onBeforeUnmount(() => {
       </template>
     </div>
     <WorkPagination
+      label="需求分页"
       :page="page"
       :total="total"
       :loading="loading"

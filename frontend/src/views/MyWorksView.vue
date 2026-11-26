@@ -4,6 +4,7 @@ import CreatorLayout from '@/layouts/CreatorLayout.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import WorkImage from '@/components/WorkImage.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
+import { useListQuery } from '@/composables/useListQuery'
 import { deleteWork, getManagedWorks, getPublicationQuota, offlineWork, recoverStockAvailability, withdrawWork } from '@/api/work'
 import type { PublicationQuotaVO, StockRecoveryVO, WorkStatus, WorkVO } from '@/types/work'
 import { useAuthStore } from '@/stores/auth'
@@ -11,11 +12,13 @@ import { ApiError } from '@/utils/request'
 import { priceLabel, validStockPrice, workStatusLabels } from '@/utils/work'
 import { formatTime } from '@/utils/creator'
 import '@/assets/styles/craftflow-publication.css'
+import { useConfirmation } from '@/composables/useConfirmation'
+
+const confirm = useConfirmation()
 const auth = useAuthStore()
 const rows = ref<WorkVO[]>([])
 const quota = ref<PublicationQuotaVO>()
-const status = ref<WorkStatus | ''>('')
-const page = ref(1)
+const { page, status, changePage, selectStatus, replaceLastPage } = useListQuery<WorkStatus>(workStatusLabels)
 const total = ref(0)
 const loading = ref(false)
 const busy = ref('')
@@ -25,17 +28,14 @@ const recoveryDialog = ref<HTMLDialogElement>()
 const recovery = ref<{ work: WorkVO; source: StockRecoveryVO; price: string; confirmed: boolean }>()
 const recoveryError = ref('')
 let revision = 0
-async function load(next = page.value) {
-  const current = ++revision; page.value = next; loading.value = true; error.value = ''
+async function load() {
+  if (!auth.session?.roles.includes('CREATOR')) return
+  const next = page.value
+  const current = ++revision; loading.value = true; error.value = ''
   try {
     const [result, available] = await Promise.all([getManagedWorks({ status: status.value, page: next }), getPublicationQuota()])
     if (current !== revision) return
-    // 当前页清空后退回最后一页，避免删除或撤回后停在空页。
-    const lastPage = Math.max(1, Math.ceil(result.total / result.size))
-    if (next > lastPage) {
-      await load(lastPage)
-      return
-    }
+    if (replaceLastPage(result, next)) return
     rows.value = result.items
     total.value = result.total
     quota.value = available
@@ -103,7 +103,10 @@ async function submitRecovery() {
 /** 列表动作携带所见版本，失败时提供手动核验入口。 */
 async function action(work: WorkVO, type: 'delete' | 'withdraw' | 'offline') {
   if (busy.value) return
-  if (!window.confirm(type === 'delete' ? '确定删除这份草稿？' : type === 'withdraw' ? '撤回后可继续修改，确定撤回？' : '下架后将停止公开展示，确定下架？')) return
+  const label = type === 'delete' ? '删除' : type === 'withdraw' ? '撤回' : '下架'
+  const explanation = type === 'delete' ? '删除后无法恢复。' : type === 'withdraw' ? '撤回后可继续修改。' : '下架后停止公开展示。'
+  if (!(await confirm({ title: label + '作品？', message: work.title + '。' + explanation, confirmLabel: '确认' + label }))) return
+  if (busy.value || !rows.value.some(row => row.id === work.id && row.version === work.version)) return
   busy.value = work.id; error.value = ''; notice.value = ''
   try {
     if (type === 'delete') await deleteWork(work.id, work.version)
@@ -113,11 +116,13 @@ async function action(work: WorkVO, type: 'delete' | 'withdraw' | 'offline') {
   } catch (failure) { error.value = failure instanceof Error ? failure.message : '操作结果未知，请刷新列表核验' }
   finally { busy.value = '' }
 }
-onMounted(() => { void load(); window.addEventListener('work-updated', refresh) })
+onMounted(() => window.addEventListener('work-updated', refresh))
 function refresh() { void load() }
-watch(() => auth.session?.userId, userId => {
+watch([page, status], () => { rows.value = []; total.value = 0; refresh() })
+watch(() => auth.session?.userId, () => {
   revision++
   rows.value = []
+  total.value = 0
   quota.value = undefined
   notice.value = ''
   loading.value = false
@@ -125,8 +130,8 @@ watch(() => auth.session?.userId, userId => {
   busy.value = ''
   recovery.value = undefined
   recoveryDialog.value?.close()
-  if (userId) void load(1)
-})
+  refresh()
+}, { immediate: true, flush: 'sync' })
 onBeforeUnmount(() => { revision++; window.removeEventListener('work-updated', refresh) })
 </script>
 <template>
@@ -159,7 +164,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('work-updated', r
         <button
           type="button"
           :aria-pressed="!status"
-          @click="status = ''; load(1)"
+          @click="selectStatus('')"
         >
           全部作品
         </button>
@@ -168,7 +173,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('work-updated', r
           :key="key"
           type="button"
           :aria-pressed="status === key"
-          @click="status = key; load(1)"
+          @click="selectStatus(key)"
         >
           {{ label }}
         </button>
@@ -346,7 +351,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('work-updated', r
         :page="page"
         :total="total"
         :loading="loading"
-        @change="load"
+        @change="changePage"
       />
       <dialog
         ref="recoveryDialog"

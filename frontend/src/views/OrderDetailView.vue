@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { useActivationRead } from '@/utils/pageActivation'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import WorkLayout from '@/layouts/WorkLayout.vue'
 import OrderCollection from '@/components/OrderCollection.vue'
 import { getOrderListQuery } from '@/utils/orderList'
+import { buyerRequestListReturn } from '@/utils/customRequest'
 import QuoteImages from '@/components/QuoteImages.vue'
 import PrivateImage from '@/components/PrivateImage.vue'
 import OrderFulfillmentPanel from '@/components/OrderFulfillmentPanel.vue'
@@ -14,6 +16,7 @@ import type { OrderPaymentDTO, OrderVO } from '@/types/quote'
 import { orderReason, orderStatus, settlementStatus } from '@/utils/quote'
 import { formatTime } from '@/utils/creator'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirmation } from '@/composables/useConfirmation'
 import { useNotificationsStore } from '@/stores/notifications'
 import { ApiError } from '@/utils/request'
 import { clearPaymentAttempt, readPaymentAttempt, savePaymentAttempt } from '@/utils/orderPayment'
@@ -25,6 +28,7 @@ import '@/assets/styles/quote.css'
 import '@/assets/styles/refund.css'
 import '@/assets/styles/craftflow-order-detail.css'
 const route = useRoute(); const auth = useAuthStore(); const notifications = useNotificationsStore()
+const confirm = useConfirmation()
 const order = ref<OrderVO>(); const loading = ref(false); const cancelling = ref(false); const error = ref('')
 const paymentState = ref<'idle' | 'submitting' | 'unknown'>('idle'); const paymentError = ref(''); const confirmationOpen = ref(false); const agreed = ref(false); const retryChecked = ref(false)
 const fulfillmentState = ref<'idle' | 'submitting' | 'unknown'>('idle'); const fulfillmentAttempt = ref<FulfillmentAttempt>(); const fulfillmentError = ref(''); const fulfillmentRetryChecked = ref(false); const fulfillmentReset = ref(0); const fulfillmentUploading = ref(false)
@@ -42,6 +46,7 @@ const paymentHeading = ref<HTMLElement>()
 const paymentTrigger = ref<HTMLButtonElement>()
 const orderSide = computed(() => order.value ? (order.value.owned ? 'BUYER' : 'CREATOR') : undefined)
 const listQuery = computed(() => getOrderListQuery(route.query, orderSide.value))
+const requestReturnTo = computed(() => order.value?.owned ? buyerRequestListReturn(route.query.returnTo) : undefined)
 const baseBusy = computed(() => cancelling.value || publicationBusy.value || paymentState.value === 'submitting' || fulfillmentState.value === 'submitting' || fulfillmentUploading.value)
 const baseBlocked = computed(() => fulfillmentState.value === 'unknown' || paymentState.value === 'unknown')
 const busy = computed(() => baseBusy.value || refundBusy.value)
@@ -96,9 +101,11 @@ async function load() {
 /** 取消仅操作当前订单；响应未知可刷新或重试，不在页面提前改变状态。 */
 async function cancel() {
   const prompt = order.value?.orderType === 'STOCK' ? '确认取消未付款现货订单？取消后该成品将重新开放购买。' : '确认取消未付款订单？需求将关闭，中标与落选报价不会恢复，重新选择需发布新需求。'
-  if (!order.value?.canCancel || busy.value || fulfillmentBlocked.value || !window.confirm(prompt)) return
+  const context = currentContext()
+  if (!context.orderId || !sameContext(context) || !order.value?.canCancel || busy.value || fulfillmentBlocked.value) return
+  if (!(await confirm({ title: '取消订单？', message: `${order.value.orderNo}。${prompt}`, confirmLabel: '确认取消订单' }))) return
+  if (!sameContext(context) || !order.value?.canCancel || busy.value || fulfillmentBlocked.value) return
   // 取消开始即作废在途旧查询，避免旧待付款快照覆盖已提交的取消结果。
-  const context = currentContext(); if (!context.userId || !context.orderId) return
   const current = ++revision; loading.value = false; cancelling.value = true; error.value = ''
   try { const result = await cancelOrder(context.orderId); if (current === revision && sameContext(context)) { order.value = result; confirmationOpen.value = false } }
   catch (failure) { if (current === revision && sameContext(context)) error.value = `${failure instanceof Error ? failure.message : '取消请求失败'}。请刷新订单核对结果，再决定是否重试。` }
@@ -113,8 +120,12 @@ async function publicationAction(decision?: 'APPROVED' | 'REJECTED') {
     : decision === 'REJECTED'
       ? '确认不同意公开本次定制成品案例？'
       : '向买家申请公开本次定制成品案例？买家需要在订单页面明确回复。'
-  if (!window.confirm(prompt)) return
-  const context = currentContext(); if (!context.orderId || !sameContext(context)) return
+  const context = currentContext()
+  if (!context.orderId || !sameContext(context)) return
+  const title = decision ? '确认公开授权决定？' : '申请公开案例？'
+  if (!(await confirm({ title, message: `${order.value?.orderNo}。${prompt}`, confirmLabel: decision === 'APPROVED' ? '确认同意' : decision === 'REJECTED' ? '确认不同意' : '确认申请' }))) return
+  if (!sameContext(context) || busy.value || fulfillmentBlocked.value || publicationNeedsCheck.value
+    || !(decision ? order.value?.canRespondPublicationConsent : order.value?.canRequestPublicationConsent)) return
   const current = ++revision
   loading.value = false
   publicationBusy.value = true
@@ -249,7 +260,6 @@ function refundWriteStart() { revision++; loading.value = false }
 function refundLock(value: { busy: boolean; blocked: boolean }) { refundBusy.value = value.busy; refundBlocked.value = value.blocked; if (!value.busy) finishDeferredRefresh() }
 function finishDeferredRefresh() { if (deferredRefresh && !busy.value) { deferredRefresh = false; void load() } }
 function refresh() { void load() }
-function visible() { if (document.visibilityState === 'visible') refresh() }
 onBeforeRouteLeave(() => !auth.session || !busy.value); onBeforeRouteUpdate(() => !auth.session || !busy.value)
 watch([() => route.name, () => route.params.id, () => auth.session?.userId], () => {
   revision++; order.value = undefined; loading.value = false; cancelling.value = false; publicationBusy.value = false; deferredRefresh = false; confirmationOpen.value = false; agreed.value = false; error.value = ''; paymentError.value = ''; retryChecked.value = false; fulfillmentUploading.value = false; fulfillmentError.value = ''; fulfillmentRetryChecked.value = false; refundBusy.value = false; refundBlocked.value = false
@@ -285,8 +295,9 @@ watch([() => route.hash, () => order.value?.id, showPublication], () => {
     target.focus({ preventScroll: true })
   })
 })
-onMounted(() => { window.addEventListener('order-updated', refresh); window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', visible) })
-onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', visible) })
+onMounted(() => { window.addEventListener('order-updated', refresh) })
+onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh) })
+useActivationRead(() => JSON.stringify(currentContext()), load)
 </script>
 <template>
   <WorkLayout>
@@ -714,7 +725,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
             </div>
             <RouterLink
               v-if="order.requestId"
-              :to="'/requests/' + order.requestId"
+              :to="{ path: '/requests/' + order.requestId, query: requestReturnTo ? { returnTo: requestReturnTo } : undefined }"
             >查看原需求 ↗</RouterLink>
           </section>
 

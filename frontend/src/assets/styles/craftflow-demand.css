@@ -175,7 +175,6 @@
 .cf-request-detail-card .field-help,
 .cf-request-editor-page .field-help { color: var(--craft-muted); }
 .cf-request-detail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 16px; }
-.cf-request-main #quotes { scroll-margin-top: 76px; }
 .cf-request-detail-notes { display: grid; gap: 6px; margin-top: 14px; }
 .cf-request-detail-notes p { margin: 0; line-height: 1.55; }
 .cf-request-main :is(.form-alert, .form-success) { margin: 0; }

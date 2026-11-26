@@ -7,6 +7,7 @@ import WorkPagination from '@/components/WorkPagination.vue'
 import { useAuthStore } from '@/stores/auth'
 import { getFavorites, getFollowing, setReaction, setFollow } from '@/api/interaction'
 import type { FavoriteWork, FollowedCreator } from '@/types/interaction'
+import { imageRenewalDelay } from '@/utils/imageExpiry'
 const route = useRoute()
 const auth = useAuthStore()
 const favoritesMode = computed(() => route.path.endsWith('/favorites'))
@@ -36,8 +37,11 @@ async function load(next = page.value) {
     else following.value = result.items as FollowedCreator[]
     total.value = result.total; page.value = next
     // 列表端点重新核验失效项，避免仅续签图片而遗留失效标题。
-    const expiries = favoritesMode.value ? favorites.value.flatMap(v => v.coverImage ? [Date.parse(v.coverImage.expiresAt)] : []) : following.value.flatMap(v => v.avatarExpiresAt ? [Date.parse(v.avatarExpiresAt)] : [])
-    if (expiries.length) timer = setTimeout(() => void load(), Math.max(5000, Math.min(...expiries) - Date.now() - 20_000))
+    const expiries = favoritesMode.value
+      ? favorites.value.map(work => work.coverImage?.expiresAt)
+      : following.value.map(creator => creator.avatarExpiresAt)
+    const delay = imageRenewalDelay(...expiries)
+    if (delay !== undefined) timer = setTimeout(() => void load(), delay)
   } catch (failure) {
     if (context === revision && current === readRevision) { favorites.value = []; following.value = []; error.value = failure instanceof Error ? failure.message : '列表读取失败' }
   } finally { if (context === revision && current === readRevision) loading.value = false }
@@ -195,6 +199,7 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
         </article>
       </div>
       <WorkPagination
+        :label="favoritesMode ? '收藏作品分页' : '关注创作者分页'"
         :page="page"
         :total="total"
         :loading="loading || busy"

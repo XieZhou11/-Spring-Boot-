@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { getApplicationImage } from '@/api/creator'
+import { imageRenewalDelay } from '@/utils/imageExpiry'
 
 const props = defineProps<{ imageId: string; label: string }>()
 const url = ref('')
@@ -19,9 +20,10 @@ async function load() {
   try {
     const image = await getApplicationImage(props.imageId)
     if (disposed || current !== revision) return
+    const delay = imageRenewalDelay(image.expiresAt)
+    if (delay === undefined) throw new Error('图片有效期无法读取，请重新读取')
     url.value = image.url
-    const delay = Date.parse(image.expiresAt) - Date.now() - 20_000
-    timer = setTimeout(() => void load(), Math.min(Math.max(delay, 5000), 2_147_000_000))
+    timer = setTimeout(() => void load(), delay)
   } catch (failure) {
     if (current !== revision) return
     url.value = ''

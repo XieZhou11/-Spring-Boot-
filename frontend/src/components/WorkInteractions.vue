@@ -11,6 +11,10 @@ import ReportDialog from './ReportDialog.vue'
 import { reportWork, reportComment } from '@/api/report'
 import type { ReportInput } from '@/types/report'
 import { prepareOwnReportVerification } from '@/utils/report'
+import { imageRenewalDelay } from '@/utils/imageExpiry'
+import { useConfirmation } from '@/composables/useConfirmation'
+
+const confirm = useConfirmation()
 const props = defineProps<{ workId: string; creatorId: string; actionsTarget: HTMLElement | null }>()
 const auth = useAuthStore()
 const allowed = computed(() => !!auth.session && !auth.session.roles.includes('ADMIN'))
@@ -43,8 +47,8 @@ async function load(next = page.value) {
     stats.value = state; comments.value = result.items; page.value = next; total.value = result.total
     if (unknown.value) checked.value = true
     // 头像从原评论分页续签，权限失效时一起撤下旧正文与签名。
-    const expiry = result.items.map(c => c.avatarExpiresAt).filter((v): v is string => !!v).map(Date.parse)
-    if (expiry.length) timer = setTimeout(() => void load(), Math.max(5000, Math.min(...expiry) - Date.now() - 20_000))
+    const delay = imageRenewalDelay(...result.items.map(comment => comment.avatarExpiresAt))
+    if (delay !== undefined) timer = setTimeout(() => void load(), delay)
   } catch (failure) {
     if (context === revision && current === readRevision) { stats.value = undefined; comments.value = []; error.value = failure instanceof Error ? failure.message : '互动读取失败' }
   } finally { if (context === revision && current === readRevision) loading.value = false }
@@ -85,8 +89,10 @@ async function submit() {
   } finally { if (current === revision) busy.value = false }
 }
 async function remove(id: string) {
-  if (busy.value || !window.confirm('确定删除这条评论吗？')) return
   const current = revision
+  if (busy.value || !allowed.value) return
+  if (!(await confirm({ title: '删除评论？', message: '删除后无法恢复。', confirmLabel: '确认删除' }))) return
+  if (current !== revision || busy.value || !allowed.value || !comments.value.some(comment => comment.id === id && comment.canDelete)) return
   busy.value = true; error.value = ''
   try { await api.deleteComment(id); if (current === revision) await load(page.value > 1 && comments.value.length === 1 ? page.value - 1 : page.value) }
   catch (failure) { if (current === revision) error.value = failure instanceof Error ? failure.message : '删除失败，可刷新核对后重试' }
@@ -146,12 +152,12 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
         role="group"
         aria-label="作品互动"
       >
+        <!-- 将计数放入按钮名称，讲述人聚焦时可同时播报操作和次数。 -->
         <button
           v-if="stats"
           class="button-secondary reaction-like"
           :disabled="busy || loading"
-          :aria-label="stats.liked ? '取消点赞' : '点赞'"
-          :aria-description="'点赞数 ' + stats.likeCount"
+          :aria-label="`${stats.liked ? '取消点赞' : '点赞'} 点赞数 ${stats.likeCount}`"
           :aria-pressed="stats.liked"
           @click="reaction('like')"
         >
@@ -161,8 +167,7 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
           v-if="stats"
           class="button-secondary reaction-favorite"
           :disabled="busy || loading"
-          :aria-label="stats.favorited ? '取消收藏' : '收藏'"
-          :aria-description="'收藏数 ' + stats.favoriteCount"
+          :aria-label="`${stats.favorited ? '取消收藏' : '收藏'} 收藏数 ${stats.favoriteCount}`"
           :aria-pressed="stats.favorited"
           @click="reaction('favorite')"
         >
@@ -378,6 +383,7 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
       />
     </article>
     <WorkPagination
+      label="评论分页"
       :page="page"
       :total="total"
       :loading="loading || busy"

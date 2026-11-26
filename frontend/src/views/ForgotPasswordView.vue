@@ -14,13 +14,17 @@ const auth = useAuthStore()
 const form = reactive({ email: '', verificationCode: '', newPassword: '' })
 const { errors, message, submitting, validate, showError } = useAuthForm()
 const sentNotice = ref('')
+const sendError = ref('')
 const redirectQuery = computed(() =>
   typeof route.query.redirect === 'string' ? { redirect: route.query.redirect } : {},
 )
 watch(
-  () => form.email,
+  () => normalizeEmail(form.email),
   () => {
     sentNotice.value = ''
+    sendError.value = ''
+    form.verificationCode = ''
+    errors.verificationCode = ''
     errors.email = ''
   },
 )
@@ -28,6 +32,9 @@ watch(
 function codeSent() {
   errors.email = ''
   message.value = ''
+  sendError.value = ''
+  form.verificationCode = ''
+  errors.verificationCode = ''
   sentNotice.value = '验证码已发送，请查收最新邮件。5 分钟内有效，使用后即失效。'
 }
 
@@ -94,7 +101,7 @@ async function submit() {
           :disabled="submitting"
           @sending="sentNotice = ''"
           @invalid-email="errors.email = $event"
-          @error="message = $event"
+          @error="sendError = $event"
           @sent="codeSent"
         />
       </template>
@@ -116,11 +123,11 @@ async function submit() {
       :disabled="submitting"
     />
     <p
-      v-if="message"
+      v-if="message || sendError"
       class="craft-auth__feedback"
       role="alert"
     >
-      {{ message }}
+      {{ sendError || message }}
     </p>
     <button
       class="craft-auth__submit"

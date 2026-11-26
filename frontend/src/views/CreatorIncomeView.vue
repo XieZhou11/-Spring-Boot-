@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import CreatorLayout from '@/layouts/CreatorLayout.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
+import { useListQuery } from '@/composables/useListQuery'
 import { getMySettlements } from '@/api/income'
 import { useAuthStore } from '@/stores/auth'
 import type { CreatorSettlementVO } from '@/types/income'
@@ -12,23 +13,23 @@ import '@/assets/styles/craftflow-settlement.css'
 
 const auth = useAuthStore()
 const rows = ref<CreatorSettlementVO[]>([])
-const status = ref('')
-const page = ref(1)
+const { page, status, changePage, changeStatus, replaceLastPage } = useListQuery(settlementStatus)
 const total = ref(0)
 const error = ref('')
 const loading = ref(false)
 let revision = 0
 
 /** 收入按本人身份只读查询，退出或切换账号后丢弃旧响应。 */
-async function load(next = page.value) {
+async function load() {
   if (!auth.session) return
+  const next = page.value
   const current = ++revision
-  page.value = next
   loading.value = true
   error.value = ''
   try {
     const result = await getMySettlements({ status: status.value || undefined, page: next })
     if (current !== revision) return
+    if (replaceLastPage(result, next)) return
     rows.value = result.items
     total.value = result.total
   } catch (failure) {
@@ -40,14 +41,14 @@ async function load(next = page.value) {
 }
 
 function refresh() { void load() }
+watch([page, status], () => { rows.value = []; total.value = 0; refresh() })
 watch(() => auth.session?.userId, () => {
   revision++
   rows.value = []
   total.value = 0
   loading.value = false
-  status.value = ''
   error.value = ''
-  void load(1)
+  refresh()
 }, { immediate: true, flush: 'sync' })
 onMounted(() => window.addEventListener('focus', refresh))
 onBeforeUnmount(() => {
@@ -73,9 +74,9 @@ onBeforeUnmount(() => {
           @submit.prevent="load()"
         >
           <label>结算状态<select
-            v-model="status"
+            :value="status"
             aria-label="结算状态"
-            @change="rows = []; total = 0; load(1)"
+            @change="changeStatus"
           >
             <option value="">全部状态</option>
             <option
@@ -173,7 +174,7 @@ onBeforeUnmount(() => {
           :page="page"
           :total="total"
           :loading="loading"
-          @change="load"
+          @change="changePage"
         />
       </section>
     </section>

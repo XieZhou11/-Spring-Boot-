@@ -18,10 +18,10 @@ const notifications = useNotificationsStore()
         class="unread-badge"
       >{{ countLabel(notifications.chatUnreadCount) }}</span>
     </RouterLink>
+    <!-- 将未读数纳入名称，让讲述人聚焦当前页链接时也能播报。 -->
     <RouterLink
       to="/messages/notifications"
-      aria-label="系统通知"
-      :aria-description="notifications.unreadCount ? `${countLabel(notifications.unreadCount)} 条未读` : undefined"
+      :aria-label="notifications.unreadCount ? `系统通知 ${countLabel(notifications.unreadCount)} 条未读` : '系统通知'"
     >
       <AppIcon name="bell" />系统通知
       <span

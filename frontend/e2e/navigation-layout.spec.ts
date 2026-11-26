@@ -82,8 +82,8 @@ test('管理员默认进入独立后台，审核队列与详情同时显示且�
     await page.reload()
     await expect(page.getByRole('searchbox', { name: '搜索作品', exact: false })).toHaveValue('双栏审核')
     await page.getByLabel('审核意见', { exact: true }).fill('请补充书签的边缘处理说明。')
-    page.once('dialog', dialog => dialog.accept())
     await page.getByRole('button', { name: '驳回作品', exact: true }).click()
+    await page.getByRole('dialog').getByRole('button', { name: '确认驳回', exact: true }).click()
     await expect(page.getByRole('status')).toContainText('已驳回')
     await expect(page.locator('.review-queue .managed-work-row').filter({ hasText: content.title })).toHaveCount(0)
     await page.goBack()
@@ -111,12 +111,13 @@ for (const kind of ['作品', '入驻'] as const) {
       const path = kind === '作品' ? `/admin/works/${id}` : `/admin/creator-applications/${id}`
       await page.goto(path)
       await page.getByLabel('审核意见', { exact: true }).fill('尚未提交的核对意见')
-      page.on('dialog', dialog => dialog.dismiss())
       if (kind === '作品') {
         await page.getByRole('button', { name: '已上架', exact: true }).click()
+        await page.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click()
         await expect.soft(page.getByRole('button', { name: '待审核', exact: true })).toHaveClass(/active/)
       } else {
         await page.getByLabel('审核状态', { exact: true }).selectOption('APPROVED')
+        await page.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click()
         await expect.soft(page.getByLabel('审核状态', { exact: true })).toHaveValue('PENDING')
       }
       await expect(page).toHaveURL(path)

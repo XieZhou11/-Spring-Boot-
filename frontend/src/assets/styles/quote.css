@@ -14,8 +14,15 @@
 .quote-image-card .work-image { height: 100px; aspect-ratio: 1; border: 1px solid var(--border); }
 .quote-image-card img { object-fit: contain; }
 .quote-image-card > button { padding: 7px; cursor: zoom-in; }
-.quote-image-dialog { width: min(850px, 90vw); padding: 20px; border: 1px solid var(--border); background: #fffdf8; }
-.quote-image-dialog::backdrop { background: #182920bb; }
+.quote-image-dialog {
+  width: min(850px, 90vw);
+  padding: 20px;
+  border: 1px solid var(--craft-border);
+  border-radius: 14px;
+  color: var(--craft-ink);
+  background: var(--craft-surface);
+}
+.quote-image-dialog::backdrop { background: #18181b60; }
 .quote-image-dialog .work-image { margin-top: 15px; max-height: 75vh; }
 .quote-image-dialog img { width: 100%; max-height: 72vh; object-fit: contain; }
 .award-panel { margin-top: 28px; border: 1px solid #58735d; background: #f7f8f0; padding: 30px; }
@@ -96,7 +103,6 @@
 .quote-cell-metric { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; }
 .quote-badge { display: inline-block; padding: 3px 7px; border-radius: 999px; color: #065f46; background: #ecfdf5; font-size: 11px; white-space: nowrap; }
 .quote-badge-duration { color: #1e40af; background: #eff6ff; }
-.cf-quotes .award-panel { scroll-margin-top: 88px; }
 .cf-quotes .award-panel h2 { font: 650 19px/1.4 var(--craft-font); margin-top: 0; }
 .cf-quotes .award-panel .work-field { max-width: 590px; }
 .cf-quotes .award-panel .request-actions { justify-content: flex-start; }

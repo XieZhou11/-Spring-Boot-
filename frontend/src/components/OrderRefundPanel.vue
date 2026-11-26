@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useActivationRead } from '@/utils/pageActivation'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import PrivateImagePicker from './PrivateImagePicker.vue'
 import QuoteImages from './QuoteImages.vue'
@@ -7,6 +8,7 @@ import { addRefundEvidence, createRefund, getRefund, getRefundEvidence, getRefun
 import type { OrderVO } from '@/types/quote'
 import type { RefundApplicationVO, RefundEvidenceVO } from '@/types/refund'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirmation } from '@/composables/useConfirmation'
 import { useNotificationsStore } from '@/stores/notifications'
 import { ApiError } from '@/utils/request'
 import { clearRefundState, readRefundAttempt, readRefundDraft, refundReasons, refundStatuses, sameRefundCreation, sameRefundEvidence, saveRefundState } from '@/utils/refund'
@@ -22,6 +24,8 @@ const page = ref(1); const total = ref(0); const cursor = ref<string | null>(nul
 const loading = ref(false); const writing = ref(false); const uploading = ref(false); const error = ref(''); const notice = ref('')
 const attempt = ref<RefundAttempt>(); const checked = ref(false); const recoveryConflict = ref(false)
 const draft = ref<RefundDraft>(); let revision = 0; let deferred = false; let restoringDraft = false
+let evidenceApplicationId: string | undefined
+let expandedEvidence = false
 const disabled = computed(() => props.busy || props.blocked || writing.value || uploading.value || !!attempt.value)
 /** 资格变化后保留草稿供查看，但终态及失效申请不再允许编辑、上传或提交。 */
 const draftUnavailable = computed(() => !!draft.value && (draft.value.mode === 'create' ? !props.order.canRequestRefund : selected.value?.id !== draft.value.applicationId || !selected.value?.canSupplement))
@@ -32,12 +36,19 @@ watch([writing, uploading, attempt], () => emit('lock', { busy: writing.value ||
 function clearLocal() {
   const c = context(); if (c.userId) { clearRefundState(c.userId, c.orderId, 'attempt'); clearRefundState(c.userId, c.orderId, 'draft') }
   attempt.value = undefined; draft.value = undefined; rows.value = []; selected.value = undefined; evidence.value = []; error.value = ''; checked.value = false
+  evidenceApplicationId = undefined; expandedEvidence = false; cursor.value = null; hasMore.value = false
 }
 function storeDraft() { const c = context(); if (!restoringDraft && c.userId && draft.value) { try { saveRefundState(c.userId, c.orderId, 'draft', draft.value) } catch { /* 提交前还会强制保存；失败时绝不发送写请求。 */ } } }
 watch(draft, storeDraft, { deep: true, flush: 'sync' })
-function begin(mode: RefundDraft['mode']) {
-  if (disabled.value || (mode === 'create' ? !props.order.canRequestRefund : !selected.value?.canSupplement)) return
-  if (draft.value && (draft.value.content || draft.value.imageIds.length) && !window.confirm('切换售后操作会清空未提交输入，确认继续？')) return
+const confirm = useConfirmation()
+async function begin(mode: RefundDraft['mode']) {
+  const current = context()
+  const selection = selected.value?.id
+  const eligible = () => !disabled.value && (mode === 'create' ? props.order.canRequestRefund : selected.value?.id === selection && selected.value?.canSupplement)
+  if (!eligible()) return
+  if (draft.value && (draft.value.content || draft.value.imageIds.length)
+    && !(await confirm({ title: '切换售后操作？', message: '未提交的输入将清空。', confirmLabel: '确认切换' }))) return
+  if (!sameContext(current) || !eligible()) return
   draft.value = { mode, applicationId: mode === 'evidence' ? selected.value!.id : '', reasonCode: 'MISMATCH', content: '', imageIds: [] }; error.value = ''; notice.value = ''
 }
 function closeDraft() { if (disabled.value) return; const c = context(); draft.value = undefined; if (c.userId) clearRefundState(c.userId, c.orderId, 'draft') }
@@ -55,10 +66,14 @@ async function load() {
     if (current !== revision || !sameContext(c)) return
     selected.value = application
     if (application) {
-      const result = await getRefundEvidence(application.id)
+      const preserve = evidenceApplicationId === application.id && expandedEvidence
+      const afterId = preserve && !hasMore.value ? evidence.value.at(-1)?.id : undefined
+      const result = await getRefundEvidence(application.id, afterId ? { afterId } : {})
       if (current !== revision || !sameContext(c)) return
-      evidence.value = result.items; cursor.value = result.nextCursor; hasMore.value = result.hasMore
-    } else { evidence.value = []; cursor.value = null; hasMore.value = false }
+      if (preserve) evidence.value = [...new Map([...evidence.value, ...result.items].map(item => [item.id, item])).values()]
+      else { evidence.value = result.items; evidenceApplicationId = application.id; expandedEvidence = false }
+      if (!preserve || afterId) { cursor.value = result.nextCursor; hasMore.value = result.hasMore }
+    } else { evidence.value = []; evidenceApplicationId = undefined; expandedEvidence = false; cursor.value = null; hasMore.value = false }
     if (attempt.value) {
       const pending = attempt.value; let applied = false
       if (pending.kind === 'create') {
@@ -83,30 +98,43 @@ async function load() {
 }
 async function select(application: RefundApplicationVO) {
   if (writing.value || uploading.value || attempt.value) return
-  if (draft.value?.mode === 'evidence' && draft.value.applicationId !== application.id && !window.confirm('切换申请将关闭当前补证草稿，确认继续？')) return
+  const current = context()
+  if (draft.value?.mode === 'evidence' && draft.value.applicationId !== application.id
+    && !(await confirm({ title: '切换退款申请？', message: '当前补证草稿将关闭。', confirmLabel: '确认切换' }))) return
+  if (!sameContext(current) || writing.value || uploading.value || attempt.value) return
   if (draft.value?.mode === 'evidence') closeDraft()
   selected.value = application; await load()
 }
 async function moreEvidence() {
   if (!selected.value || loading.value || writing.value || uploading.value || !hasMore.value || !cursor.value) return
   const c = context(); const applicationId = selected.value.id; const current = revision; loading.value = true
-  try { const result = await getRefundEvidence(applicationId, { afterId: cursor.value }); if (current === revision && sameContext(c) && selected.value?.id === applicationId) { evidence.value = [...evidence.value, ...result.items.filter(item => !evidence.value.some(old => old.id === item.id))]; cursor.value = result.nextCursor; hasMore.value = result.hasMore } }
+  try { const result = await getRefundEvidence(applicationId, { afterId: cursor.value }); if (current === revision && sameContext(c) && selected.value?.id === applicationId) { evidence.value = [...evidence.value, ...result.items.filter(item => !evidence.value.some(old => old.id === item.id))]; expandedEvidence = true; cursor.value = result.nextCursor; hasMore.value = result.hasMore } }
   catch (failure) { if (current === revision) error.value = failure instanceof Error ? failure.message : '证据读取失败' }
   finally { if (current === revision) loading.value = false }
 }
-function submit() {
+async function submit() {
   if (disabled.value || !draft.value) return
+  const current = context()
   const d = draft.value; const content = d.content.trim(); error.value = ''
   if (d.mode === 'create') {
     if (!props.order.canRequestRefund || !refundReasons[d.reasonCode] || content.length < 20 || content.length > 500 || d.imageIds.length > 3) { error.value = '申请说明需20—500字，凭证最多3张，请核对当前申请资格。'; return }
-    if (!window.confirm(`确认向管理员申请订单 ${props.order.orderNo} 全额退款 ¥ ${props.order.paidAmount}？处理中暂停履约，管理员依据证据裁定。`)) return
+    const message = `订单 ${props.order.orderNo} 全额退款 ¥ ${props.order.paidAmount}。处理中暂停履约，管理员依据证据裁定。`
+    if (!(await confirm({ title: '申请全额退款？', message, confirmLabel: '确认申请' }))) return
+    if (!sameContext(current) || disabled.value || draft.value !== d || !props.order.canRequestRefund) return
     void write({ kind: 'create', input: { requestKey: crypto.randomUUID(), reasonCode: d.reasonCode, description: content, imageIds: [...d.imageIds] } })
   } else {
     if (!selected.value?.canSupplement || selected.value.id !== d.applicationId || (!content && !d.imageIds.length) || content.length > 500 || d.imageIds.length > 3) { error.value = '补证需文字或图片至少一项，最多500字及3张图片，请核对当前申请。'; return }
     void write({ kind: 'evidence', applicationId: d.applicationId, input: { requestKey: crypto.randomUUID(), content, imageIds: [...d.imageIds] } })
   }
 }
-function withdrawal() { if (!disabled.value && selected.value?.canWithdraw && window.confirm('确认撤回当前退款申请？订单恢复原履约状态，原完成时间及申请期限不会重开。')) void write({ kind: 'withdraw', applicationId: selected.value.id }) }
+async function withdrawal() {
+  const current = context()
+  const id = selected.value?.id
+  if (disabled.value || !id || !selected.value?.canWithdraw) return
+  if (!(await confirm({ title: '撤回退款申请？', message: `申请 ${id} 撤回后，订单恢复原履约状态，原完成时间及申请期限不会重开。`, confirmLabel: '确认撤回' }))) return
+  if (!sameContext(current) || disabled.value || selected.value?.id !== id || !selected.value.canWithdraw) return
+  void write({ kind: 'withdraw', applicationId: id })
+}
 /** 写前保存并废弃旧GET；未知结果只允许原参数重试，不允许另起申请、补证或履约。 */
 async function write(candidate?: RefundAttempt) {
   const c = context(); if (!c.userId || writing.value || uploading.value || props.busy || props.blocked) return
@@ -128,9 +156,8 @@ async function write(candidate?: RefundAttempt) {
 }
 function uploadState(value: boolean) { uploading.value = value; if (!value && deferred) { deferred = false; void load() } }
 function refresh() { void load() }
-function visible() { if (document.visibilityState === 'visible') refresh() }
 watch([() => props.order.id, () => auth.session?.userId], () => {
-  revision++; rows.value = []; selected.value = undefined; evidence.value = []; error.value = ''; notice.value = ''; writing.value = false; uploading.value = false; page.value = 1
+  revision++; rows.value = []; selected.value = undefined; evidence.value = []; evidenceApplicationId = undefined; expandedEvidence = false; cursor.value = null; hasMore.value = false; error.value = ''; notice.value = ''; writing.value = false; uploading.value = false; page.value = 1
   const c = context(); restoringDraft = true
   draft.value = c.userId ? readRefundDraft(c.userId, c.orderId) : undefined; attempt.value = c.userId ? readRefundAttempt(c.userId, c.orderId) : undefined
   if (attempt.value?.kind === 'create') draft.value = { mode: 'create', applicationId: '', reasonCode: attempt.value.input.reasonCode, content: attempt.value.input.description, imageIds: [...attempt.value.input.imageIds] }
@@ -139,8 +166,9 @@ watch([() => props.order.id, () => auth.session?.userId], () => {
 }, { immediate: true })
 watch(() => props.order.currentRefund?.version, refresh)
 watch(() => notifications.connected, (value, old) => { if (value && !old) refresh() })
-onMounted(() => { window.addEventListener('order-updated', refresh); window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', visible) })
-onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', visible) })
+onMounted(() => { window.addEventListener('order-updated', refresh) })
+onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh) })
+useActivationRead(() => JSON.stringify([context(), page.value]), load)
 </script>
 
 <template>
@@ -231,6 +259,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
     </nav>
     <WorkPagination
       v-if="total > 20"
+      label="售后申请分页"
       :page="page"
       :total="total"
       :loading="loading || writing || uploading || !!attempt"

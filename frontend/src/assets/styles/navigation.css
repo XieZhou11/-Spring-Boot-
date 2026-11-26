@@ -151,7 +151,7 @@
 .craft-header :is(a, button, input):focus-visible { outline: 2px solid #b45309; outline-offset: 2px; }
 .craft-header-search input:focus-visible { outline-offset: -2px; }
 
-.craft-header .field-error {
+.craft-header .session-tools .field-error {
   position: absolute;
   top: 100%;
   right: 24px;
@@ -164,6 +164,20 @@
   box-shadow: 0 3px 10px #18181b14;
   color: #991b1b;
 }
+
+.craft-header .craft-header-error {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 6px 24px 10px;
+  color: #991b1b;
+  overflow-wrap: anywhere;
+}
+
+.craft-header .craft-header-error button { flex: none; color: inherit; }
 
 @media (max-width: 1150px) {
   .craft-header-inner { flex-wrap: wrap; gap: 4px 14px; padding-top: 10px; padding-bottom: 8px; }

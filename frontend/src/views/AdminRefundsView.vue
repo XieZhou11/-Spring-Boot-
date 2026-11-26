@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useActivationRead } from '@/utils/pageActivation'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
@@ -106,7 +107,6 @@ async function load() {
   }
 }
 function refresh() { void load() }
-function visible() { if (document.visibilityState === 'visible') refresh() }
 watch([() => route.query, () => auth.session?.userId, () => auth.session?.roles.includes('ADMIN')], () => {
   revision++
   rows.value = []
@@ -118,8 +118,9 @@ watch([() => route.query, () => auth.session?.userId, () => auth.session?.roles.
   void load()
 }, { immediate: true, flush: 'sync' })
 watch(() => notifications.connected, (value, old) => { if (value && !old) refresh() })
-onMounted(() => { window.addEventListener('order-updated', refresh); window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', visible) })
-onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', visible) })
+onMounted(() => { window.addEventListener('order-updated', refresh) })
+onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh) })
+useActivationRead(() => JSON.stringify([auth.session?.userId, filters.value, page.value]), load)
 </script>
 <template>
   <AdminLayout title="售后与退款">
@@ -224,6 +225,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
           </article>
         </div>
         <WorkPagination
+          label="售后队列分页"
           :page="page"
           :total="total"
           :loading="loading"

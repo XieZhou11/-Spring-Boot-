@@ -10,10 +10,15 @@ import { awardQuote, getQuoteComparison, getRequestQuotes } from '@/api/quote'
 import type { AddressVO } from '@/types/account'
 import type { AwardDTO, QuoteComparisonVO, QuoteVO } from '@/types/quote'
 import { formatTime } from '@/utils/creator'
+import { buyerRequestListReturn, requestListPaths } from '@/utils/customRequest'
 import { ApiError } from '@/utils/request'
 import { useAuthStore } from '@/stores/auth'
+import { stickyHeaderOffset } from '@/router/scroll'
 import '@/assets/styles/custom-request.css'
 import '@/assets/styles/quote.css'
+import { useConfirmation } from '@/composables/useConfirmation'
+
+const confirm = useConfirmation()
 
 const route = useRoute(); const router = useRouter(); const auth = useAuthStore()
 const comparison = ref<QuoteComparisonVO>(); const sort = ref('AMOUNT'); const loading = ref(false); const loadError = ref('')
@@ -74,7 +79,14 @@ async function loadAddresses() {
 async function select(quote: QuoteVO) {
   if (busy.value || uncertain.value) return
   selected.value = quote; lateAccepted.value = false; error.value = ''; attempt = undefined
-  await loadAddresses(); await nextTick(); document.getElementById('award-confirmation')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  await loadAddresses()
+  await nextTick()
+  if (id() !== quote.requestId || selected.value?.id !== quote.id) return
+  const confirmation = document.getElementById('award-confirmation')
+  if (confirmation) {
+    confirmation.style.scrollMarginTop = stickyHeaderOffset() + 'px'
+    confirmation.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 }
 /** 一次确认冻结报价、地址、日期和请求键；失败后不能把新表单拼入旧请求。 */
 async function award() {
@@ -88,10 +100,14 @@ async function award() {
   // 确认开始后，先前尚未返回的刷新不能改变原方案、地址或测算日期。
   revision++; addressRevision++; loading.value = false; addressLoading.value = false
   busy.value = true; error.value = ''
+  const returnTo = buyerRequestListReturn(route.query.returnTo)
   try {
     const order = await awardQuote(requestId, attempt)
     completed = true; uncertain.value = false; attempt = undefined
-    await router.push(`/orders/${order.id}`)
+    await router.push({
+      path: `/orders/${order.id}`,
+      query: returnTo && returnTo !== requestListPaths.mine ? { returnTo } : undefined,
+    })
   } catch (failure) {
     uncertain.value = !(failure instanceof ApiError) || !failure.status || failure.status >= 500
     error.value = `${failure instanceof Error ? failure.message : '定标请求失败'}${uncertain.value ? '。定标结果未知，请重试确认定标结果；报价、地址和确认日期已锁定。也可前往我的订单核对。' : '。本次请求已被拒绝，请刷新方案和地址，核对后重新确认。'}`
@@ -103,7 +119,7 @@ function refresh() { void load(); void loadHistory() }
 function canLeave() {
   if (completed || !auth.session) return true
   if (busy.value) return false
-  return !uncertain.value || window.confirm('定标结果仍未知，离开后请到我的订单核对结果。确定离开？')
+  return !uncertain.value || confirm({ title: '离开报价对比？', message: '定标结果仍未知，离开后请到我的订单核对结果。', confirmLabel: '确认离开' })
 }
 function beforeUnload(event: BeforeUnloadEvent) { if (auth.session && (busy.value || uncertain.value)) { event.preventDefault(); event.returnValue = '' } }
 onBeforeRouteLeave(canLeave); onBeforeRouteUpdate(canLeave)
@@ -456,6 +472,7 @@ onBeforeUnmount(() => { revision++; historyRevision++; addressRevision++; window
             :key="quote.id"
             :quote="quote"
           /><WorkPagination
+            label="报价历史分页"
             :page="historyPage"
             :total="historyTotal"
             :loading="historyLoading"

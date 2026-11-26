@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useActivationRead } from '@/utils/pageActivation'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import QuoteImages from '@/components/QuoteImages.vue'
@@ -6,6 +7,7 @@ import { decideRefund, getAdminRefund, getAdminRefundMessages, getRefundEvidence
 import type { AdminRefundDetailVO, RefundDecisionDTO, RefundEvidenceVO } from '@/types/refund'
 import type { ChatMessageVO } from '@/types/customRequest'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirmation } from '@/composables/useConfirmation'
 import { useNotificationsStore } from '@/stores/notifications'
 import { ApiError } from '@/utils/request'
 import { clearRefundState, clearUserRefundState, readRefundDecision, refundReasons, refundStatuses, sameRefundDecision, saveRefundState } from '@/utils/refund'
@@ -14,11 +16,14 @@ import { orderStatus, progressNodeName, settlementStatus } from '@/utils/quote'
 
 const emit = defineEmits<{ reviewed: [] }>()
 const route = useRoute(); const auth = useAuthStore(); const notifications = useNotificationsStore()
+const confirm = useConfirmation()
 const detail = ref<AdminRefundDetailVO>(); const evidence = ref<RefundEvidenceVO[]>([]); const messages = ref<ChatMessageVO[]>([])
 const evidenceCursor = ref<string | null>(null); const moreEvidenceAvailable = ref(false); const moreMessagesAvailable = ref(false)
 const loading = ref(false); const writing = ref(false); const error = ref(''); const notice = ref(''); const attempt = ref<RefundDecisionDTO>(); const checked = ref(false); const recoveryConflict = ref(false)
 const input = ref<RefundDecisionDTO>({ expectedVersion: 0, decision: 'REJECT', reason: '', returnRequired: false, returnedConfirmed: false, returnTrackingNo: '', returnEvidenceImageIds: [], noReturnBasis: '' })
 const stale = ref(false); const reviewed = ref(false); let revision = 0; let restoring = false
+let expandedEvidence = false
+let expandedMessages = false
 const id = () => typeof route.params.id === 'string' && /^[1-9]\d*$/.test(route.params.id) ? route.params.id : undefined
 const context = () => ({ userId: auth.session?.userId, applicationId: id() })
 const sameContext = (c: ReturnType<typeof context>) => !!c.userId && !!c.applicationId && c.userId === auth.session?.userId && c.applicationId === id() && !!auth.session?.roles.includes('ADMIN')
@@ -32,6 +37,8 @@ function clearSensitive() {
   evidenceCursor.value = null
   moreEvidenceAvailable.value = false
   moreMessagesAvailable.value = false
+  expandedEvidence = false
+  expandedMessages = false
   checked.value = false
   recoveryConflict.value = false
   stale.value = false
@@ -48,9 +55,24 @@ async function load() {
   const current = ++revision; loading.value = true; checked.value = false; recoveryConflict.value = false
   try {
     const result = await getAdminRefund(c.applicationId!)
-    const [proof, chat] = await Promise.all([getRefundEvidence(c.applicationId!, {}, true), getAdminRefundMessages(c.applicationId!)])
+    const cursor = expandedEvidence && !moreEvidenceAvailable.value ? evidence.value.at(-1)?.id : undefined
+    const [proof, chat] = await Promise.all([
+      getRefundEvidence(c.applicationId!, cursor ? { cursor } : {}, true),
+      getAdminRefundMessages(c.applicationId!),
+    ])
     if (current !== revision || !sameContext(c)) return
-    const initial = !detail.value; detail.value = result; evidence.value = proof.items; evidenceCursor.value = proof.nextCursor; moreEvidenceAvailable.value = proof.hasMore; messages.value = chat.items; moreMessagesAvailable.value = chat.hasMore
+    const initial = !detail.value
+    detail.value = result
+    // 实时核对保留已展开批次及凭证选项，游标继续从已加载范围的边界读取。
+    evidence.value = expandedEvidence ? [...new Map([...evidence.value, ...proof.items].map(item => [item.id, item])).values()] : proof.items
+    if (!expandedEvidence || cursor) { evidenceCursor.value = proof.nextCursor; moreEvidenceAvailable.value = proof.hasMore }
+    if (expandedMessages) {
+      messages.value = [...new Map([...messages.value, ...chat.items].map(item => [item.id, item])).values()]
+        .sort((a, b) => BigInt(a.seqNo) < BigInt(b.seqNo) ? -1 : 1)
+    } else {
+      messages.value = chat.items
+      moreMessagesAvailable.value = chat.hasMore
+    }
     if (initial && !input.value.reason && !attempt.value && !readRefundDecision(c.userId!, c.applicationId!, 'admin-draft')) input.value.expectedVersion = result.application.version
     stale.value = input.value.expectedVersion !== result.application.version
     if (stale.value) reviewed.value = false
@@ -67,7 +89,7 @@ async function load() {
 async function moreEvidence() {
   const c = context(); if (!sameContext(c) || loading.value || writing.value || !moreEvidenceAvailable.value || !evidenceCursor.value) return
   const current = revision; loading.value = true
-  try { const result = await getRefundEvidence(c.applicationId!, { cursor: evidenceCursor.value }, true); if (current === revision && sameContext(c)) { evidence.value = [...evidence.value, ...result.items.filter(item => !evidence.value.some(old => old.id === item.id))]; evidenceCursor.value = result.nextCursor; moreEvidenceAvailable.value = result.hasMore } }
+  try { const result = await getRefundEvidence(c.applicationId!, { cursor: evidenceCursor.value }, true); if (current === revision && sameContext(c)) { evidence.value = [...evidence.value, ...result.items.filter(item => !evidence.value.some(old => old.id === item.id))]; expandedEvidence = true; evidenceCursor.value = result.nextCursor; moreEvidenceAvailable.value = result.hasMore } }
   catch (failure) { if (current === revision && sameContext(c)) readFailed(failure, '证据读取失败') }
   finally { if (current === revision) loading.value = false }
 }
@@ -75,7 +97,7 @@ async function moreMessages() {
   const c = context(); if (!sameContext(c) || loading.value || writing.value || !moreMessagesAvailable.value) return
   const before = messages.value.reduce<string | undefined>((min, item) => !min || BigInt(item.seqNo) < BigInt(min) ? item.seqNo : min, undefined)
   const current = revision; loading.value = true
-  try { const result = await getAdminRefundMessages(c.applicationId!, { before }); if (current === revision && sameContext(c)) { messages.value = [...result.items.filter(item => !messages.value.some(old => old.id === item.id)), ...messages.value].sort((a, b) => BigInt(a.seqNo) < BigInt(b.seqNo) ? -1 : 1); moreMessagesAvailable.value = result.hasMore } }
+  try { const result = await getAdminRefundMessages(c.applicationId!, { before }); if (current === revision && sameContext(c)) { messages.value = [...result.items.filter(item => !messages.value.some(old => old.id === item.id)), ...messages.value].sort((a, b) => BigInt(a.seqNo) < BigInt(b.seqNo) ? -1 : 1); expandedMessages = true; moreMessagesAvailable.value = result.hasMore } }
   catch (failure) { if (current === revision && sameContext(c)) readFailed(failure, '聊天读取失败') }
   finally { if (current === revision) loading.value = false }
 }
@@ -98,7 +120,12 @@ async function submit(retry = false) {
     if (candidate.returnRequired && (!candidate.returnedConfirmed || (!/^[A-Za-z0-9]{8,30}$/.test(candidate.returnTrackingNo) && !candidate.returnEvidenceImageIds.length))) { error.value = '需退货时，必须确认原成品已退回，并提供合法退回单号或选择当前申请已保存的凭证。'; return }
     if (!candidate.returnRequired && !candidate.noReturnBasis) { error.value = '无需退货时请填写核查依据。'; return }
   }
-  if (!retry && !window.confirm(`确认裁定订单 ${detail.value.order.orderNo}、申请 ${c.applicationId}：${candidate.decision === 'APPROVE' ? `全额退款 ¥ ${detail.value.application.refundAmount}，取消待结算并终止履约` : '驳回申请并恢复原履约状态'}？`)) return
+  if (!retry) {
+    const result = candidate.decision === 'APPROVE' ? `全额退款 ¥ ${detail.value.application.refundAmount}，取消待结算并终止履约` : '驳回申请并恢复原履约状态'
+    const message = `订单 ${detail.value.order.orderNo}，申请 ${c.applicationId}。${result}。`
+    if (!(await confirm({ title: '确认退款裁定？', message, confirmLabel: '确认裁定' }))) return
+    if (!sameContext(c) || writing.value || loading.value || attempt.value || !detail.value?.canDecide || stale.value || !reviewed.value || detail.value.application.version !== candidate.expectedVersion) return
+  }
   try { saveRefundState(c.userId!, c.applicationId!, 'admin-attempt', candidate) }
   catch { error.value = '浏览器存储暂时不可用，本次裁定未提交。原意见和核验输入保留，请允许存储后重试。'; return }
   attempt.value = candidate; input.value = { ...candidate, returnEvidenceImageIds: [...candidate.returnEvidenceImageIds] }; const current = ++revision; writing.value = true; checked.value = false; loading.value = false; notice.value = ''
@@ -114,19 +141,20 @@ async function submit(retry = false) {
   } finally { if (sameContext(c)) { writing.value = false; void load() } }
 }
 function refresh() { void load() }
-function visible() { if (document.visibilityState === 'visible') refresh() }
 onBeforeRouteLeave(() => !auth.session || !writing.value); onBeforeRouteUpdate(() => !auth.session || !writing.value)
 watch([() => route.params.id, () => auth.session?.userId, () => auth.session?.roles.includes('ADMIN')], () => {
   if (!auth.session?.roles.includes('ADMIN')) { revision++; clearUserRefundState(auth.session?.userId); clearSensitive(); loading.value = false; writing.value = false; return }
   revision++; detail.value = undefined; evidence.value = []; messages.value = []; error.value = ''; notice.value = ''; reviewed.value = false; stale.value = false; writing.value = false
+  expandedEvidence = false; expandedMessages = false; evidenceCursor.value = null; moreEvidenceAvailable.value = false; moreMessagesAvailable.value = false
   const c = context(); restoring = true
   attempt.value = c.userId && c.applicationId ? readRefundDecision(c.userId, c.applicationId, 'admin-attempt') : undefined
   input.value = attempt.value || (c.userId && c.applicationId ? readRefundDecision(c.userId, c.applicationId, 'admin-draft') : undefined) || { expectedVersion: 0, decision: 'REJECT', reason: '', returnRequired: false, returnedConfirmed: false, returnTrackingNo: '', returnEvidenceImageIds: [], noReturnBasis: '' }
   restoring = false; void load()
 }, { immediate: true })
 watch(() => notifications.connected, (value, old) => { if (value && !old) refresh() })
-onMounted(() => { window.addEventListener('order-updated', refresh); window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', visible) })
-onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', visible) })
+onMounted(() => { window.addEventListener('order-updated', refresh) })
+onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh) })
+useActivationRead(() => JSON.stringify(context()), load)
 </script>
 <template>
   <div

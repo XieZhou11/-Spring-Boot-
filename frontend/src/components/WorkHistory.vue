@@ -122,6 +122,7 @@ onBeforeUnmount(() => requestRevision++)
         </details>
       </div>
     </article><WorkPagination
+      label="审核历史分页"
       :page="page"
       :total="total"
       :loading="loading"

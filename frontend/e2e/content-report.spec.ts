@@ -93,6 +93,34 @@ test('举报入口提交、我的举报列表与后台隐藏评论处置', async
     await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
     await expect(page.getByText('处理中', { exact: true })).toBeVisible()
 
+    // 基线读取失败时不提交补证，恢复后用原有草稿正常提交。
+    const reportApiPath = `/api${new URL(page.url()).pathname}`
+    let evidenceWrites = 0
+    page.on('request', request => {
+      if (request.method() === 'POST' && new URL(request.url()).pathname === `${reportApiPath}/evidence`) {
+        evidenceWrites += 1
+      }
+    })
+    await page.getByRole('button', { name: '补充证据', exact: true }).click()
+    const evidenceText = '补充截图用于核实主页的宣传内容。'
+    const evidenceDescription = page.getByLabel('材料说明', { exact: true })
+    const evidencePreview = page.getByRole('img', { name: '举报证据图片 1', exact: true })
+    const submitEvidence = page.getByRole('button', { name: '提交补充证据', exact: true })
+    await evidenceDescription.fill(evidenceText)
+    await page.getByLabel(/证据图片/).setInputFiles({ name: 'report-evidence.png', mimeType: 'image/png', buffer: image })
+    await expect(evidencePreview).toBeVisible()
+    await page.route(url => url.pathname === reportApiPath, route => route.abort('failed'), { times: 1 })
+    await submitEvidence.click()
+    await expect(page.getByRole('alert')).toContainText('请检查网络后重试')
+    expect(evidenceWrites).toBe(0)
+    await expect(evidenceDescription).toHaveValue(evidenceText)
+    await expect(evidencePreview).toBeVisible()
+    await expect(submitEvidence).toBeEnabled()
+    await submitEvidence.click()
+    await expect(page.getByRole('status')).toContainText('材料已提交。')
+    await expect(page.getByText(evidenceText, { exact: true })).toBeVisible()
+    expect(evidenceWrites).toBe(1)
+
     // 管理员可以从队列打开目标作品，核对原评论全文和通过举报范围签名的图片。
     await admin.goto('/admin/content-reports')
     await admin.getByRole('button', { name: /举报作品/ }).click()
@@ -132,8 +160,8 @@ test('举报入口提交、我的举报列表与后台隐藏评论处置', async
     await page.getByLabel('说明', { exact: true }).fill(selfDeletedReport)
     await page.getByRole('button', { name: '提交评论举报', exact: true }).click()
     await expect(page.getByText('举报已提交，管理员将核查处理', { exact: false })).toBeVisible()
-    creator.once('dialog', dialog => dialog.accept())
     await creator.getByRole('button', { name: '删除评论', exact: true }).click()
+    await creator.getByRole('dialog').getByRole('button', { name: '确认删除', exact: true }).click()
     await expect(creator.getByText(selfDeletedComment, { exact: true })).toHaveCount(0)
     await page.reload()
     await expect(page.getByText('0 评论', { exact: false })).toBeVisible()

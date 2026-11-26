@@ -9,6 +9,9 @@ import { workStatusLabels } from '@/utils/work'
 import { formatTime } from '@/utils/creator'
 import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/work.css'
+import { useConfirmation } from '@/composables/useConfirmation'
+
+const confirm = useConfirmation()
 const emit = defineEmits<{ reviewed: [] }>()
 const route = useRoute()
 const auth = useAuthStore()
@@ -29,7 +32,11 @@ async function load() {
 async function decide(decision: 'APPROVED' | 'REJECTED' | 'OFFLINE') {
   if (!work.value || busy.value || loading.value) return
   if (decision !== 'APPROVED' && !reason.value.trim()) { error.value = '驳回或下架必须填写原因'; return }
-  if (!window.confirm(decision === 'APPROVED' ? '确认通过该作品并公开上架？' : decision === 'REJECTED' ? '确认驳回并发送审核意见？' : '确认下架并通知创作者？')) return
+  const original = work.value
+  const title = decision === 'APPROVED' ? '通过审核并公开上架？' : decision === 'REJECTED' ? '驳回作品审核？' : '下架作品？'
+  const confirmLabel = decision === 'APPROVED' ? '确认通过' : decision === 'REJECTED' ? '确认驳回' : '确认下架'
+  if (!(await confirm({ title, message: '作品「' + original.title + '」的处理结果将通知创作者。', confirmLabel }))) return
+  if (!auth.session?.roles.includes('ADMIN') || work.value !== original || loading.value || busy.value) return
   busy.value = true; error.value = ''; notice.value = ''
   try {
     work.value = decision === 'OFFLINE' ? await offlineWork(work.value.id, work.value.version, true, reason.value) : await reviewWork(work.value.id, work.value.version, decision, reason.value)
@@ -40,7 +47,11 @@ async function decide(decision: 'APPROVED' | 'REJECTED' | 'OFFLINE') {
   } finally { busy.value = false; emit('reviewed') }
 }
 /** 审核中阻止切换对象；会话已撤销时立即离开，避免草稿确认拦住退出。 */
-function canLeave() { return !auth.session || (!busy.value && (!reason.value.trim() || window.confirm('审核意见尚未提交，确定离开？'))) }
+function canLeave() {
+  if (!auth.session?.roles.includes('ADMIN')) return true
+  if (busy.value) return false
+  return !reason.value.trim() || confirm({ title: '离开作品审核？', message: '审核意见尚未提交。', confirmLabel: '确认离开' })
+}
 onBeforeRouteLeave(canLeave)
 onBeforeRouteUpdate(canLeave)
 watch(() => route.params.id, () => void load(), { immediate: true })

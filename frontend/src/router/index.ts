@@ -1,9 +1,18 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { safeRedirect } from '@/utils/auth'
+import { scrollBehavior } from './scroll'
+import { invalidPathResource, routeFeedback } from './routeFeedback'
+import { clearCreatorDestination, creatorDestination, rememberCreatorDestination } from './creatorDestination'
+import type { RouteLocationGeneric, RouteLocationNormalized } from 'vue-router'
+
+/** 兼容 Vue Router 的大小写匹配，同时保留原路径的已编码资源段。 */
+const legacyPath = (to: RouteLocationGeneric, prefix: RegExp, target: string) =>
+  ({ path: to.path.replace(prefix, target), query: to.query, hash: to.hash })
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
+  scrollBehavior,
   routes: [
     {
       path: '/',
@@ -35,8 +44,8 @@ const router = createRouter({
       { path: ':id', component: () => import('@/views/ConversationDetailView.vue'), meta: { title: '需求沟通' } },
     ] },
     // 旧需求、会话和通知链接继续可用，完整保留筛选参数与页面锚点。
-    { path: '/account/requests/:rest(.*)*', redirect: to => ({ path: to.path.replace('/account/requests', '/my-requests'), query: to.query, hash: to.hash }) },
-    { path: '/account/conversations/:rest(.*)*', redirect: to => ({ path: to.path.replace('/account/conversations', '/messages/conversations'), query: to.query, hash: to.hash }) },
+    { path: '/account/requests/:rest(.*)*', redirect: to => legacyPath(to, /^\/account\/requests(?=\/|$)/i, '/my-requests') },
+    { path: '/account/conversations/:rest(.*)*', redirect: to => legacyPath(to, /^\/account\/conversations(?=\/|$)/i, '/messages/conversations') },
     { path: '/account/notifications', redirect: to => ({ path: '/messages/notifications', query: to.query, hash: to.hash }) },
     { path: '/creator/works', component: () => import('@/views/MyWorksView.vue'), meta: { requiresAuth: true, requiresCreator: true, title: '我的作品' } },
     { path: '/creator/works/new', component: () => import('@/views/WorkEditorView.vue'), meta: { requiresAuth: true, requiresCreator: true, title: '发布作品' } },
@@ -121,19 +130,21 @@ const router = createRouter({
         },
       ],
     },
-    { path: '/:pathMatch(.*)*', redirect: '/' },
+    { path: '/:pathMatch(.*)*', name: 'not-found', component: { render: () => null }, meta: { title: '找不到页面' } },
   ],
 })
 
 /** 业务页每次导航核验服务端身份，保留原目标的路径、查询及锚点。 */
+let latestTarget: RouteLocationNormalized | undefined
 router.beforeEach(async (to) => {
+  latestTarget = to
   const auth = useAuthStore()
   try {
     await auth.restoreSession(Boolean(to.meta.requiresAuth))
   } catch {
     if (to.meta.requiresAuth) {
-      auth.clearSession()
-      return { path: '/login', query: { redirect: to.fullPath, reason: 'connection' } }
+      if (latestTarget === to) routeFeedback.value = { path: to.fullPath, kind: 'connection' }
+      return false
     }
   }
   if (to.meta.requiresAuth && !auth.session)
@@ -141,14 +152,31 @@ router.beforeEach(async (to) => {
   // 管理员默认进入工作后台，显式访问 /discover 时仍可查看前台作品。
   if (to.path === '/' && auth.session?.roles.includes('ADMIN')) return { path: '/admin/dashboard' }
   if (to.meta.requiresAdmin && !auth.session?.roles.includes('ADMIN')) return '/'
-  if (to.meta.requiresCreator && !auth.session?.roles.includes('CREATOR')) return '/account/creator-certification'
+  // 用独立的兜底记录保留地址，同时避免已挂载详情监听到无效参数。
+  if (invalidPathResource(to))
+    return { name: 'not-found', params: { pathMatch: to.path.slice(1).split('/').map(part => {
+      try { return decodeURIComponent(part) } catch { return part }
+    }) }, query: to.query, hash: to.hash, replace: true }
+  if (to.meta.requiresCreator && auth.session && !auth.session.roles.includes('CREATOR')) {
+    if (latestTarget !== to) return false
+    rememberCreatorDestination(auth.session.userId, to.fullPath)
+    return { name: 'creator-certification', query: { redirect: to.fullPath } }
+  }
   if (to.meta.guestOnly && auth.session) {
     const target = safeRedirect(to.query.redirect)
     return router.resolve(target).meta.requiresAuth ? target : '/'
   }
 })
 
-router.afterEach((to) => {
+router.onError((_error, to) => {
+  if (!latestTarget || latestTarget === to) routeFeedback.value = { path: to.fullPath, kind: 'resource' }
+})
+
+router.afterEach((to, _from, failure) => {
+  if (failure) return
+  routeFeedback.value = undefined
+  const auth = useAuthStore()
+  if (creatorDestination(router, auth.session?.userId) === to.fullPath) clearCreatorDestination()
   document.title = to.meta.title ? `${String(to.meta.title)} · 匠心集 CraftFlow` : '匠心集 CraftFlow'
 })
 
