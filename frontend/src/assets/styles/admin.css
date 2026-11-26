@@ -1,6 +1,11 @@
 /* 后台独立于前台：固定菜单、紧凑工具栏和保留上下文的审核双栏。 */
-.admin-page { min-height: 100svh; background: #f5f5ef; }
-.admin-page .admin-sidebar { position: fixed; inset: 0 auto 0 0; width: 208px; z-index: 30; display: flex; flex-direction: column; padding: 28px 16px 20px; background: #fcfdf8; color: var(--green); border-right: 1px solid #e2e6da; overflow-y: auto; }
+.admin-page {
+  /* 固定侧栏和主区偏移使用同一宽度，切换时不叠盖内容。 */
+  --admin-sidebar-width: 208px;
+  min-height: 100svh;
+  background: #f5f5ef;
+}
+.admin-page .admin-sidebar { position: fixed; inset: 0 auto 0 0; width: var(--admin-sidebar-width); z-index: 30; display: flex; flex-direction: column; padding: 28px 16px 20px; background: #fcfdf8; color: var(--green); border-right: 1px solid #e2e6da; overflow-y: auto; }
 .admin-brand { display: flex; align-items: center; gap: 12px; padding: 0 8px 30px; white-space: nowrap; }
 .admin-brand strong { font-size: 19px; font-weight: 600; }
 .admin-brand-seal { display: grid; place-items: center; width: 36px; height: 38px; border-radius: 9px 9px 3px 9px; background: var(--green); color: #f5edce; font: 25px var(--serif); }
@@ -11,7 +16,7 @@
 .admin-sidebar-bottom { display: grid; gap: 16px; margin-top: auto; padding: 28px 14px 0; font-size: 12px; }
 .admin-sidebar-bottom a, .admin-sidebar-bottom button { display: flex; align-items: center; gap: 12px; color: #7c8b72; }
 .admin-sidebar-bottom button { border: 0; padding: 0; background: none; text-align: left; font: inherit; }
-.admin-main { margin-left: 208px; min-width: 0; }
+.admin-main { margin-left: var(--admin-sidebar-width); min-width: 0; }
 .admin-topbar { min-height: 70px; padding: 16px 30px; border-bottom: 1px solid #e4e7dc; background: var(--paper); display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .admin-topbar nav { display: flex; gap: 14px; font-size: 12px; color: #8d9983; }
 .admin-user-tools, .admin-user { display: flex; align-items: center; gap: 18px; font-size: 12px; }
@@ -82,6 +87,6 @@
 }
 .review-material-scroll:focus-visible { outline: 2px solid var(--green); outline-offset: 4px; }
 @media (min-width: 1700px) { .admin-review-grid { grid-template-columns: minmax(420px, 1fr) minmax(0, 1fr); } .admin-page .admin-content { max-width: 1780px; margin-inline: auto; } }
-@media (max-width: 1150px) { .admin-page .admin-sidebar { width: 176px; padding-inline: 12px; } .admin-brand { gap: 8px; padding-inline: 0; } .admin-brand strong { font-size: 17px; } .admin-main { margin-left: 176px; } .admin-page .admin-content { padding: 24px 20px; } .admin-review-grid { grid-template-columns: minmax(280px, .9fr) minmax(0, 1.1fr); gap: 14px; } .review-queue, .review-detail { padding: 16px; } .review-queue .managed-work-row { flex-wrap: wrap; } .review-queue .managed-work-row > a { margin-left: auto; } }
+@media (max-width: 1150px) { .admin-page { --admin-sidebar-width: 176px; } .admin-page .admin-sidebar { padding-inline: 12px; } .admin-brand { gap: 8px; padding-inline: 0; } .admin-brand strong { font-size: 17px; } .admin-page .admin-content { padding: 24px 20px; } .admin-review-grid { grid-template-columns: minmax(280px, .9fr) minmax(0, 1.1fr); gap: 14px; } .review-queue, .review-detail { padding: 16px; } .review-queue .managed-work-row { flex-wrap: wrap; } .review-queue .managed-work-row > a { margin-left: auto; } }
 @media (max-width: 900px) { .admin-review-grid { grid-template-columns: 1fr; } .review-queue { position: static; } .admin-review-grid.has-selection .review-queue { display: none; } .review-placeholder { min-height: 230px; } .review-detail .work-gallery > .work-image { max-height: 360px; } }
-@media (max-width: 600px) { .admin-page .admin-sidebar { width: 64px; padding: 20px 8px; } .admin-brand { justify-content: center; } .admin-brand strong { display: none; } .admin-page .admin-sidebar nav a { flex-direction: column; gap: 8px; padding: 14px 2px; font-size: 10px; } .admin-sidebar-bottom { padding: 20px 0 0; } .admin-sidebar-bottom a, .admin-sidebar-bottom button { flex-direction: column; gap: 8px; font-size: 10px; text-align: center; line-height: 1.8; } .admin-main { margin-left: 64px; } .admin-topbar { padding: 14px 12px; min-height: 64px; } .admin-topbar nav { gap: 8px; font-size: 10px; } .admin-user-tools { gap: 10px; } .admin-user-tools .identity-label, .admin-user { display: none; } .admin-page .admin-content { padding: 22px 12px; } .admin-page .admin-heading h1 { font-size: 22px; } .review-detail, .review-queue { padding: 14px; } .review-detail .material-fields > div { grid-template-columns: 65px minmax(0, 1fr); } .review-detail .review-actions button { width: 100%; } .review-queue .review-table th:nth-child(2), .review-queue .review-table td:nth-child(2) { display: none; } }
+@media (max-width: 600px) { .admin-page { --admin-sidebar-width: 64px; } .admin-page .admin-sidebar { padding: 20px 8px; } .admin-brand { justify-content: center; } .admin-brand strong { display: none; } .admin-page .admin-sidebar nav a { flex-direction: column; gap: 8px; padding: 14px 2px; font-size: 10px; } .admin-sidebar-bottom { padding: 20px 0 0; } .admin-sidebar-bottom a, .admin-sidebar-bottom button { flex-direction: column; gap: 8px; font-size: 10px; text-align: center; line-height: 1.8; } .admin-topbar { padding: 14px 12px; min-height: 64px; } .admin-topbar nav { gap: 8px; font-size: 10px; } .admin-user-tools { gap: 10px; } .admin-user-tools .identity-label, .admin-user { display: none; } .admin-page .admin-content { padding: 22px 12px; } .admin-page .admin-heading h1 { font-size: 22px; } .review-detail, .review-queue { padding: 14px; } .review-detail .material-fields > div { grid-template-columns: 65px minmax(0, 1fr); } .review-detail .review-actions button { width: 100%; } .review-queue .review-table th:nth-child(2), .review-queue .review-table td:nth-child(2) { display: none; } }

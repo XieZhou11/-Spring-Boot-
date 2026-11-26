@@ -61,7 +61,6 @@ onBeforeUnmount(() => {
     <section class="cf-settlement">
       <header class="cf-settlement-heading">
         <h1>收入记录</h1>
-        <p>订单完成满 7 天且无处理中售后时，系统自动模拟结算。</p>
       </header>
 
       <section

@@ -136,13 +136,24 @@ test('后台队列超过二十条可翻页，查看与返回及焦点刷新保�
   await page.route(`${api}/admin/refund-applications/321`, route => route.fulfill({ json: success(adminDetail(selected)) }))
   await page.route(`${api}/admin/refund-applications/321/evidence*`, route => route.fulfill({ json: success({ items: [], nextCursor: null, hasMore: false }) }))
   await page.route(`${api}/admin/refund-applications/321/messages*`, route => route.fulfill({ json: success({ items: [], hasMore: false }) }))
+  await page.setViewportSize({ width: 930, height: 774 })
   await page.goto('/admin/refunds')
   const queue = page.getByRole('region', { name: '售后申请队列' })
+  const submitFilters = queue.getByRole('button', { name: '筛选申请', exact: true })
+  const formBounds = await queue.locator('.refund-filters').boundingBox()
+  expect(formBounds).not.toBeNull()
+  expect(await submitFilters.boundingBox()).toMatchObject({ x: formBounds?.x, width: formBounds?.width })
+  await expect(page.getByRole('button', { name: '刷新售后队列', exact: true })).toHaveCount(0)
   await queue.getByLabel('申请状态', { exact: true }).selectOption('REFUNDED')
   await queue.getByLabel('申请类型', { exact: true }).selectOption('NO_START_TIMEOUT')
   await queue.getByLabel('按订单编号筛选').fill('  PAGING  ')
   await queue.getByLabel('金额从', { exact: true }).fill('0')
-  await queue.getByRole('button', { name: '筛选申请', exact: true }).click()
+  const dates = queue.getByRole('group', { name: '申请时间', exact: true })
+  const createdFrom = '2026-01-01T08:30'
+  const createdTo = '2026-12-31T20:45'
+  await dates.getByLabel('申请时间从', { exact: true }).fill(createdFrom)
+  await dates.getByLabel('申请时间至', { exact: true }).fill(createdTo)
+  await submitFilters.click()
   await expect(queue.locator('.managed-work-row')).toHaveCount(20)
   await expect(queue.getByText('第 1 页 · 共 21 条', { exact: true })).toBeVisible()
   await queue.getByRole('button', { name: '下一页', exact: true }).click()
@@ -152,7 +163,7 @@ test('后台队列超过二十条可翻页，查看与返回及焦点刷新保�
   await expect(queue.getByRole('button', { name: '下一页', exact: true })).toBeDisabled()
   const assertConditions = () => {
     const query = new URL(page.url()).searchParams
-    const expected = { status: 'REFUNDED', applicationType: 'NO_START_TIMEOUT', orderNo: 'PAGING', minAmount: '0', page: '2' }
+    const expected = { status: 'REFUNDED', applicationType: 'NO_START_TIMEOUT', orderNo: 'PAGING', createdFrom, createdTo, minAmount: '0', page: '2' }
     expect(Object.fromEntries(query)).toEqual(expected)
     expect(Object.fromEntries(queries.at(-1)!.searchParams)).toMatchObject(expected)
   }
@@ -168,6 +179,8 @@ test('后台队列超过二十条可翻页，查看与返回及焦点刷新保�
   await expect(queue.getByLabel('申请类型', { exact: true })).toHaveValue('NO_START_TIMEOUT')
   await expect(queue.getByLabel('按订单编号筛选')).toHaveValue('PAGING')
   await expect(queue.getByLabel('金额从', { exact: true })).toHaveValue('0')
+  await expect(dates.getByLabel('申请时间从', { exact: true })).toHaveValue(createdFrom)
+  await expect(dates.getByLabel('申请时间至', { exact: true })).toHaveValue(createdTo)
   assertConditions()
   // 焦点刷新依据已应用的 URL 条件，保留表单里尚未提交的筛选草稿。
   await queue.getByLabel('按订单编号筛选').fill('UNAPPLIED')

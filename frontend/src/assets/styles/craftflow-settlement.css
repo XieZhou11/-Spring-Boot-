@@ -3,7 +3,6 @@
 
 .cf-settlement-heading { margin: 0 0 18px; }
 .cf-settlement-heading h1 { margin: 0; font: 650 25px/1.4 var(--craft-font); }
-.cf-settlement-heading p { margin: 5px 0 0; color: var(--craft-muted); font-size: 13px; }
 
 .cf-settlement-card {
   border: 1px solid var(--craft-border);
@@ -21,6 +20,10 @@
 .cf-settlement-filters--admin {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+}
+.cf-settlement-filters--admin > .admin-date-range { grid-column: span 2; }
+@media (max-width: 450px) {
+  .cf-settlement-filters--admin > .admin-date-range { grid-column: 1 / -1; }
 }
 .cf-settlement-filters label {
   display: grid;

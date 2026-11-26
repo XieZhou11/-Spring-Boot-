@@ -26,8 +26,69 @@
 .craft-admin .admin-topbar nav,
 .craft-admin .admin-user-tools .identity-label { color: var(--craft-muted); }
 .craft-admin .admin-sidebar nav a { border-radius: 8px; }
+.craft-admin .admin-sidebar nav .admin-sidebar-label { font: inherit; opacity: 1; }
 .craft-admin .admin-sidebar nav a:hover { background: #f4f4f5; }
 .craft-admin .admin-sidebar nav a.active { color: #fff; background: var(--craft-primary); }
+.craft-admin .admin-sidebar-bottom { gap: 4px; padding-inline: 8px; }
+.craft-admin .admin-sidebar-bottom :is(a, button) {
+  min-height: 36px;
+  padding-inline: 6px;
+  border-radius: 8px;
+}
+.craft-admin .admin-sidebar-bottom :is(a, button):hover { color: var(--craft-ink); background: #f4f4f5; }
+.craft-admin .admin-sidebar-bottom a.active { color: #fff; background: var(--craft-primary); }
+.craft-admin .admin-topbar-start { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.craft-admin .admin-sidebar-toggle {
+  display: grid;
+  flex: 0 0 34px;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--craft-border);
+  border-radius: 8px;
+  background: var(--craft-surface);
+  color: var(--craft-ink);
+}
+.craft-admin .admin-sidebar-toggle:hover { background: #f4f4f5; }
+.craft-admin .admin-sidebar-toggle .app-icon { width: 18px; height: 18px; }
+
+/* 桌面折叠后保留图标入口，菜单文字仍可供辅助技术读取。 */
+@media (width > 600px) {
+  .craft-admin .admin-sidebar { overflow-x: hidden; }
+  .craft-admin .admin-sidebar-label { white-space: nowrap; }
+  .craft-admin .admin-brand-seal { flex-shrink: 0; }
+  .craft-admin.admin-sidebar-collapsed { --admin-sidebar-width: 64px; }
+  .craft-admin.admin-sidebar-collapsed .admin-sidebar { padding-inline: 8px; }
+  .admin-sidebar-collapsed .admin-brand { padding-inline: 6px; }
+  .admin-sidebar-collapsed .admin-sidebar nav a { padding-inline: 13px; }
+  .craft-admin.admin-sidebar-collapsed .admin-sidebar-bottom { padding-inline: 0; }
+  .craft-admin.admin-sidebar-collapsed .admin-sidebar-bottom :is(a, button) { padding-inline: 13px; }
+  .admin-sidebar-collapsed .admin-sidebar-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .admin-sidebar-collapsed .admin-sidebar-toggle .app-icon { transform: scaleX(-1); }
+}
+/* 点击折叠按钮后同步过渡侧栏宽度与内容偏移，页面初次布局直接就位。 */
+@media (width > 600px) and (prefers-reduced-motion: no-preference) {
+  .craft-admin.admin-sidebar-animated { --admin-sidebar-transition: 220ms ease; }
+  .admin-sidebar-animated .admin-sidebar {
+    transition: width var(--admin-sidebar-transition), padding-inline var(--admin-sidebar-transition);
+  }
+  .admin-sidebar-animated .admin-main { transition: margin-left var(--admin-sidebar-transition); }
+  .admin-sidebar-animated :is(.admin-brand, .admin-sidebar nav a, .admin-sidebar-bottom, .admin-sidebar-bottom a, .admin-sidebar-bottom button) {
+    transition: padding-inline var(--admin-sidebar-transition);
+  }
+}
+@media (max-width: 600px) {
+  .craft-admin .admin-sidebar-toggle { display: none; }
+  .craft-admin .admin-sidebar-bottom { padding-inline: 0; }
+  .craft-admin .admin-sidebar-bottom :is(a, button) { padding: 6px 2px; }
+}
 .craft-admin .admin-user > span { font: 600 12px var(--craft-font); background: #f4f4f5; }
 .craft-admin .admin-heading { gap: 12px; flex-wrap: wrap; }
 .craft-admin .admin-heading h1 { font: 650 25px var(--craft-font); }

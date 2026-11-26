@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** 共用线性图标，不依赖外部字体或网络资源。 */
-defineProps<{ name: 'mail' | 'lock' | 'user' | 'code' | 'arrow' | 'check' | 'leaf' | 'logout' | 'image' | 'grid' | 'shield' | 'bell' | 'message' | 'search' | 'hammer' | 'plus' }>()
+defineProps<{ name: keyof typeof paths }>()
 const paths = {
   mail: 'M3 5h18v14H3z M3 6l9 7 9-7',
   lock: 'M5 10h14v11H5z M8 10V7a4 4 0 0 1 8 0v3 M12 14v3',
@@ -18,6 +18,9 @@ const paths = {
   search: 'M16 16l5 5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
   hammer: 'M15 11l-8.5 8.5a2.1 2.1 0 0 1-3-3L12 8 M10 8l4-4a3 3 0 0 1 4.2 0l2.8 2.8V11h-4l-2 2z',
   plus: 'M12 5v14 M5 12h14',
+  sidebar: 'M3 4h18v16H3z M9 4v16 M15 9l-3 3 3 3',
+  tag: 'M3 4h8l10 10-7 7L3 10z M7 8h.01',
+  wallet: 'M19 8V5H6a3 3 0 0 0 0 6h15v9H6a3 3 0 0 1-3-3V8 M21 14h-5v3h5',
 }
 </script>
 

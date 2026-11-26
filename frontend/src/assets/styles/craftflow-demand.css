@@ -51,7 +51,7 @@
   font: 650 23px/1.4 var(--craft-font);
 }
 
-.cf-request-list-heading p, .cf-request-editor-heading p {
+.cf-request-editor-heading p {
   margin-top: 4px;
   color: var(--craft-muted);
   font: 400 12px/1.5 var(--craft-font);

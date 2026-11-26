@@ -55,7 +55,12 @@ const loginPath = computed(() => router.resolve({ path: '/login', query: redirec
               {{ tab.label }}
             </RouterLink>
           </nav>
-          <slot />
+          <div
+            :key="route.path"
+            class="craft-auth__view"
+          >
+            <RouterView />
+          </div>
         </div>
       </section>
     </div>

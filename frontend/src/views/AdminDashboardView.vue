@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import { getAdminDashboard } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth'
 import type { AdminDashboardVO } from '@/types/admin'
-import { formatTime } from '@/utils/creator'
 import { requestStatus } from '@/utils/customRequest'
 import { orderStatus } from '@/utils/quote'
 import { workStatusLabels } from '@/utils/work'
 
 const auth = useAuthStore()
 const adminId = computed(() => auth.session?.roles.includes('ADMIN') ? auth.session.userId : undefined)
-const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).format(new Date())
+const now = ref(new Date())
+const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).format(now.value)
+const dashboardTime = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', timeStyle: 'medium' })
+let clockTimer: number | undefined
 const from = ref(today)
 const to = ref(today)
 const data = ref<AdminDashboardVO>()
@@ -74,10 +76,23 @@ watch(adminId, () => {
   loading.value = false
   void load()
 }, { immediate: true })
+
+// 每次读当前时间，标签页从休眠恢复后可直接追上实际时刻。
+onMounted(() => {
+  clockTimer = window.setInterval(() => { now.value = new Date() }, 1_000)
+})
+onBeforeUnmount(() => window.clearInterval(clockTimer))
 </script>
 
 <template>
   <AdminLayout title="数据看板">
+    <template #actions>
+      <time
+        class="dashboard-clock"
+        :datetime="now.toISOString()"
+        title="当前北京时间"
+      >{{ dashboardTime.format(now) }}</time>
+    </template>
     <form
       class="dashboard-toolbar"
       @submit.prevent="load"
@@ -100,12 +115,6 @@ watch(adminId, () => {
           {{ loading ? '正在更新…' : '更新看板' }}
         </button>
       </div>
-      <p
-        v-if="data"
-        class="dashboard-updated"
-      >
-        <time :datetime="data.updatedAt">更新于 {{ formatTime(data.updatedAt) }}（北京时间）</time>
-      </p>
     </form>
     <p
       v-if="error"
@@ -259,7 +268,12 @@ watch(adminId, () => {
   color: var(--craft-ink);
   font: inherit;
 }
-.dashboard-updated { margin: 0 0 8px; color: var(--craft-muted); font-size: 12px; }
+.dashboard-clock {
+  margin-inline-start: auto;
+  color: var(--craft-ink);
+  font: 650 24px/1.2 var(--craft-font);
+  font-variant-numeric: tabular-nums;
+}
 .dashboard-top,
 .dashboard-breakdown,
 .dashboard-order-types { display: grid; gap: 14px; }

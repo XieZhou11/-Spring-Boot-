@@ -11,9 +11,10 @@
 
 .craft-auth__card {
   display: grid;
-  grid-template-columns: 5fr 7fr;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  grid-template-rows: minmax(0, 1fr);
   width: min(100%, 980px);
-  min-height: 492px;
+  height: 576px;
   border: 1px solid var(--craft-border);
   border-radius: 16px;
   background: var(--craft-surface);
@@ -69,14 +70,24 @@
 
 .craft-auth__panel {
   display: grid;
-  place-items: center;
+  justify-items: center;
   min-width: 0;
   padding: 36px 40px;
 }
 
 .craft-auth__content {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   width: min(100%, 380px);
   min-width: 0;
+  min-height: 0;
+}
+
+/* 错误提示和窄屏表单在内容区内滚动，页签与品牌栏保持位置。 */
+.craft-auth__view {
+  margin: -5px;
+  padding: 5px;
+  overflow-y: auto;
 }
 
 .craft-auth__tabs {
@@ -93,6 +104,7 @@
   border-bottom: 2px solid transparent;
   color: var(--craft-muted);
   font-size: 14px;
+  font-weight: 550;
   line-height: 1.5;
 }
 
@@ -103,7 +115,6 @@
 
 .craft-auth__tabs a[aria-current='page'] {
   border-bottom-color: var(--craft-ink);
-  font-weight: 650;
 }
 
 .craft-auth__panel h1 {
@@ -205,15 +216,11 @@
   white-space: nowrap;
 }
 
-.craft-auth__field-help,
-.craft-auth__note {
+.craft-auth__field-help {
+  margin: 5px 0 0;
   color: var(--craft-muted);
   font-size: 12px;
   line-height: 1.55;
-}
-
-.craft-auth__field-help {
-  margin: 5px 0 0;
 }
 
 .craft-auth .field-error {
@@ -246,7 +253,7 @@
   overflow-wrap: anywhere;
 }
 
-.craft-auth__content > .craft-auth__feedback {
+.craft-auth__view > .craft-auth__feedback {
   margin-bottom: 13px;
 }
 
@@ -276,7 +283,8 @@
 
   .craft-auth__card {
     grid-template-columns: minmax(0, 1fr);
-    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 616px;
   }
 
   .craft-auth__intro,

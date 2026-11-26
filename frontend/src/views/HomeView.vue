@@ -119,10 +119,7 @@ onBeforeUnmount(() => {
         @submit.prevent="apply()"
       >
         <div class="cf-work-search-heading">
-          <div>
-            <h1>作品广场</h1>
-            <p>发现原创手工作品，选购单件现货或以作品为参考发起同类定制。</p>
-          </div>
+          <h1>作品广场</h1>
           <div class="cf-work-search-fields">
             <div class="cf-work-keyword">
               <AppIcon name="search" />

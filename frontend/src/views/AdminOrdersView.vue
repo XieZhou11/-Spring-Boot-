@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AdminLayout from '@/layouts/AdminLayout.vue'
+import AdminDateRange from '@/components/AdminDateRange.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
 import { getAdminOrder, getAdminOrders } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth'
@@ -177,7 +178,7 @@ watch([() => route.query, adminId], () => {
         class="order-filters"
         @submit.prevent="applyFilters"
       >
-        <label>订单编号<input
+        <label class="order-number-filter">订单编号<input
           v-model="draft.orderNo"
           maxlength="32"
           placeholder="包含匹配"
@@ -192,14 +193,11 @@ watch([() => route.query, adminId], () => {
           :key="key"
           :value="key"
         >{{ label }}</option></select></label>
-        <label>创建时间从<input
-          v-model="draft.createdFrom"
-          type="datetime-local"
-        ></label>
-        <label>创建时间至<input
-          v-model="draft.createdTo"
-          type="datetime-local"
-        ></label>
+        <AdminDateRange
+          v-model:from="draft.createdFrom"
+          v-model:to="draft.createdTo"
+          label="创建时间"
+        />
         <label>金额从<input
           :value="draft.minAmount"
           type="number"
@@ -502,7 +500,8 @@ watch([() => route.query, adminId], () => {
 .order-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 10px; margin-bottom: 16px; }
 .order-filters label { display: grid; gap: 4px; color: var(--craft-muted); font-size: 12px; font-weight: 600; }
 .order-filters :is(input, select) { width: 100%; min-width: 0; min-height: 36px; padding: 6px 10px; border: 1px solid var(--craft-border); border-radius: 8px; background: var(--craft-surface); color: var(--craft-ink); font: inherit; }
-.order-filters button { justify-self: start; }
+.order-number-filter, .order-filters > .admin-date-range { grid-column: span 2; }
+.order-filters button { grid-column: 1 / -1; justify-self: end; }
 .order-panel { min-width: 0; padding: 16px; border: 1px solid var(--craft-border); border-radius: 14px; background: var(--craft-surface); }
 .order-panel > header, .order-overview, .order-records li > div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 .order-panel > header { margin-bottom: 9px; }
@@ -537,8 +536,11 @@ watch([() => route.query, adminId], () => {
 .order-nodes > li { padding: 8px; border-radius: 7px; background: var(--craft-bg); }
 .order-nodes > li > p { margin: 4px 0; font-size: 12px; }
 .order-nodes > li > small { display: block; }
+@media (max-width: 900px) {
+  .order-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 850px) {
   .order-detail-grid { grid-template-columns: 1fr; }
-  .order-filters, .order-nodes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .order-nodes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 </style>

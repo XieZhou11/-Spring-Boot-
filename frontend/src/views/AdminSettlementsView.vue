@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AdminLayout from '@/layouts/AdminLayout.vue'
+import AdminDateRange from '@/components/AdminDateRange.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
 import { getAdminSettlements } from '@/api/income'
 import { useAuthStore } from '@/stores/auth'
@@ -146,14 +147,11 @@ onBeforeUnmount(() => {
           maxlength="32"
           placeholder="包含匹配"
         ></label>
-        <label>记录创建时间从<input
-          v-model="draft.createdFrom"
-          type="datetime-local"
-        ></label>
-        <label>记录创建时间至<input
-          v-model="draft.createdTo"
-          type="datetime-local"
-        ></label>
+        <AdminDateRange
+          v-model:from="draft.createdFrom"
+          v-model:to="draft.createdTo"
+          label="记录创建时间"
+        />
         <label>实付金额从<input
           v-model="draft.minAmount"
           type="number"

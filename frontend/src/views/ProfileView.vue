@@ -298,14 +298,7 @@ onBeforeUnmount(() => {
           v-model="email"
           label="邮箱地址"
           readonly
-          hint="登录邮箱，暂不支持修改"
         />
-        <RouterLink
-          class="text-link"
-          to="/forgot-password"
-        >
-          重新设置密码
-        </RouterLink>
         <AccountField
           v-model="form.bio"
           label="个人简介"

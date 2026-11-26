@@ -253,14 +253,15 @@
 .craft-messages .chat-send { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .craft-messages .chat-send .app-icon { width: 15px; height: 15px; }
 
-.craft-messages .message-notifications {
+/* 通知和举报使用同宽的列表面板、标题栏与状态区。 */
+.craft-messages :is(.message-notifications, .message-reports) {
   min-height: 370px;
   overflow: hidden;
   border: 1px solid var(--craft-border);
   border-radius: 16px;
   background: var(--craft-surface);
 }
-.craft-messages .notification-toolbar {
+.craft-messages :is(.notification-toolbar, .report-list-heading) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -283,8 +284,8 @@
 .craft-messages .connection-indicator::before { width: 6px; height: 6px; border-radius: 50%; background: currentColor; content: ""; }
 .craft-messages .notification-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
 .craft-messages .notification-toolbar .notification-actions { margin-left: auto; }
-.craft-messages .message-notifications > .message-placeholder { min-height: 280px; }
-.craft-messages .message-notifications > :is(.connection-message, .form-alert) { margin: 12px 20px; font-size: 13px; }
+.craft-messages :is(.message-notifications, .message-reports) > .message-placeholder { min-height: 280px; }
+.craft-messages :is(.message-notifications, .message-reports) > :is(.connection-message, .form-alert) { margin: 12px 20px; font-size: 13px; }
 .craft-messages .notification-list { display: block; }
 .craft-messages .notification-card {
   display: grid;

@@ -4,7 +4,8 @@ import { image, mutate, publishWork, register } from './interaction-helpers'
 
 test.use({ storageMode: 'receiver', databaseGroup: 'content-reports', actionTimeout: 15_000 })
 
-test('我的举报等待列表响应时显示加载反馈，响应后显示空状态', async ({ page, mailbox }) => {
+test('消息中心的我的举报保留页签，等待列表响应后显示空状态', async ({ page, mailbox }) => {
+  await page.setViewportSize({ width: 1107, height: 822 })
   await register(page, mailbox.codes, '举报列表访客')
   let release = () => {}
   const hold = new Promise<void>(resolve => { release = resolve })
@@ -13,15 +14,25 @@ test('我的举报等待列表响应时显示加载反馈，响应后显示空�
     await hold
     await route.continue()
   })
+  const tabs = page.getByRole('navigation', { name: '消息中心', exact: true })
   try {
     await page.goto('/messages/notifications')
-    await page.getByRole('link', { name: '我的举报', exact: true }).click()
+    await tabs.getByRole('link', { name: '我的举报', exact: true }).click()
+    await expect(page).toHaveURL('/me/reports')
+    await expect(page.getByRole('heading', { name: '消息中心', exact: true })).toBeVisible()
+    await expect(tabs.getByRole('link', { name: '我的举报', exact: true })).toHaveAttribute('aria-current', 'page')
     await expect(page.getByRole('status').filter({ hasText: '正在读取举报列表' })).toBeVisible()
     await expect(page.getByText('还没有提交过举报。')).toHaveCount(0)
   } finally {
     release()
   }
   await expect(page.getByText('还没有提交过举报。')).toBeVisible()
+  await tabs.getByRole('link', { name: '交易会话', exact: true }).click()
+  await expect(page).toHaveURL('/messages/conversations')
+  await expect(page.getByText('暂无会话', { exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: '查看我的需求', exact: true })).toHaveCount(0)
+  await tabs.getByRole('link', { name: '系统通知', exact: true }).click()
+  await expect(page).toHaveURL('/messages/notifications')
 })
 
 /** 作品、评论与主页举报提交、我的举报列表及后台内容举报处置全链路。 */

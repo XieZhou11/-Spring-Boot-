@@ -111,9 +111,10 @@
   align-items: end;
 }
 .refund-filters .work-field { min-width: 0; margin: 0; color: var(--craft-muted); }
-.refund-filters .refund-order-filter { grid-column: 1 / -1; }
+.refund-filters > :is(.refund-order-filter, .admin-date-range) { grid-column: 1 / -1; }
 .refund-filters :is(input, select) { width: 100%; min-width: 0; min-height: 36px; }
-.refund-filters .button-secondary { justify-self: start; }
+/* 筛选操作跨满队列的两列，与筛选字段的外边缘对齐。 */
+.admin-refund-workspace .refund-filters > button { grid-column: 1 / -1; min-height: 42px; }
 .admin-refund-workspace .refund-queue-row .managed-work-copy { min-width: 0; overflow-wrap: anywhere; }
 .refund-queue-row time { color: var(--craft-muted); font-size: 12px; }
 .refund-queue-action { display: grid; justify-items: end; flex-shrink: 0; gap: 7px; }

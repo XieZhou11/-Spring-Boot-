@@ -209,12 +209,22 @@ test('个人中心桌面布局无横向溢出并保存预览', async ({ page, ma
     headers: { [csrf.headerName]: csrf.token },
     data: { recipientName: '手作收件人', phone: '13800138000', province: '北京市', city: '市辖区', district: '东城区', detailAddress: '春日街道 18 号，手作工作室二层', isDefault: true },
   })).status()).toBe(201)
-  for (const width of [1366, 1440, 375]) {
-    await page.setViewportSize({ width, height: 1000 })
+  for (const width of [1107, 1366, 1440, 375]) {
+    await page.setViewportSize({ width, height: width === 1107 ? 822 : 1000 })
     for (const route of ['profile', 'addresses']) {
       await page.goto(`/account/${route}`)
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-      if (route === 'profile') await expect(page.getByLabel('昵称', { exact: true })).toHaveValue('手作测试')
+      if (route === 'profile') {
+        await expect(page.getByLabel('昵称', { exact: true })).toHaveValue('手作测试')
+        const sidebar = await page.locator('.account-sidebar').boundingBox()
+        const content = await page.locator('.account-content').boundingBox()
+        if (!sidebar || !content) throw new Error('个人中心侧栏或内容未显示')
+        if (width > 760) expect(sidebar).toMatchObject({ y: content.y, height: content.height })
+        else expect(sidebar.y + sidebar.height).toBeLessThan(content.y)
+        await expect(page.getByLabel('邮箱地址', { exact: true })).toHaveJSProperty('readOnly', true)
+        await expect(page.getByText('登录邮箱，暂不支持修改', { exact: true })).toHaveCount(0)
+        await expect(page.getByRole('link', { name: '重新设置密码', exact: true })).toHaveCount(0)
+      }
       if (route === 'addresses') {
         await expect(page.getByRole('article')).toContainText('手作收件人')
         await page.getByRole('button', { name: '编辑', exact: true }).click()

@@ -85,6 +85,13 @@ test('报价撤回重报、地址定标未知响应重试、订单取消与历�
   try {
     const creator = await creatorContext.newPage()
     const { categoryId } = await prepareCreator(creator, await adminContext.newPage(), mailbox.codes, mailbox.promoteAdmin)
+    await creator.setViewportSize({ width: 1107, height: 768 })
+    await creator.goto('/creator/quotes')
+    const findRequests = creator.getByRole('link', { name: /寻找需求/ })
+    const refreshQuotes = await creator.getByRole('button', { name: '刷新报价' }).boundingBox()
+    expect(await findRequests.boundingBox()).toMatchObject({ y: refreshQuotes?.y, height: refreshQuotes?.height })
+    await findRequests.click()
+    await expect(creator).toHaveURL('/requests')
     await register(page, mailbox.codes, '方案买家')
     const content = { title: '原木书签报价验收', categoryId, purpose: '生日礼物', materialPreference: '天然原木', specification: '十二厘米', budgetMin: '100.00', budgetMax: '300.00', expectedShipDate: new Date(Date.now() + 8 * 86400000).toISOString().slice(0, 10), description: '希望为爱读书的朋友制作一枚原木书签，保留自然木纹，边角打磨圆润并刻上名字作为生日纪念。', referenceImageIds: [], visibility: 'PUBLIC', invitedCreatorId: null, sourceWorkId: null }
     const draft = await mutate(page, '/me/custom-requests', { ...content, requestKey: randomUUID() })

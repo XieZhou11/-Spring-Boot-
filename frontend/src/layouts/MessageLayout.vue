@@ -6,7 +6,9 @@ import MessageCenterTabs from '@/components/MessageCenterTabs.vue'
 import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/craftflow-messages.css'
 
-// 消息是独立业务工作区；管理员的系统通知沿用后台外壳。
+defineProps<{ adminTitle?: string }>()
+
+// 前台消息使用同一套页签，管理员的消息入口沿用后台布局。
 const auth = useAuthStore()
 const isAdmin = computed(() => auth.session?.roles.includes('ADMIN') ?? false)
 </script>
@@ -14,7 +16,7 @@ const isAdmin = computed(() => auth.session?.roles.includes('ADMIN') ?? false)
 <template>
   <component
     :is="isAdmin ? AdminLayout : WorkLayout"
-    :title="isAdmin ? '系统通知' : undefined"
+    :title="isAdmin ? (adminTitle ?? '系统通知') : undefined"
   >
     <div class="craft-messages">
       <header

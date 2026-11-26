@@ -4,11 +4,11 @@ import { useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
 import { getCategories } from '@/api/creator'
-import { getRequestQuota, getRequests } from '@/api/customRequest'
+import { getRequests } from '@/api/customRequest'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { CategoryVO } from '@/types/creator'
-import type { CustomRequestVO, RequestQuotaVO } from '@/types/customRequest'
+import type { CustomRequestVO } from '@/types/customRequest'
 import { requestBudget, requestListPaths, requestStatus } from '@/utils/customRequest'
 import { formatTime } from '@/utils/creator'
 import '@/assets/styles/craftflow-demand.css'
@@ -27,7 +27,6 @@ const isBuyer = computed(() => props.scope === 'mine')
 const title = computed(() => ({ mine: '我的需求', hall: '需求大厅', invitations: '收到的定向邀约' })[props.scope])
 const rows = ref<CustomRequestVO[]>([])
 const categories = ref<CategoryVO[]>([])
-const quota = ref<RequestQuotaVO>()
 const total = ref(0)
 const loading = ref(false)
 const error = ref('')
@@ -81,14 +80,6 @@ async function load() {
   } finally {
     if (current === revision) loading.value = false
   }
-  if (isBuyer.value && current === revision) {
-    try {
-      const result = await getRequestQuota()
-      if (current === revision) quota.value = result
-    } catch {
-      // 额度读取失败时保留已加载的需求，可随下次同步更新额度。
-    }
-  }
 }
 
 function goToList(values: Record<string, string>, next: number) {
@@ -118,14 +109,12 @@ watch(() => auth.session?.userId, () => {
   revision++
   rows.value = []
   total.value = 0
-  quota.value = undefined
   loading.value = false
   error.value = ''
   void load()
 }, { flush: 'sync' })
 watch(() => props.refreshVersion, () => { void load() })
 watch(() => props.scope, scope => {
-  quota.value = undefined
   if (scope === 'hall') void getCategories().then(result => categories.value = result).catch(() => { /* 主列表独立显示读取错误。 */ })
 }, { immediate: true })
 
@@ -153,14 +142,9 @@ onBeforeUnmount(() => {
     :aria-label="title"
   >
     <header class="cf-request-list-heading">
-      <div>
-        <component :is="selectedId ? 'h2' : 'h1'">
-          {{ title }}
-        </component>
-        <p v-if="isBuyer && quota">
-          开放中 {{ quota.used }} / {{ quota.limit }} 条 · 草稿不占额度
-        </p>
-      </div>
+      <component :is="selectedId ? 'h2' : 'h1'">
+        {{ title }}
+      </component>
       <RouterLink
         v-if="isBuyer"
         class="button-primary"

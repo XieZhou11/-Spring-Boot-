@@ -7,7 +7,8 @@
 .craft-account .account-shell {
   width: min(1280px, calc(100% - 64px));
   grid-template-columns: 216px minmax(0, 1fr);
-  align-items: start;
+  /* 桌面侧栏与内容共用一行，随较长的一侧撑开。 */
+  align-items: stretch;
   gap: 32px;
   flex: 0 1 auto;
   margin: 32px auto 64px;
@@ -122,7 +123,6 @@
 .craft-account-panel .avatar-selected-preview img { border-color: var(--craft-border); border-radius: 8px; }
 .craft-account-panel .avatar-selected-preview figcaption { color: var(--craft-muted); font-size: 11px; }
 .craft-account-panel .profile-form { gap: 16px; }
-.craft-account-panel .profile-form > .text-link { justify-self: start; margin-top: -6px; }
 .craft-account-panel .creator-pause-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 20px; margin-top: 16px; }
 .craft-account-panel .creator-pause-panel p { margin-top: 5px; color: var(--craft-muted); font-size: 13px; }
 .craft-account-panel .creator-pause-panel > p { grid-column: 1 / -1; margin-top: 0; }

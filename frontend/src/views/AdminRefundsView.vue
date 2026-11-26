@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import AdminLayout from '@/layouts/AdminLayout.vue'
+import AdminDateRange from '@/components/AdminDateRange.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
 import { getAdminRefunds } from '@/api/refund'
 import type { AdminRefundQueueVO } from '@/types/refund'
@@ -121,19 +122,7 @@ onMounted(() => { window.addEventListener('order-updated', refresh); window.addE
 onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', visible) })
 </script>
 <template>
-  <AdminLayout
-    title="售后与退款"
-  >
-    <template #actions>
-      <button
-        type="button"
-        class="button-secondary"
-        :disabled="loading"
-        @click="load()"
-      >
-        刷新售后队列
-      </button>
-    </template>
+  <AdminLayout title="售后与退款">
     <div
       class="admin-review-grid admin-refund-workspace"
       :class="{ 'has-selection': !!route.params.id }"
@@ -168,13 +157,13 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
             type="search"
             maxlength="32"
             placeholder="输入订单编号"
-          ></label><label class="work-field">申请时间从<input
-            v-model="draft.createdFrom"
-            type="datetime-local"
-          ></label><label class="work-field">申请时间至<input
-            v-model="draft.createdTo"
-            type="datetime-local"
-          ></label><label class="work-field">金额从<input
+          ></label>
+          <AdminDateRange
+            v-model:from="draft.createdFrom"
+            v-model:to="draft.createdTo"
+            label="申请时间"
+          />
+          <label class="work-field">金额从<input
             v-model="draft.minAmount"
             type="number"
             min="0"
@@ -185,7 +174,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
             min="0"
             step="0.01"
           ></label><button
-            class="button-secondary"
+            class="button-primary"
             type="submit"
           >
             筛选申请

@@ -10,7 +10,6 @@ async function fillRegistration(page: Page, email: string) {
   await page.getByLabel('昵称').fill('手作测试')
   await page.getByLabel('邮箱地址').fill(email)
   await page.getByLabel('密码', { exact: true }).fill(password)
-  await page.getByLabel('确认密码', { exact: true }).fill(password)
 }
 
 async function requestCode(page: Page, email: string, codes: Map<string, string>) {
@@ -69,14 +68,23 @@ test('旧需求书签登录后保留筛选及锚点，旧消息书签刷新后�
   await expect(page.getByRole('region', { name: '通知列表' })).toBeVisible()
 })
 
-test('三个认证页签可直接访问和互跳，并保留登录回跳地址', async ({ page }) => {
+test('三个认证页签互跳时保留回跳地址且外壳、品牌栏和表单区不位移', async ({ page }) => {
   const target = '/works/42?from=collection#materials'
+  await page.setViewportSize({ width: 855, height: 768 })
   await page.goto(`/login?redirect=${encodeURIComponent(target)}`)
   const tabs = page.getByRole('navigation', { name: '账号入口' })
   await expect(tabs.getByRole('link', { name: '邮箱登录' })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('heading', { name: '欢迎回到匠心集' })).toBeVisible()
   await expect(page.getByLabel('邮箱地址')).toBeVisible()
   await expect(page.getByLabel('密码', { exact: true })).toBeVisible()
+  await expect(page.getByText('登录状态保留 7 天', { exact: true })).toHaveCount(0)
+  const measureLayout = () => Promise.all([
+    page.locator('.craft-auth__card').boundingBox(),
+    page.locator('.craft-auth__intro').boundingBox(),
+    page.locator('.craft-auth__panel').boundingBox(),
+    tabs.boundingBox(),
+  ])
+  const layout = await measureLayout()
   await tabs.getByRole('link', { name: '新用户注册' }).click()
   await expect(page).toHaveURL(url => url.pathname === '/register' && url.searchParams.get('redirect') === target)
   await expect(tabs.getByRole('link', { name: '新用户注册' })).toHaveAttribute('aria-current', 'page')
@@ -84,25 +92,31 @@ test('三个认证页签可直接访问和互跳，并保留登录回跳地址',
   await expect(page.getByLabel('昵称')).toBeVisible()
   await expect(page.getByLabel('邮箱验证码')).toBeVisible()
   await expect(page.getByRole('button', { name: '发送验证码' })).toBeVisible()
+  await expect(page.locator('input[autocomplete="new-password"]')).toHaveCount(1)
+  expect(await measureLayout()).toEqual(layout)
   await tabs.getByRole('link', { name: '找回密码' }).click()
   await expect(page).toHaveURL(url => url.pathname === '/forgot-password' && url.searchParams.get('redirect') === target)
   await expect(tabs.getByRole('link', { name: '找回密码' })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByLabel('新密码', { exact: true })).toBeVisible()
+  await expect(page.locator('input[autocomplete="new-password"]')).toHaveCount(1)
+  await expect(page.getByText('重置成功后，所有设备都需要重新登录。', { exact: true })).toHaveCount(0)
+  expect(await measureLayout()).toEqual(layout)
   await tabs.getByRole('link', { name: '邮箱登录' }).click()
   await expect(page).toHaveURL(url => url.pathname === '/login' && url.searchParams.get('redirect') === target)
+  expect(await measureLayout()).toEqual(layout)
 })
 
-test('空值、邮箱域、昵称和确认密码错误就近提示，密码可切换可见性', async ({ page }) => {
+test('空值、邮箱域、昵称和密码格式错误就近提示，密码可切换可见性', async ({ page }) => {
   await page.goto('/register')
   await page.getByRole('button', { name: '注册账号' }).click()
   await expect(page.getByText('昵称需为 2—8 字')).toBeVisible()
   await expect(page.getByLabel('昵称')).toBeFocused()
   await fillRegistration(page, 'test@gmail.com')
   await page.getByLabel('邮箱验证码').fill('123456')
-  await page.getByLabel('确认密码', { exact: true }).fill('Another123')
+  await page.getByLabel('密码', { exact: true }).fill('short')
   await page.getByRole('button', { name: '注册账号' }).click()
   await expect(page.getByText('请输入 QQ 邮箱或 163 邮箱', { exact: true })).toBeVisible()
-  await expect(page.getByText('两次输入的密码不一致')).toBeVisible()
+  await expect(page.getByText('密码需为 8—20 位', { exact: true })).toBeVisible()
   await expect(page.getByLabel('密码', { exact: true })).toHaveAttribute('type', 'password')
   await page.getByRole('button', { name: '显示密码', exact: true }).click()
   await expect(page.getByLabel('密码', { exact: true })).toHaveAttribute('type', 'text')
@@ -189,12 +203,10 @@ test('邮箱找回重置后旧密码失效、新密码可用，另一设备旧�
     await other.goto(`${frontendOrigin}/login`)
     await signIn(other, email)
     await expect(other.getByRole('heading', { name: '作品广场', exact: true })).toBeVisible()
-    await page.getByRole('link', { name: '手作测试 · 个人中心', exact: true }).click()
-    await page.getByRole('link', { name: /重新设置密码/ }).click()
+    await page.goto('/forgot-password')
     await page.getByLabel('邮箱地址').fill(email)
     await page.getByLabel('邮箱验证码').fill(await requestCode(page, email, mailbox.codes))
     await page.getByLabel('新密码', { exact: true }).fill(newPassword)
-    await page.getByLabel('确认新密码', { exact: true }).fill(newPassword)
     await page.getByRole('button', { name: '重置密码', exact: true }).click()
     await expect(page).toHaveURL(/\/login\?notice=reset$/)
     await expect(page.getByRole('status')).toContainText('密码已重置')

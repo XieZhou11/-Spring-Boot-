@@ -60,6 +60,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('quote-updated', 
           刷新报价
         </button><RouterLink
           v-if="canCreateQuote"
+          class="button-secondary"
           to="/requests"
         >寻找需求 ↗</RouterLink>
       </form>

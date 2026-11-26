@@ -103,11 +103,6 @@ function businessStatus(row: ConversationVO) {
             class="inline-button"
             to="/requests"
           >前往需求大厅</RouterLink>
-          <RouterLink
-            v-else
-            class="inline-button"
-            to="/my-requests"
-          >查看我的需求</RouterLink>
         </div>
         <div
           v-if="rows.length"

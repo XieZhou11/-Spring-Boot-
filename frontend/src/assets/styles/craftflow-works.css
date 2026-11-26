@@ -43,14 +43,11 @@
 }
 
 .cf-work-search-heading h1 {
-  margin: 0 0 5px;
   color: var(--craft-ink);
   font-size: 22px;
   letter-spacing: -.025em;
   line-height: 1.35;
 }
-
-.cf-work-search-heading p { margin: 0; color: var(--craft-muted); font-size: 14px; }
 
 .cf-work-search-fields,
 .cf-work-criteria,

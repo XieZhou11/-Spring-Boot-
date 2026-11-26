@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import WorkLayout from '@/layouts/WorkLayout.vue'
+import MessageLayout from '@/layouts/MessageLayout.vue'
 import { useRoute, useRouter } from 'vue-router'
+import AppIcon from '@/components/AppIcon.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
 import { getMyReports } from '@/api/report'
 import type { ContentReportVO } from '@/types/report'
@@ -42,10 +43,16 @@ watch([page, () => auth.session?.userId, () => auth.session?.roles.includes('ADM
 onBeforeUnmount(() => { revision++ })
 </script>
 <template>
-  <WorkLayout>
-    <div class="report-public-page">
+  <MessageLayout admin-title="举报记录">
+    <section
+      class="message-reports"
+      aria-labelledby="my-reports-heading"
+      :aria-busy="loading"
+    >
       <header class="report-list-heading">
-        <h1>我的举报</h1>
+        <h2 id="my-reports-heading">
+          我的举报
+        </h2>
       </header>
       <p
         v-if="error"
@@ -61,17 +68,18 @@ onBeforeUnmount(() => { revision++ })
       </p>
       <p
         v-if="loading"
-        class="muted"
+        class="account-loading"
         role="status"
       >
         正在读取举报列表…
       </p>
-      <p
+      <div
         v-else-if="!rows.length && !error"
-        class="muted"
+        class="message-placeholder"
       >
-        还没有提交过举报。
-      </p>
+        <span class="message-empty-icon"><AppIcon name="shield" /></span>
+        <p>还没有提交过举报。</p>
+      </div>
       <article
         v-for="row in rows"
         :key="row.id"
@@ -111,13 +119,19 @@ onBeforeUnmount(() => { revision++ })
         label="我的举报分页"
         @change="changePage"
       />
-    </div>
-  </WorkLayout>
+    </section>
+  </MessageLayout>
 </template>
 <style scoped>
-/* 举报列表与消息中心使用同一套标题字形。 */
-.report-list-heading h1 { color: var(--craft-ink); font: 650 24px/1.35 var(--craft-font); }
-.report-list-item { display: grid; gap: 6px; }
+/* 举报条目按消息列表的行距排列，长文本在当前行内折行。 */
+.report-list-heading h2 { color: var(--craft-ink); font: 650 16px/1.4 var(--craft-font); }
+.report-list-item {
+  display: grid;
+  gap: 6px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--craft-border);
+}
+.message-placeholder p { font: 650 16px/1.4 var(--craft-font); }
 .report-list-item p { margin: 0; overflow-wrap: anywhere; }
 .report-list-item a { justify-self: start; }
 .report-item-heading { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

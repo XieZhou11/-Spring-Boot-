@@ -42,7 +42,7 @@ async function watchSettlementEvent(page: Page, eventType: string, orderId: stri
       if (typeof payload !== 'string') return
       const event = JSON.parse(payload) as { type: string; notification?: NotificationVO }
       if (event.type === 'SYSTEM_NOTIFICATION' && event.notification?.eventType === eventType
-          && event.notification.businessReference.id === orderId) {
+          && event.notification.businessReference?.id === orderId) {
         received.push(event.notification)
       }
     })
@@ -84,6 +84,7 @@ test('创作者与管理员按角色查询待结算、已结算与退款取消�
     await expect(creator.getByRole('heading', { name: '暂无收入记录' })).toBeVisible()
     await creator.getByLabel('结算状态', { exact: true }).selectOption('')
     // 管理员资金记录含已审核收款资料明文，仅管理员可达。
+    await admin.setViewportSize({ width: 930, height: 774 })
     await admin.goto('/admin/settlements')
     const adminRow = admin.locator('.settlement-row').filter({ hasText: order.title })
     await expect(adminRow).toContainText('待结算')
@@ -92,6 +93,11 @@ test('创作者与管理员按角色查询待结算、已结算与退款取消�
     await admin.getByLabel('结算状态', { exact: true }).selectOption('PENDING')
     await expect(adminRow).toBeVisible()
     await admin.getByRole('textbox', { name: '订单号', exact: true }).fill(order.orderNo)
+    const dates = admin.getByRole('group', { name: '记录创建时间', exact: true })
+    const createdFrom = '2001-01-01T08:30'
+    const createdTo = '2099-12-31T20:45'
+    await dates.getByLabel('记录创建时间从', { exact: true }).fill(createdFrom)
+    await dates.getByLabel('记录创建时间至', { exact: true }).fill(createdTo)
     await admin.getByLabel('实付金额从').fill('0')
     await admin.getByLabel('实付金额至').fill('0')
     await admin.getByRole('button', { name: '查询', exact: true }).click()
@@ -105,6 +111,8 @@ test('创作者与管理员按角色查询待结算、已结算与退款取消�
     await admin.getByRole('link', { name: '返回资金记录' }).click()
     await expect(admin.getByRole('textbox', { name: '订单号', exact: true })).toHaveValue(order.orderNo)
     await expect(admin.getByLabel('实付金额从')).toHaveValue('0')
+    await expect(dates.getByLabel('记录创建时间从', { exact: true })).toHaveValue(createdFrom)
+    await expect(dates.getByLabel('记录创建时间至', { exact: true })).toHaveValue(createdTo)
     await expect(admin.getByLabel('结算状态', { exact: true })).toHaveValue('PENDING')
     await expect(adminRow).toBeVisible()
     await admin.goto('/admin/orders')

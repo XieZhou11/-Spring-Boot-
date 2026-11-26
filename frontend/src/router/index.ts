@@ -98,21 +98,28 @@ const router = createRouter({
     },
     {
       path: '/login',
-      name: 'login',
-      component: () => import('@/views/LoginView.vue'),
-      meta: { guestOnly: true, title: '登录' },
-    },
-    {
-      path: '/register',
-      name: 'register',
-      component: () => import('@/views/RegisterView.vue'),
-      meta: { guestOnly: true, title: '注册' },
-    },
-    {
-      path: '/forgot-password',
-      name: 'forgot-password',
-      component: () => import('@/views/ForgotPasswordView.vue'),
-      meta: { title: '找回密码' },
+      component: () => import('@/layouts/AuthLayout.vue'),
+      // 三个认证地址共用父布局，页签切换只更新右侧表单。
+      children: [
+        {
+          path: '',
+          name: 'login',
+          component: () => import('@/views/LoginView.vue'),
+          meta: { guestOnly: true, title: '登录' },
+        },
+        {
+          path: '/register',
+          name: 'register',
+          component: () => import('@/views/RegisterView.vue'),
+          meta: { guestOnly: true, title: '注册' },
+        },
+        {
+          path: '/forgot-password',
+          name: 'forgot-password',
+          component: () => import('@/views/ForgotPasswordView.vue'),
+          meta: { title: '找回密码' },
+        },
+      ],
     },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
