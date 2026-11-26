@@ -218,8 +218,20 @@ test('混合举报队列分流评价裁定、恢复口碑并通知关联用户',
     const reportId = visitor.url().split('/').at(-1)!
     await visitor.getByRole('button', { name: '补充证据', exact: true }).click()
     await visitor.getByLabel('材料说明', { exact: true }).fill('补充订单评价截图相关说明。')
+    await visitor.getByLabel(/证据图片/).setInputFiles({ name: 'review-evidence.png', mimeType: 'image/png', buffer: image })
+    await expect(visitor.getByText('证据图片（1 / 6 张）', { exact: true })).toBeVisible()
+    await expect(visitor.getByRole('img', { name: '举报证据图片 1', exact: true })).toBeVisible()
     await visitor.getByRole('button', { name: '提交补充证据', exact: true }).click()
     await expect(visitor.getByText('补充订单评价截图相关说明。')).toBeVisible()
+    await expect(visitor.getByRole('img', { name: '补充材料图片', exact: true })).toBeVisible()
+    const rejected = await mutate(visitor, '/review-reports/' + reportId + '/evidence', {
+      content: '核对无法转换为文件编号的输入。',
+      imageIds: ['9223372036854775808'],
+    })
+    expect(rejected.status()).toBe(400)
+    expect((await rejected.json()).data.fieldErrors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'imageIds[0]' })]),
+    )
 
     await admin.goto('/admin/content-reports?status=PENDING&type=REVIEW')
     await admin.getByRole('button', { name: /举报评价/ }).filter({ hasText: content }).click()

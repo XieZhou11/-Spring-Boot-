@@ -9,5 +9,9 @@ import lombok.Setter;
 @Getter @Setter
 public class ReviewReportEvidenceDTO {
     /** 补充说明或异议内容。 */ @Size(max=1000) private String content;
-    /** 本人上传的证据图片编号。 */ @NotNull @Size(max=6) private List<@NotBlank @Pattern(regexp="[1-9][0-9]{0,18}") String> imageIds=List.of();
+    /** 本人上传的证据图片编号，最多六张，每个编号为 1 至 18 位正整数字符串。 */
+    @NotNull
+    @Size(max = 6)
+    private List<@NotBlank @Pattern(regexp = "[1-9][0-9]{0,17}",
+            message = "图片编号须为 1–18 位正整数字符串") String> imageIds = List.of();
 }

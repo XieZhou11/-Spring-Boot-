@@ -12,6 +12,9 @@ public class ContentReportDTO {
     @NotBlank @Pattern(regexp="COPYRIGHT|FALSE_ADVERTISING|OFFSITE|ABUSE|OTHER") private String reasonCode;
     /** 举报说明，可仅用图片举证。 */
     @Size(max=1000) private String description;
-    /** 本人已上传的举报证据图片编号。 */
-    @NotNull @Size(max=6) private List<@NotBlank @Pattern(regexp="[1-9][0-9]{0,18}") String> imageIds=List.of();
+    /** 本人已上传的举报证据图片编号，最多六张，每个编号为 1 至 18 位正整数字符串。 */
+    @NotNull
+    @Size(max = 6)
+    private List<@NotBlank @Pattern(regexp = "[1-9][0-9]{0,17}",
+            message = "图片编号须为 1–18 位正整数字符串") String> imageIds = List.of();
 }

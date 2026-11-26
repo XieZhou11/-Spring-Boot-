@@ -37,11 +37,27 @@ public class ContentReportServiceImpl implements ContentReportService {
     });}
 
     @Override @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
-    public ContentReportVO submitCommentReport(Long userId,Long commentId,ContentReportDTO input){return BusinessLog.run(LOG,"作品评论违规举报",userId,()->{
-        var c=reports.lockComment(commentId);if(c==null||c.getUserDeletedAt()!=null||!"VISIBLE".equals(c.getModerationStatus()))throw missing("评论不存在或已不可见");
-        var w=reports.lockWork(c.getWorkId());if(w==null||w.getDeletedAt()!=null||!"ONLINE".equals(w.getReviewStatus()))throw missing("作品不存在或已下架");
-        return submit(userId,"COMMENT",commentId,c.getAuthorId(),input,()->excerpt(c.getContent())+"（作品："+w.getTitle()+"）");
-    });}
+    public ContentReportVO submitCommentReport(Long userId, Long commentId, ContentReportDTO input) {
+        return BusinessLog.run(LOG, "作品评论违规举报", userId, () -> {
+            // 普通读取只用于定位作品，举报与作者删除均先锁作品、再锁评论。
+            var initialComment = reports.comment(commentId);
+            if (initialComment == null) {
+                throw missing("评论不存在或已不可见");
+            }
+            var work = reports.lockWork(initialComment.getWorkId());
+            if (work == null || work.getDeletedAt() != null || !"ONLINE".equals(work.getReviewStatus())) {
+                throw missing("作品不存在或已下架");
+            }
+            var comment = reports.lockComment(commentId);
+            if (comment == null || !Objects.equals(comment.getWorkId(), work.getId())
+                    || comment.getUserDeletedAt() != null || !"VISIBLE".equals(comment.getModerationStatus())) {
+                throw missing("评论不存在或已不可见");
+            }
+            LOG.info("评论举报目标校验完成：userId={}, workId={}, commentId={}", userId, work.getId(), commentId);
+            return submit(userId, "COMMENT", commentId, comment.getAuthorId(), input,
+                    () -> excerpt(comment.getContent()) + "（作品：" + work.getTitle() + "）");
+        });
+    }
 
     @Override @Transactional(rollbackFor=Exception.class,isolation=Isolation.READ_COMMITTED)
     public ContentReportVO submitProfileReport(Long userId,Long creatorId,ContentReportDTO input){return BusinessLog.run(LOG,"创作者主页违规举报",userId,()->{
@@ -59,8 +75,8 @@ public class ContentReportServiceImpl implements ContentReportService {
         validateImages(userId,ids);
         var pending=reports.pending(userId,targetType,targetId);
         ReviewReport report;
-        if(pending==null){report=new ReviewReport();report.setReporterId(userId);report.setTargetType(targetType);report.setTargetId(targetId);report.setReasonCode(input.getReasonCode());report.setDescription(description);report.setImageIds(json.writeValueAsString(ids));reports.insertReport(report);LOG.info("内容举报已提交：type={}, targetId={}, reportId={}, reporterId={}",targetType,targetId,report.getId(),userId);}
-        else{reports.addEvidence(pending.getId(),userId,"SUPPLEMENT",description,json.writeValueAsString(ids));report=pending;LOG.info("内容举报重复提交合并补证：type={}, targetId={}, reportId={}, reporterId={}",targetType,targetId,report.getId(),userId);}
+        if(pending==null){report=new ReviewReport();report.setReporterId(userId);report.setTargetType(targetType);report.setTargetId(targetId);report.setReasonCode(input.getReasonCode());report.setDescription(description);report.setImageIds(json.writeValueAsString(ids));reports.insertReport(report);LOG.info("内容举报已写入事务：type={}, targetId={}, reportId={}, reporterId={}",targetType,targetId,report.getId(),userId);}
+        else{reports.addEvidence(pending.getId(),userId,"SUPPLEMENT",description,json.writeValueAsString(ids));report=pending;LOG.info("重复举报补证已写入事务：type={}, targetId={}, reportId={}, reporterId={}",targetType,targetId,report.getId(),userId);}
         logs.record(userId,false,"CONTENT_REPORT",report.getId(),"SUBMIT",null,"PENDING",null,Map.of("targetType",targetType,"targetId",targetId.toString()));
         return reportView(report,summary.get());
     }

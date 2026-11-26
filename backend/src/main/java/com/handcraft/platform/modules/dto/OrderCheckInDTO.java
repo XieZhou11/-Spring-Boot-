@@ -11,6 +11,7 @@ public class OrderCheckInDTO {
     @NotBlank @Pattern(regexp="[A-Za-z0-9_-]{1,64}") private String requestKey;
     /** 定制阶段完成说明；现货发货不提交制作过程内容。 */
     @Size(max=500) private String content="";
-    /** 定制阶段实拍图；现货发货不提交节点图片。 */
+    /** 定制阶段须附 1 至 6 张实拍图，现货发货可使用默认空列表。 */
+    @NotNull(message = "图片列表须为数组")
     @Size(max=6) private List<@NotBlank @Pattern(regexp="[1-9][0-9]{0,18}") String> imageIds=new ArrayList<>();
 }

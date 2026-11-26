@@ -109,6 +109,28 @@ test('举报入口提交、我的举报列表与后台隐藏评论处置', async
     await expect(page.getByText('0 评论', { exact: false })).toBeVisible()
     await expect(page.getByText(comment, { exact: true })).toHaveCount(0)
 
+    // 作者自删走公开作品入口，已提交举报仍可在举报记录中查到。
+    const selfDeletedComment = '这条正常讨论用于核对作者删除和举报记录是否彼此独立。'
+    const selfDeletedReport = '为这条评论提交的核验说明。'
+    await creator.goto('/works/' + workId)
+    await creator.getByLabel('评论内容', { exact: true }).fill(selfDeletedComment)
+    await creator.getByRole('button', { name: '发表评论', exact: true }).click()
+    await expect(creator.getByText(selfDeletedComment, { exact: true })).toBeVisible()
+    await page.reload()
+    await page.getByRole('button', { name: '举报评论', exact: true }).click()
+    await page.getByLabel('说明', { exact: true }).fill(selfDeletedReport)
+    await page.getByRole('button', { name: '提交评论举报', exact: true }).click()
+    await expect(page.getByText('举报已提交，管理员将核查处理', { exact: false })).toBeVisible()
+    creator.once('dialog', dialog => dialog.accept())
+    await creator.getByRole('button', { name: '删除评论', exact: true }).click()
+    await expect(creator.getByText(selfDeletedComment, { exact: true })).toHaveCount(0)
+    await page.reload()
+    await expect(page.getByText('0 评论', { exact: false })).toBeVisible()
+    await page.goto('/me/reports')
+    const retainedReport = page.getByRole('article').filter({ hasText: selfDeletedReport })
+    await retainedReport.getByRole('link', { name: '查看详情', exact: true }).click()
+    await expect(page.getByText(selfDeletedReport, { exact: true })).toBeVisible()
+
     // 管理员暂停被举报主页的新业务，创作者收到持久化系统通知。
     await admin.goto('/admin/content-reports')
     await admin.getByRole('button', { name: /创作者主页/ }).click()

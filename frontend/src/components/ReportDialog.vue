@@ -92,7 +92,7 @@ onBeforeUnmount(() => { active = false })
       :disabled="busy || unknown"
       placeholder="描述需要核实的问题；也可仅附图片证据"
     /></label>
-    <label>证据图片（最多{{ maxImages }}张）<input
+    <label>证据图片（{{ images.length }} / {{ maxImages }} 张）<input
       type="file"
       accept="image/jpeg,image/png,image/webp"
       :disabled="busy || unknown || images.length >= maxImages"

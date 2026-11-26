@@ -1,6 +1,6 @@
 # MVP 后端专项审查修复实施计划
 
-- 前三批已通过验收，第四批待开始。制定日期为 2026-11-25。
+- 前四批已通过验收，第五批待开始。制定日期为 2026-11-25。
 - 开发基线为 `main` 的 `8a556dc`。需求、业务状态和验收口径见 [V1.5 MVP 需求正文](../requirements/requirements.md)。
 - 每次选定一个批次实施。完成该批的关键后端验证和前端主流程联调后，记录结果并交接到下一批。开始实际修复时按仓库约定登记业务任务，验证结果写入对应测试记录。
 
@@ -61,12 +61,14 @@
 
 **目标。** 评论举报与作者删除使用同一行锁顺序。无效图片编号和定制打卡缺图返回明确的输入错误。对应 §4.2.4、§4.6.2、UC-08、UC-22。
 
-- [ ] **统一评论锁序。** `ContentReportServiceImpl.submitCommentReport` 先读取评论取得作品编号，依次锁作品和评论，锁内重检作品状态、评论归属、可见性及作者删除状态。用两个测试账号验证正常举报和删除，再用隔离 MySQL 验证一次并发。举报先完成时举报与删除均成功，删除先完成时举报返回 `404`。
-- [ ] **缩短相关图片编号输入上限。** 拟将 `OrderReviewDTO`、`ReviewReportDTO`、`ContentReportDTO` 和 `ReviewReportEvidenceDTO` 的 `imageIds` 限为最多 18 位正整数字符串。超出时返回字段级 `400`。沿用数据库主键和前端字符串类型，页面以缩略图和张数展示。实施前检查存量编号，存在合法 19 位编号时保留该编号的提交兼容，并按 `Long` 正整数上界校验。
-- [ ] **校验定制图片张数。** `OrderCheckInDTO` 拒绝显式 `null`。在 `OrderFulfillmentServiceImpl` 的普通打卡及包装发货定制分支中，写入前要求 1–6 张，保留数据库约束。现货发货继续只需运单，节点补充仍可提交纯文字。
-- [ ] **联调。** 带图评价及举报补证各提交一次，核对超长编号返回字段错误。在定制单用一张图完成节点，空图得到明确提示且状态未推进。现货单仅填运单仍可发货。
+- [x] **统一评论锁序。** `ContentReportServiceImpl.submitCommentReport` 先读取评论取得作品编号，依次锁作品和评论，锁内重检作品状态、评论归属、可见性及作者删除状态。隔离 MySQL 覆盖并发的两种顺序。举报先完成时举报与删除均成功，删除先完成时举报返回 `404`。
+- [x] **缩短相关图片编号输入上限。** 开发库只读检查未发现合法的 19 位文件编号。`OrderReviewDTO`、`ReviewReportDTO`、`ContentReportDTO` 和 `ReviewReportEvidenceDTO` 的 `imageIds` 接受 1–18 位正整数字符串，越界返回字段级 `400`。沿用数据库主键和前端字符串类型，页面以缩略图和张数展示。
+- [x] **校验定制图片张数。** `OrderCheckInDTO` 拒绝显式 `null`。`OrderFulfillmentServiceImpl` 在普通打卡及定制包装发货写入前要求 1–6 张，数据库约束继续兜底。现货凭运单发货，节点补充可提交纯文字。
+- [x] **联调。** 浏览器验证评论举报与自删、图文评价、带图补证和超长编号字段错误。定制打卡及发货空图有明确提示，各自补一张图后成功。现货只填运单即可发货。
 
 [评论举报](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/ContentReportServiceImpl.java) · [评论删除](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/WorkInteractionServiceImpl.java) · [定制打卡和发货](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/OrderFulfillmentServiceImpl.java) · [制作履约联调用例](../../frontend/e2e/order-fulfillment.spec.ts)
+
+2026-11-26 第四批验收通过。隔离 MySQL 定向 71 项、Playwright 11 项（含单项复测）、前端类型检查、lint、构建及独立审查通过。 [任务](tasks/T-031-comment-lock-image-validation.md) · [测试记录](../testing/T-031-comment-lock-image-validation.md)
 
 ## 第 5 批 · 日期、交易通知与资金看板
 

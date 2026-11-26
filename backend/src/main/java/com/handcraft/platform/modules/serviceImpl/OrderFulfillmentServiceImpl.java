@@ -92,7 +92,9 @@ public class OrderFulfillmentServiceImpl implements OrderFulfillmentService {
         if(retry(actor,nodeId,input.getRequestKey(),"CHECKIN",input.getContent(),input.getImageIds(),null))return false;
         active(c);if(!"IN_PRODUCTION".equals(c.order().getStatus()))throw conflict("订单当前不可制作打卡");
         var nodes=nodesAndConversation(c.order());var node=node(nodes,nodeId);if(node.getSortOrder()==5)throw conflict("包装发货节点须随运单号同时提交");
-        ready(nodes,node);requireContent(input.getContent(),5);unique(input.getImageIds());images.validate(actor,orderId,"PROGRESS",input.getImageIds());
+        ready(nodes,node);requireContent(input.getContent(),5);
+        requireProgressImages(input.getImageIds());
+        unique(input.getImageIds());images.validate(actor,orderId,"PROGRESS",input.getImageIds());
         var record=record(actor,nodeId,input.getRequestKey(),"CHECKIN",input.getContent(),input.getImageIds(),null,c.now());
         String before=c.order().getStatus();handled(c,nodes,node,"CHECKED");history(actor,c,"PROGRESS_CHECKIN",before,c.order().getStatus(),Map.of("recordId",record.getId().toString()));
         notifications.fulfillmentChanged(c.order().getBuyerId(),"ORDER_PROGRESS",record.getId(),orderId,c.order().getRequestId());conversations.orderChanged(c.order());return true;
@@ -140,6 +142,7 @@ public class OrderFulfillmentServiceImpl implements OrderFulfillmentService {
         }
         active(c);if(!"PENDING_SHIP".equals(c.order().getStatus()))throw conflict("仅前四节点完成后的订单可发货");
         var nodes=nodesAndConversation(c.order());var fifth=nodes.getLast();ready(nodes,fifth);requireContent(input.getContent(),5);
+        requireProgressImages(input.getImageIds());
         unique(input.getImageIds());images.validate(actor,orderId,"PROGRESS",input.getImageIds());
         var record=record(actor,fifth.getId(),input.getRequestKey(),"CHECKIN",input.getContent(),input.getImageIds(),null,c.now());
         fulfillment.nodeState(fifth.getId(),"CHECKED",c.now(),c.now());
@@ -207,6 +210,12 @@ public class OrderFulfillmentServiceImpl implements OrderFulfillmentService {
     private void both(Locked c,String event,Long eventId){var order=c.order();notifications.fulfillmentChanged(order.getBuyerId(),event,eventId,order.getId(),order.getRequestId());notifications.fulfillmentChanged(order.getCreatorId(),event,eventId,order.getId(),order.getRequestId());}
     private List<String> ids(String raw){return json.readValue(raw,new TypeReference<List<String>>(){});}
     private void requireContent(String content,int minimum){if(content==null||content.strip().length()<minimum||content.length()>500)throw invalid("说明字数不符合要求");}
+    /** 定制首次打卡和包装发货均要求阶段实拍图。 */
+    private void requireProgressImages(List<String> imageIds) {
+        if (imageIds == null || imageIds.isEmpty() || imageIds.size() > 6) {
+            throw invalid("请上传 1–6 张当前阶段实拍图");
+        }
+    }
     private void unique(List<String> imageIds){if(new HashSet<>(imageIds).size()!=imageIds.size())throw invalid("同一提交不能重复引用图片");}
     private void participant(Long actor,TradeOrder order){if(order==null||!Set.of("CUSTOM","STOCK").contains(order.getOrderType())||!Objects.equals(actor,order.getBuyerId())&&!Objects.equals(actor,order.getCreatorId()))throw new BusinessException(CommonErrorCode.NOT_FOUND);}
     private static BusinessException conflict(String text){return new BusinessException(CommonErrorCode.CONFLICT,text);}
