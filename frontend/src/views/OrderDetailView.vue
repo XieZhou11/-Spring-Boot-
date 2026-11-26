@@ -448,7 +448,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', 
                 <dt>付款截止</dt><dd>{{ formatTime(order.payDeadlineAt) }}</dd>
               </div>
               <div v-else-if="order.orderType === 'STOCK' && order.shipDeadlineAt">
-                <dt>发货截止</dt><dd><time :datetime="order.shipDeadlineAt">{{ formatTime(order.shipDeadlineAt) }}</time></dd>
+                <dt>发货截止</dt><dd><time :datetime="order.shipDeadlineAt">{{ formatTime(order.shipDeadlineAt, 'medium') }}</time></dd>
               </div>
               <div v-else-if="order.orderType === 'CUSTOM' && order.shipDate">
                 <dt>约定发货日</dt><dd><time :datetime="order.shipDate">{{ order.shipDate }}</time></dd>

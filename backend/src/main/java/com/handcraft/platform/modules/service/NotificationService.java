@@ -1,13 +1,17 @@
 package com.handcraft.platform.modules.service;
 
+import com.handcraft.platform.modules.entity.TradeOrder;
 import com.handcraft.platform.modules.vo.*;
+import java.math.BigDecimal;
 
 /** 持久化通知与已读状态，实时推送不替代数据库记录。 */
 public interface NotificationService {
-    /** 售后申请、证据、终局及取消待结算与业务同事务保存，按事件编号去重。 */
+    /** 售后申请、证据和处理结果与业务同事务保存，按事件编号去重。 */
     void refundChanged(Long recipientId,String eventType,Long eventId,Long orderId,Long requestId);
     /** 履约按原始记录或操作编号去重，事件键与订单跳转编号独立。 */
     void fulfillmentChanged(Long recipientId,String eventType,Long eventId,Long orderId,Long requestId);
+    /** 在结算或退款事务内保存双方的结算结果通知，金额仅在创作者正文展示。 */
+    void settlementChanged(TradeOrder order, String eventType, Long eventId, BigDecimal amount);
     /** 报价与订单事件按业务对象去重，与业务同事务保存，提交后推送。 */
     void tradeChanged(Long recipientId,String eventType,String businessType,Long businessId,Long requestId);
     /** 与需求状态事务一起保存按事件和接收人去重的邀约、关闭或过期通知。 */

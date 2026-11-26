@@ -207,7 +207,7 @@ public class OrderServiceImpl implements OrderService {
         if("STOCK".equals(order.getOrderType())){
             if(stockWork==null||!Objects.equals(stockWork.getStockOrderId(),order.getId())||works.releaseStock(order.getWorkId(),order.getId(),policy.now())!=1)throw conflict("现货占用关联异常，取消未完成");
             stockWork.setStockStatus("AVAILABLE");stockWork.setStockOrderId(null);
-        }else lifecycle.state(request,"CLOSED",actorId);
+        }else lifecycle.closeForOrder(request,actorId);
         logs.record(actorId,false,"ORDER",order.getId(),"CANCEL","PENDING_PAY","CANCELLED",reason,Map.of("occurredAt",occurredAt.toString()));
         notifications.tradeChanged(order.getBuyerId(),"ORDER_CANCELLED","ORDER",order.getId(),order.getRequestId());
         notifications.tradeChanged(order.getCreatorId(),"ORDER_CANCELLED","ORDER",order.getId(),order.getRequestId());
@@ -267,13 +267,23 @@ public class OrderServiceImpl implements OrderService {
         var refundView=refund==null?null:new OrderNoStartRefundVO(refund.getId().toString(),refund.getDescription(),ids(refund.getImageIds()),refundedFlow==null?null:refundedFlow.getAmount().setScale(2).toPlainString(),refundedFlow==null?null:refundedFlow.getFlowNo(),time(refund.getFinishedAt()),refund.getDecisionReason());
         boolean canPay=owned&&"PENDING_PAY".equals(status)&&!buyer.isAdmin();
         var preview=detailed&&canPay?("STOCK".equals(order.getOrderType())?paymentService.stockPreview(now):paymentService.preview(now.toLocalDate(),order.getDurationDays())):null;
+        // 发货截止取付款快照。定制以次日零时为上界，现货直接使用截止当天。
+        boolean custom = "CUSTOM".equals(order.getOrderType());
+        LocalDateTime paidAt = order.getPaidAt();
+        LocalDateTime shipDeadline = paidAt == null ? null : order.getShipDeadlineAt();
+        LocalDate shipDate = shipDeadline == null ? null : shipDeadline.toLocalDate();
+        if (custom && shipDate != null) {
+            shipDate = shipDate.minusDays(1);
+        }
+        LocalDateTime startDeadline = custom && paidAt != null ? paidAt.plusHours(48) : null;
         return new OrderVO(order.getId().toString(),order.getOrderNo(),order.getOrderType(),order.getBuyerId().toString(),buyer.getNickname(),
                 order.getCreatorId().toString(),creator.getNickname(),text(order.getRequestId()),text(order.getQuoteId()),status,
                 order.getTitleSnapshot(),order.getTotalAmount().setScale(2).toPlainString(),order.getDurationDays(),map(order.getAgreementSnapshot()),
                 detailed&&(owned||"PENDING_SHIP".equals(status)||order.getShippedAt()!=null)?map(order.getAddressSnapshot()):null,time(order.getCreatedAt()),time(order.getPayDeadlineAt()),time(cancelledAt),reason,
                 owned,owned&&"PENDING_PAY".equals(status),conversation==null?null:conversation.getId().toString(),history,
-                canPay,paidAmount,time(order.getPaidAt()),time(order.getTermsConfirmedAt()),order.getShipDeadlineAt()==null?null:order.getShipDeadlineAt().toLocalDate().minusDays(1),
-                time(order.getShipDeadlineAt()),preview,paymentView,settlementView,nodes,time(order.getStartedAt()),time(order.getPaidAt()==null?null:order.getPaidAt().plusHours(48)),order.getTrackingNo(),time(order.getShippedAt()),time(order.getAutoConfirmAt()),time(order.getOriginalCompletedAt()),time(now),
+                canPay,paidAmount,time(paidAt),time(order.getTermsConfirmedAt()),shipDate,time(shipDeadline),
+                preview,paymentView,settlementView,nodes,time(order.getStartedAt()),time(startDeadline),
+                order.getTrackingNo(),time(order.getShippedAt()),time(order.getAutoConfirmAt()),time(order.getOriginalCompletedAt()),time(now),
                 active&&!owned&&"PAID".equals(status),active&&!owned&&"PENDING_SHIP".equals(status),active&&!owned&&"SHIPPED".equals(status),active&&owned&&"SHIPPED".equals(status),
                 active&&owned&&"PAID".equals(status)&&order.getStartedAt()==null&&order.getPaidAt()!=null&&!now.isBefore(order.getPaidAt().plusHours(48)),
                 Set.of("PAID","IN_PRODUCTION","PENDING_SHIP").contains(status)&&order.getShippedAt()==null&&order.getShipDeadlineAt()!=null&&!now.isBefore(order.getShipDeadlineAt()),trackingHistory,refundView,owned&&!pending&&refundService.eligible(order,now),time(order.getOriginalCompletedAt()==null?null:order.getOriginalCompletedAt().plusDays(7)),

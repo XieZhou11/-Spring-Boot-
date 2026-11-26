@@ -46,12 +46,13 @@ public class OrderRefundExecutionServiceImpl implements OrderRefundExecutionServ
         else if(!noStart||!"REFUNDED".equals(refund.getStatus()))throw conflict("退款申请状态异常");
         order.setStatus("REFUNDED");order.setUpdatedAt(now);if(fulfillment.updateOrder(order)!=1)throw conflict("订单状态已变化");
         // 现货继续保持售出及原订单关联，作品恢复销售由创作者单独确认。
-        if(custom)lifecycle.state(request,"CLOSED",actor);
+        if(custom)lifecycle.closeForOrder(request,actor);
         var detail=new LinkedHashMap<String,Object>();if(audit!=null)detail.putAll(audit);detail.put("occurredAt",now.toString());detail.put("refundId",refund.getId().toString());detail.put("paymentFlowNo",context.payment().getFlowNo());detail.put("refundFlowNo",flow.getFlowNo());
         logs.record(actor,admin,"ORDER",order.getId(),action,before,"REFUNDED",refund.getDecisionReason(),detail);
         if(noStart){notifications.fulfillmentChanged(order.getBuyerId(),"ORDER_NO_START_REFUNDED",refund.getId(),order.getId(),order.getRequestId());notifications.fulfillmentChanged(order.getCreatorId(),"ORDER_NO_START_REFUNDED",refund.getId(),order.getId(),order.getRequestId());}
         else {notifications.refundChanged(order.getBuyerId(),"REFUND_APPROVED",refund.getId(),order.getId(),order.getRequestId());notifications.refundChanged(order.getCreatorId(),"REFUND_APPROVED",refund.getId(),order.getId(),order.getRequestId());}
-        notifications.refundChanged(order.getCreatorId(),"SETTLEMENT_CANCELLED",refund.getId(),order.getId(),order.getRequestId());conversations.orderChanged(order);
+        notifications.settlementChanged(order, "SETTLEMENT_CANCELLED", refund.getId(), context.settlement().getPaidAmount());
+        conversations.orderChanged(order);
         LOGGER.info("订单全额退款结果已准备：orderId={}, refundId={}, stage=资金及状态同事务",order.getId(),refund.getId());return null;
     });}
     private void validate(TradeOrder order,OrderSettlement settlement,FundFlow payment){if(payment==null||settlement==null||!"PENDING".equals(settlement.getStatus())||fulfillment.refundFlowForOrder(order.getId())!=null)throw conflict("原支付、待结算或成功退款状态异常");if(payment.getAmount().compareTo(order.getTotalAmount())!=0||payment.getAmount().compareTo(settlement.getPaidAmount())!=0)throw conflict("订单成交、原成功支付与待结算金额不一致，请联系平台处理");}

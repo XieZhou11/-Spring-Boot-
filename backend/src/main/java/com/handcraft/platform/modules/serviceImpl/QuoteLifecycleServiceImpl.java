@@ -93,6 +93,20 @@ public class QuoteLifecycleServiceImpl implements QuoteLifecycleService {
         LOGGER.info("需求状态变更已准备：requestId={}, before={}, after={}",request.getId(),before,status);
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void closeForOrder(CustomRequest request, Long actorId) {
+        if ("CLOSED".equals(request.getStatus())) {
+            return;
+        }
+        state(request, "CLOSED", actorId);
+        // 定向成单的双方继续使用原会话。只在本次关闭时保存需求结果通知。
+        if ("DIRECTED".equals(request.getVisibility())) {
+            notifications.customRequestChanged(request.getBuyerId(), request.getId(), "REQUEST_CLOSED");
+            notifications.customRequestChanged(request.getInvitedCreatorId(), request.getId(), "REQUEST_CLOSED");
+        }
+    }
+
     @Transactional(propagation=Propagation.MANDATORY)
     public void terminate(CustomRequest request,String status,Long actorId) {
         var history=quotes.lockForRequest(request.getId());

@@ -33,14 +33,14 @@ import java.time.LocalDate;
  * @param paidAmount 原成功实付金额，未付为空
  * @param paidAt 原成功付款时间
  * @param termsConfirmedAt 原付款条款确认时间
- * @param shipDate 支付固定的约定发货日
- * @param shipDeadlineAt 发货日次日零时的排他截止上界
+ * @param shipDate 现货为发货截止的北京时间日期，定制为约定发货日，未付款为空
+ * @param shipDeadlineAt 付款时固定的排他截止，现货为付款后四十八小时，定制为约定发货日次日零时
  * @param paymentPreview 仅买家待付款详情的条款及日期预览
  * @param payment 仅订单双方详情的原成功付款信息
  * @param settlement 仅创作者详情的脱敏结算信息
  * @param progressNodes 仅详情的固定节点计划，列表为空数组
  * @param startedAt 首次开工时间
- * @param startDeadlineAt 支付后四十八小时边界
+ * @param startDeadlineAt 已付款定制的开工截止，现货或未付款为空
  * @param trackingNo 当前有效运单号
  * @param shippedAt 首次发货时间
  * @param autoConfirmAt 当前自动收货时刻

@@ -5,7 +5,7 @@ import java.util.Map;
 
 /** 后台基础数据看板快照。 */
 public record AdminDashboardVO(
-        /** 查询完成时间，使用北京时间偏移。 */ OffsetDateTime updatedAt,
+        /** 本次查询共同使用的业务时点，按北京时间返回。 */ OffsetDateTime updatedAt,
         /** 注册账号总数。 */ long userTotal,
         /** 所选日期范围内新增注册账号数。 */ long newUsers,
         /** 当前认证通过账号数。 */ long certifiedCreators,
@@ -18,5 +18,5 @@ public record AdminDashboardVO(
         /** 当前待结算金额。 */ String pendingSettlementAmount,
         /** 成功模拟结算金额。 */ String settledAmount,
         /** 待办数，按类别区分。 */ Map<String,Long> todos,
-        /** 新增统计起始日期，无筛选时为空。 */ String from,
-        /** 新增统计结束日期，无筛选时为空。 */ String to) {}
+        /** 新增统计起始日期，默认取查询时点的北京时间日期。 */ String from,
+        /** 新增统计结束日期，默认取查询时点的北京时间日期。 */ String to) {}

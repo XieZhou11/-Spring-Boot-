@@ -164,7 +164,7 @@ export interface OrderVO {
   paidAt: string | null
   /** 买家确认支付条款的时刻。 */
   termsConfirmedAt: string | null
-  /** 支付时固定的最终约定发货日。 */
+  /** 现货为发货截止的北京时间日期，定制为约定发货日，未付款为空。 */
   shipDate: string | null
   /** 服务端排他的发货截止时刻，现货按支付后 48 小时，定制按约定日期次日零时。 */
   shipDeadlineAt: string | null
@@ -176,7 +176,7 @@ export interface OrderVO {
   addressSnapshot: (Omit<AddressDTO, 'isDefault'> & { id?: string }) | null
   /** 实际确认开工时刻，未开工为空。 */
   startedAt: string | null
-  /** 支付后48小时确认开工截止时刻。 */
+  /** 定制付款后 48 小时为开工截止，现货或未付款为空。 */
   startDeadlineAt: string | null
   /** 当前运单号；尚未发货为空。 */
   trackingNo: string | null

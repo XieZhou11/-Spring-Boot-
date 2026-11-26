@@ -13,6 +13,8 @@ public interface QuoteLifecycleService {
     void expireLockedQuotes(CustomRequest request,List<Quote> history,LocalDateTime now);
     /** 关闭或过期需求，同步失效报价及归档无订单会话。 */
     void terminate(CustomRequest request,String status,Long actorId);
+    /** 订单取消或退款后关闭原需求，实际关闭时通知定向双方并保留成单会话。 */
+    void closeForOrder(CustomRequest request, Long actorId);
     /** 在需求行锁内保存状态及版本，保留内容。 */
     void state(CustomRequest request,String status,Long actorId);
     /** 在需求行锁内按指定业务时点保存状态及版本。 */

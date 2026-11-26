@@ -16,7 +16,7 @@ import org.springframework.transaction.*;
 import org.springframework.transaction.annotation.*;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 模拟结算执行：到期待结算订单在锁内重检后同事务落地结算流水、状态、系统日志及创作者通知。 */
+/** 模拟结算执行：到期待结算订单在锁内重检后同事务落地结算流水、状态、系统日志及双方通知。 */
 @Service
 public class OrderSettlementServiceImpl implements OrderSettlementService {
     private static final Logger LOGGER=LoggerFactory.getLogger(OrderSettlementServiceImpl.class);
@@ -76,10 +76,10 @@ public class OrderSettlementServiceImpl implements OrderSettlementService {
         if(fulfillment.markSettled(orderId,flow.getId(),now)!=1)throw conflict("结算状态已变化，不能结算");
         // 系统动作日志沿用统一 OperationLogService 通道；原因列为空表示定时扫描自动结算。
         logs.record(null,false,"ORDER",orderId,"SETTLEMENT","PENDING","SETTLED",null,Map.of("flowId",flow.getId().toString(),"amount",settlement.getPaidAmount().toPlainString()));
-        // 金额只通知创作者；订单状态不变，买家视角不出现结算金额。
-        notifications.fulfillmentChanged(order.getCreatorId(),"SETTLEMENT_DONE",orderId,orderId,order.getRequestId());
+        // 双方收到结算结果，金额仅进入创作者通知。
+        notifications.settlementChanged(order, "SETTLEMENT_DONE", orderId, settlement.getPaidAmount());
         conversations.orderChanged(order);
-        LOGGER.info("订单模拟结算完成：orderId={}, flowId={}, stage=资金及状态同事务",orderId,flow.getId());
+        LOGGER.info("订单模拟结算结果已准备：orderId={}, flowId={}, stage=资金及状态同事务",orderId,flow.getId());
     }
 
     private <T>T run(String name,Long orderId,Supplier<T> work){

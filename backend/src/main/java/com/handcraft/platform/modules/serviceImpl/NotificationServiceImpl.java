@@ -3,10 +3,12 @@ package com.handcraft.platform.modules.serviceImpl;
 import com.handcraft.platform.common.exception.*;
 import com.handcraft.platform.common.logging.*;
 import com.handcraft.platform.modules.entity.SystemNotification;
+import com.handcraft.platform.modules.entity.TradeOrder;
 import com.handcraft.platform.modules.mapper.SystemNotificationMapper;
 import com.handcraft.platform.modules.security.NotificationSocketHandler;
 import com.handcraft.platform.modules.service.NotificationService;
 import com.handcraft.platform.modules.vo.*;
+import java.math.BigDecimal;
 import java.time.*;
 import java.util.*;
 import org.slf4j.LoggerFactory;
@@ -33,13 +35,12 @@ public class NotificationServiceImpl implements NotificationService {
                 case "REFUND_WITHDRAWN" -> "售后申请已撤回";
                 case "REFUND_REJECTED" -> "售后申请已驳回，履约已恢复";
                 case "REFUND_APPROVED" -> "售后申请已批准并全额退款";
-                case "SETTLEMENT_CANCELLED" -> "订单待结算已取消";
                 default -> throw new IllegalArgumentException("不支持的售后通知事件");
             };
             var notice=new SystemNotification();notice.setRecipientId(recipientId);notice.setEventType(eventType);notice.setEventKey(key);
             notice.setTitle(title);notice.setContent(title+"，请查看订单详情。");
             notice.setBusinessReference(orderReference(orderId,requestId));
-            notices.insert(notice);afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(notice.getId()))));publishUnread(recipientId);});return null;
+            insertAndPublishAfterCommit(notice);return null;
         });
     }
     @Transactional(propagation=Propagation.MANDATORY)
@@ -54,15 +55,64 @@ public class NotificationServiceImpl implements NotificationService {
                 case "ORDER_RECEIVED" -> "订单已确认收货";
                 case "ORDER_NO_START_REFUNDED" -> "未开工订单已无责退款";
                 case "ORDER_SHIPPING_OVERDUE" -> "订单发货已超期";
-                case "SETTLEMENT_DONE" -> "订单已模拟结算";
                 default -> throw new IllegalArgumentException("不支持的履约通知事件");
             };
             var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType(eventType);n.setEventKey(key);n.setTitle(title);
             n.setContent(title+"，请查看订单详情。");
             n.setBusinessReference(orderReference(orderId,requestId));
-            notices.insert(n);afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(n.getId()))));publishUnread(recipientId);});return null;
+            insertAndPublishAfterCommit(n);return null;
         });
     }
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void settlementChanged(TradeOrder order, String eventType, Long eventId, BigDecimal amount) {
+        var logger = LoggerFactory.getLogger(getClass());
+        BusinessLog.run(logger, "结算结果通知保存", order.getCreatorId(), () -> {
+            String title = switch (eventType) {
+                case "SETTLEMENT_DONE" -> "订单已模拟结算";
+                case "SETTLEMENT_CANCELLED" -> "订单待结算已取消";
+                default -> throw new IllegalArgumentException("不支持的结算通知事件");
+            };
+            String eventKey = eventType + ":" + eventId;
+            String reference = orderReference(order.getId(), order.getRequestId());
+            String amountLabel = "SETTLEMENT_DONE".equals(eventType) ? "模拟结算金额" : "原待结算金额";
+            String amountText = amount.setScale(2).toPlainString();
+
+            // 买家收到处理结果，金额只写入创作者通知的正文。
+            saveSettlementNotice(order.getBuyerId(), eventType, eventKey, title, title + "，请查看订单详情。", reference);
+            saveSettlementNotice(order.getCreatorId(), eventType, eventKey, title,
+                    title + "，" + amountLabel + " ¥" + amountText + "。请查看订单详情。", reference);
+            logger.info("结算结果通知已准备：orderId={}, eventType={}, eventId={}", order.getId(), eventType, eventId);
+            return null;
+        });
+    }
+
+    /** 结算事件可能重试，按每位接收人的原事件键分别去重。 */
+    private void saveSettlementNotice(Long recipientId, String eventType, String eventKey, String title,
+                                      String content, String reference) {
+        if (notices.event(recipientId, eventKey) != null) {
+            return;
+        }
+        var notice = new SystemNotification();
+        notice.setRecipientId(recipientId);
+        notice.setEventType(eventType);
+        notice.setEventKey(eventKey);
+        notice.setTitle(title);
+        notice.setContent(content);
+        notice.setBusinessReference(reference);
+        insertAndPublishAfterCommit(notice);
+    }
+
+    /** 业务事务先保存通知，提交后按接收人推送并刷新未读计数。 */
+    private void insertAndPublishAfterCommit(SystemNotification notice) {
+        notices.insert(notice);
+        Long recipientId = notice.getRecipientId();
+        afterCommit(() -> {
+            socket.publish(recipientId, Map.of("type", "SYSTEM_NOTIFICATION", "notification", view(notices.find(notice.getId()))));
+            publishUnread(recipientId);
+        });
+    }
+
     /** 现货与定制均使用订单入口，定制通知额外携带需求编号。 */
     private String orderReference(Long orderId,Long requestId){
         var reference=new LinkedHashMap<String,String>();
@@ -106,9 +156,9 @@ public class NotificationServiceImpl implements NotificationService {
         String key=eventType+":"+requestId;if(notices.event(recipientId,key)!=null)return null;
         var n=new SystemNotification();n.setRecipientId(recipientId);n.setEventType(eventType);n.setEventKey(key);
         n.setTitle(switch(eventType){case "REQUEST_INVITED"->"收到定向需求邀约";case "REQUEST_CLOSED"->"定制需求已关闭";default->"定制需求已过期";});
-        n.setContent(switch(eventType){case "REQUEST_INVITED"->"你被指定为该需求的唯一受邀创作者，请查看需求详情。";case "REQUEST_CLOSED"->"需求已关闭，未形成订单的相关会话已归档，可查看历史记录。";default->"需求发布已满七天且无有效报价，已过期；未成单会话已归档。";});
-        n.setBusinessReference(json.writeValueAsString(Map.of("type","CUSTOM_REQUEST","id",requestId.toString())));notices.insert(n);
-        afterCommit(()->{socket.publish(recipientId,Map.of("type","SYSTEM_NOTIFICATION","notification",view(notices.find(n.getId()))));publishUnread(recipientId);});return null;
+        n.setContent(switch(eventType){case "REQUEST_INVITED"->"你被指定为该需求的唯一受邀创作者，请查看需求详情。";case "REQUEST_CLOSED"->"需求已关闭。未成单会话可查看历史，已成单会话可继续沟通。";default->"需求发布已满七天且无有效报价，已过期；未成单会话已归档。";});
+        n.setBusinessReference(json.writeValueAsString(Map.of("type","CUSTOM_REQUEST","id",requestId.toString())));
+        insertAndPublishAfterCommit(n);return null;
     });}
     @Transactional(propagation=Propagation.MANDATORY)
     public void workChanged(Long recipientId,Long workId,Long submittedVersion,String eventType,String decision,String reason){

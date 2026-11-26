@@ -45,7 +45,12 @@ test('已发货现货全额退款后仍已售出，创作者确认退回才能�
     await buyer.getByLabel('我已阅读并同意现货支付条款', { exact: true }).check()
     await buyer.getByRole('button', { name: '确认模拟支付', exact: true }).click()
     await expect(buyer.locator('.work-section-heading .work-status')).toHaveText('待发货')
+    const paid = (await (await buyer.request.get(`${api}${orderPath}`)).json()).data as OrderVO
+    expect(Date.parse(paid.shipDeadlineAt!) - Date.parse(paid.paidAt!)).toBe(48 * 60 * 60 * 1000)
+    expect(paid.startDeadlineAt).toBeNull()
+    await expect(buyer.locator(`.order-facts time[datetime="${paid.shipDeadlineAt}"]`)).toHaveText(/\d{2}:\d{2}:\d{2}/)
     await creator.goto(orderPath)
+    await expect(creator.locator(`.order-facts time[datetime="${paid.shipDeadlineAt}"]`)).toHaveText(/\d{2}:\d{2}:\d{2}/)
     await creator.getByRole('button', { name: '填写运单并发货', exact: true }).click()
     await creator.getByLabel('运单号', { exact: true }).fill('STOCK2026112501')
     await creator.getByRole('button', { name: '确认发货', exact: true }).click()
@@ -120,6 +125,18 @@ test('已发货现货全额退款后仍已售出，创作者确认退回才能�
       const approved = page.locator('.notification-card').filter({ hasText: '售后申请已批准并全额退款' })
       await approved.getByRole('button', { name: '查看订单', exact: true }).click()
       await expect(page).toHaveURL(orderPath)
+    }
+
+    for (const participant of [buyer, creator]) {
+      await participant.goto('/messages/notifications')
+      const cancelled = participant.locator('.notification-card').filter({
+        has: participant.getByRole('heading', { name: '订单待结算已取消', exact: true }),
+      })
+      await expect(cancelled).toHaveCount(1)
+      if (participant === creator) await expect(cancelled).toContainText('138.60')
+      else await expect(cancelled).not.toContainText('138.60')
+      await cancelled.getByRole('button', { name: '查看订单', exact: true }).click()
+      await expect(participant).toHaveURL(orderPath)
     }
 
     // 退款不补库存，恢复后新订单应使用新售价，旧订单仍保留原实付。

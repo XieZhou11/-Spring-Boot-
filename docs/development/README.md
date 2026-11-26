@@ -12,6 +12,8 @@
 
 [T-031 评论锁序与图片输入](tasks/T-031-comment-lock-image-validation.md) 对应后端专项审查第四批。
 
+[T-032 订单日期、交易通知与资金看板](tasks/T-032-trade-dates-notifications-dashboard.md) 对应后端专项审查第五批。 [测试记录](../testing/T-032-trade-dates-notifications-dashboard.md)
+
 [T-027 CraftFlow 第 7 批](tasks/T-027-craftflow-cutover.md)覆盖全站联验、新版切换和旧书签兼容。 [测试记录](../testing/T-027-craftflow-cutover.md)
 
 [T-025 CraftFlow 第 5 批](tasks/T-025-craftflow-after-sale-reviews-consent.md)覆盖定制普通售后、模拟结算查询、订单评价和定制成品案例。 [测试记录](../testing/T-025-craftflow-after-sale-reviews-consent.md)

@@ -1,6 +1,6 @@
 # MVP 后端专项审查修复实施计划
 
-- 前四批已通过验收，第五批待开始。制定日期为 2026-11-25。
+- 五批均已按顺序通过验收。制定日期为 2026-11-25，最后验收于 2026-11-26。
 - 开发基线为 `main` 的 `8a556dc`。需求、业务状态和验收口径见 [V1.5 MVP 需求正文](../requirements/requirements.md)。
 - 每次选定一个批次实施。完成该批的关键后端验证和前端主流程联调后，记录结果并交接到下一批。开始实际修复时按仓库约定登记业务任务，验证结果写入对应测试记录。
 
@@ -74,12 +74,14 @@
 
 **目标。** 现货详情显示付款后精确 48 小时的发货截止。两类订单的买卖双方按业务事件收到通知。看板待结算与已结算使用同一个数据库快照。对应 §4.5.3、§4.8.1、§4.9.4。
 
-- [ ] **修正订单日期。** `OrderServiceImpl` 按订单类型填充字段。现货 `shipDate` 是截止时刻的北京时间日期，`shipDeadlineAt` 保留付款后 48 小时，`startDeadlineAt` 返回空。定制保留约定发货日、次日零时截止及开工时限。同步 `OrderVO` 字段说明和前端类型或文案。
-- [ ] **补足通知。** 定向订单取消或退款关闭原需求时，在业务事务中向买家与指定创作者各保存一条可跳转的 `REQUEST_CLOSED`，成单会话保持可交流。模拟结算与取消待结算结果通知双方，金额仅限创作者侧。沿用现有事件去重、提交后推送和消息中心跳转。
-- [ ] **统一资金快照。** `AdminDashboardServiceImpl` 使用只读一致性事务及同一个业务时点。待结算余额与成功结算流水从同一数据库快照读取，沿用现有状态统计规则。
-- [ ] **联调。** 对照一笔现货与一笔定制的付款后日期。取消一笔定向订单，使用买卖双方账号查看通知、跳转和原会话。准备一笔到期测试订单触发结算，检查双方通知、创作者金额及看板金额各自落在正确口径。
+- [x] **修正订单日期。** `OrderServiceImpl` 按订单类型填充字段。现货 `shipDate` 是截止时刻的北京时间日期，`shipDeadlineAt` 保留付款后 48 小时，`startDeadlineAt` 返回空。定制保留约定发货日、次日零时截止及开工时限。同步 `OrderVO` 字段说明和前端类型或文案。
+- [x] **补足通知。** 定向订单取消或退款关闭原需求时，在业务事务中向买家与指定创作者各保存一条可跳转的 `REQUEST_CLOSED`，成单会话保持可交流。模拟结算与取消待结算结果通知双方，金额仅限创作者侧。沿用现有事件去重、提交后推送和消息中心跳转。
+- [x] **统一资金快照。** `AdminDashboardServiceImpl` 使用只读一致性事务及同一个业务时点。待结算余额与成功结算流水从同一数据库快照读取，沿用现有状态统计规则。
+- [x] **联调。** 对照一笔现货与一笔定制的付款后日期。取消一笔定向订单，使用买卖双方账号查看通知、跳转和原会话。准备一笔到期测试订单触发结算，检查双方通知、创作者金额及看板金额各自落在正确口径。
 
 [订单详情投影](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/OrderServiceImpl.java) · [业务通知](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/NotificationServiceImpl.java) · [后台看板](../../backend/src/main/java/com/handcraft/platform/modules/serviceImpl/AdminDashboardServiceImpl.java) · [结算联调用例](../../frontend/e2e/settlement-income.spec.ts)
+
+2026-11-26 第五批验收通过。隔离 MySQL 定向 174 项、Playwright 9 项（含 2 项定向复测）、前端类型检查、lint、构建及独立审查通过。 [任务](tasks/T-032-trade-dates-notifications-dashboard.md) · [测试记录](../testing/T-032-trade-dates-notifications-dashboard.md)
 
 ## 联调与阶段交接
 

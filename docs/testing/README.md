@@ -6,6 +6,8 @@ CraftFlow 第 7 批全站联验、新版切换、V1.5 UC-01 至 UC-40 证据及�
 
 本目录只保存实际业务功能开发或业务缺陷修复的简短测试结果：测了什么、通过还是失败、必要的问题说明。账号后端验证见 [T-001 测试记录](T-001-backend-auth.md)，认证页面联调见 [T-002 测试记录](T-002-frontend-auth.md)，个人资料、头像与地址联调见 [T-003 测试记录](T-003-personal-center.md)，创作者入驻、审核及通知见 [T-004 测试记录](T-004-creator-onboarding.md)，作品发布、审核及浏览见 [T-005 测试记录](T-005-work-publication.md)，定制需求、定向邀约及图文会话见 [T-007 测试记录](T-007-custom-requests.md)。
 
+后端专项审查第五批的订单日期、交易通知与资金看板并发验证见 [T-032 测试记录](T-032-trade-dates-notifications-dashboard.md)。
+
 ## 存放方式
 
 作品互动、评论图片、个人收藏和关注，以及与 T-007—T-011 的集成回归见 [T-006 测试记录](T-006-work-interactions.md)，保留独立分支历史验证及当前业务分支复测结果。
