@@ -16,7 +16,7 @@ async function openNotice(page: Page, title: string, id: string) {
   await page.goto('/messages/notifications')
   const card = page.getByRole('article').filter({ has: page.getByRole('heading', { name: title, exact: true }) })
   await card.getByRole('button', { name: '查看订单' }).click()
-  await expect(page).toHaveURL(`/orders/${id}#publication-consent`)
+  await expect(page).toHaveURL(`/orders/${id}/details/publication`)
   await expect(page.getByRole('region', { name: '定制成品公开授权' })).toBeInViewport()
 }
 
@@ -30,7 +30,7 @@ test('买家明确同意后可发布关联案例，审核通过才公开且只�
     const { categoryId } = await prepareCreator(creator, admin, mailbox.codes, mailbox.promoteAdmin)
     const buyerEmail = await register(buyer, mailbox.codes, '案例授权买家')
     const order = await completedOrder(buyer, creator, categoryId, '原木书签成品授权')
-    await creator.goto(`/orders/${order.id}`)
+    await creator.goto(`/orders/${order.id}/details/publication`)
     // 后端已提交但应答丢失时，页面从只读订单接口核对实际授权。
     const consentUrl = `**/api/orders/${order.id}/publication-consent`
     await creator.route(consentUrl, async route => {
@@ -117,7 +117,7 @@ test('明确拒绝后只有原回复，拒绝的来源链接无法进入案例�
     const { categoryId } = await prepareCreator(creator, admin, mailbox.codes, mailbox.promoteAdmin)
     await register(buyer, mailbox.codes, '拒绝授权买家')
     const order = await completedOrder(buyer, creator, categoryId, '买家拒绝公开的手工作品')
-    await creator.goto(`/orders/${order.id}`)
+    await creator.goto(`/orders/${order.id}/details/publication`)
     await creator.getByRole('button', { name: '申请公开成品案例' }).click()
     await creator.getByRole('dialog').getByRole('button', { name: '确认申请', exact: true }).click()
     await openNotice(buyer, '创作者申请公开定制成品', order.id)

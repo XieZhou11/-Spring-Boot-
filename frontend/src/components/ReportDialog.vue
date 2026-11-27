@@ -144,7 +144,7 @@ onBeforeUnmount(() => { active = false })
 <style scoped>
 .report-dialog { display: grid; gap: 12px; margin-top: 12px; padding: 16px; background: #f5f2eb; border-radius: 8px; }
 .report-dialog textarea { display: block; box-sizing: border-box; width: 100%; min-height: 80px; margin-top: 8px; padding: 10px; border: 1px solid #d9d3c7; border-radius: 4px; font: inherit; resize: vertical; }
-.report-dialog select { margin-left: 8px; padding: 4px 8px; }
+.report-dialog select { margin-left: 8px; }
 .report-dialog-images { display: flex; flex-wrap: wrap; gap: 10px; }
 .report-dialog-images :deep(img) { width: 96px; height: 96px; object-fit: cover; border-radius: 4px; }
 </style>

@@ -51,9 +51,8 @@
 .cf-quotes .button-secondary { color: var(--craft-ink); background: var(--craft-surface); border: 1px solid var(--craft-border); border-radius: 8px; }
 .cf-quotes :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid #b45309; outline-offset: 3px; }
 .cf-quotes .request-filters { align-items: flex-end; background: var(--craft-surface); border-color: var(--craft-border); border-radius: 12px; padding: 16px; }
-.cf-quotes .request-filters select { color: var(--craft-ink); background: var(--craft-surface); border-color: var(--craft-border); border-radius: 8px; }
 .cf-quotes .request-filters > h2 { margin: 0 auto 0 0; font-size: 18px; }
-.cf-quotes .work-field :is(input, select, textarea) { color: var(--craft-ink); background: var(--craft-surface); border-color: var(--craft-border); border-radius: 8px; }
+.cf-quotes .work-field :is(input, textarea) { color: var(--craft-ink); background: var(--craft-surface); border-color: var(--craft-border); border-radius: 8px; }
 .cf-quotes .work-field { color: var(--craft-ink); }
 .cf-quotes .work-field [aria-invalid=true] { border-color: #b45309; }
 .cf-quotes :is(.quote-form, .quote-record, .award-panel, .creator-empty) { background: var(--craft-surface); border: 1px solid var(--craft-border); border-radius: 14px; }

@@ -12,7 +12,7 @@ import { getOrderListQuery, type OrderSide } from '@/utils/orderList'
 import { orderStatus } from '@/utils/quote'
 import '@/assets/styles/craftflow-order-collection.css'
 
-const props = defineProps<{ selectedId?: string; defaultSide?: OrderSide; resolvingSide?: boolean; refreshVersion?: number }>()
+const props = defineProps<{ selectedId?: string; selectedStatus?: OrderVO['status']; defaultSide?: OrderSide; resolvingSide?: boolean; refreshVersion?: number }>()
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
@@ -21,7 +21,7 @@ const query = computed(() => getOrderListQuery(route.query, props.defaultSide))
 const side = computed(() => query.value.side || 'BUYER')
 const status = computed(() => query.value.status || '')
 const page = computed(() => Number(query.value.page || 1))
-const viewingDetail = computed(() => route.name === 'order-detail')
+const viewingDetail = computed(() => route.name === 'order-detail' || route.name === 'order-detail-section')
 // 未携带列表关系的详情直链需等订单归属返回，否则可能按另一方的总数改写页码。
 const waitingForSide = computed(() => viewingDetail.value && props.resolvingSide && route.query.side !== 'BUYER' && route.query.side !== 'CREATOR')
 const sides = [
@@ -33,6 +33,8 @@ const rows = ref<OrderVO[]>([])
 const total = ref(0)
 const loading = ref(false)
 const error = ref('')
+const renderedQuery = ref('')
+const queryKey = computed(() => JSON.stringify([auth.session?.userId, side.value, status.value, page.value, waitingForSide.value]))
 let revision = 0
 
 /** 筛选和翻页由服务端处理，旧身份或旧筛选的响应不能写回当前列表。 */
@@ -40,6 +42,7 @@ async function load() {
   if (!auth.session || waitingForSide.value) return
   const current = ++revision
   const requestedPage = page.value
+  const requestedQuery = queryKey.value
   loading.value = true
   error.value = ''
   try {
@@ -52,7 +55,7 @@ async function load() {
       // 刷新后列表可能缩短。回到最后一页，同时保留详情及会话锚点。
       const nextQuery = getOrderListQuery({ ...route.query, page: String(lastPage) }, side.value)
       await router.replace(viewingDetail.value
-        ? { name: 'order-detail', params: route.params, query: { ...route.query, ...nextQuery }, hash: route.hash }
+        ? { name: route.name, params: route.params, query: { ...route.query, ...nextQuery }, hash: route.hash }
         : { path: '/orders', query: nextQuery })
     }
   } catch (failure) {
@@ -61,7 +64,10 @@ async function load() {
     total.value = 0
     error.value = failure instanceof Error ? failure.message : '订单读取失败'
   } finally {
-    if (current === revision) loading.value = false
+    if (current === revision) {
+      loading.value = false
+      renderedQuery.value = requestedQuery
+    }
   }
 }
 
@@ -84,8 +90,14 @@ function openOrder(order: OrderVO) {
   return { name: 'order-detail', params: { id: order.id }, query: query.value }
 }
 
+/** 选中卡片优先展示当前详情已核验的状态，等待列表同步。 */
+function displayedStatus(order: OrderVO) {
+  return order.id === props.selectedId ? props.selectedStatus ?? order.status : order.status
+}
+
 function reset() {
   revision++
+  renderedQuery.value = ''
   rows.value = []
   total.value = 0
   loading.value = false
@@ -115,6 +127,7 @@ useActivationRead(() => JSON.stringify([auth.session?.userId, side.value, status
   <section
     class="craftflow-order-collection"
     aria-label="订单列表"
+    :data-order-list-ready="renderedQuery === queryKey"
   >
     <header class="craftflow-order-collection-heading">
       <component :is="viewingDetail ? 'h2' : 'h1'">
@@ -217,8 +230,8 @@ useActivationRead(() => JSON.stringify([auth.session?.userId, side.value, status
               >{{ row.orderType === 'STOCK' ? '现货订单' : '定制订单' }}</span>
               <span
                 class="craftflow-order-card-tag"
-                :data-status="row.status"
-              >{{ orderStatus[row.status] || row.status }}</span>
+                :data-status="displayedStatus(row)"
+              >{{ orderStatus[displayedStatus(row)] || displayedStatus(row) }}</span>
             </span>
             <span class="craftflow-order-card-amount">¥ {{ row.totalAmount }}</span>
           </span>

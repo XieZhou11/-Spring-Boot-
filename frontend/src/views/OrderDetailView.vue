@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { useActivationRead } from '@/utils/pageActivation'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import WorkLayout from '@/layouts/WorkLayout.vue'
 import OrderCollection from '@/components/OrderCollection.vue'
 import { getOrderListQuery } from '@/utils/orderList'
+import { hasOrderReturn, isOrderDetailSection, orderDetailLabels, type OrderDetailSection } from '@/utils/orderDetail'
+import AppIcon from '@/components/AppIcon.vue'
 import { buyerRequestListReturn } from '@/utils/customRequest'
 import QuoteImages from '@/components/QuoteImages.vue'
 import PrivateImage from '@/components/PrivateImage.vue'
@@ -22,12 +24,12 @@ import { ApiError } from '@/utils/request'
 import { clearPaymentAttempt, readPaymentAttempt, savePaymentAttempt } from '@/utils/orderPayment'
 import { clearFulfillmentAttempt, fulfillmentActionName, fulfillmentApplied, readFulfillmentAttempt, saveFulfillmentAttempt } from '@/utils/orderFulfillment'
 import type { FulfillmentAttempt } from '@/utils/orderFulfillment'
-import { clearRefundState } from '@/utils/refund'
+import { clearRefundState, readRefundAttempt } from '@/utils/refund'
 import '@/assets/styles/custom-request.css'
 import '@/assets/styles/quote.css'
 import '@/assets/styles/refund.css'
 import '@/assets/styles/craftflow-order-detail.css'
-const route = useRoute(); const auth = useAuthStore(); const notifications = useNotificationsStore()
+const route = useRoute(); const router = useRouter(); const auth = useAuthStore(); const notifications = useNotificationsStore()
 const confirm = useConfirmation()
 const order = ref<OrderVO>(); const loading = ref(false); const cancelling = ref(false); const error = ref('')
 const paymentState = ref<'idle' | 'submitting' | 'unknown'>('idle'); const paymentError = ref(''); const confirmationOpen = ref(false); const agreed = ref(false); const retryChecked = ref(false)
@@ -46,6 +48,39 @@ const paymentHeading = ref<HTMLElement>()
 const paymentTrigger = ref<HTMLButtonElement>()
 const orderSide = computed(() => order.value ? (order.value.owned ? 'BUYER' : 'CREATOR') : undefined)
 const listQuery = computed(() => getOrderListQuery(route.query, orderSide.value))
+const orderRoute = computed(() => route.name === 'order-detail' || route.name === 'order-detail-section')
+const section = computed(() => route.name === 'order-detail-section' && isOrderDetailSection(route.params.section) ? route.params.section : undefined)
+const sectionLabel = (value: OrderDetailSection) => value === 'agreement' && order.value?.orderType === 'STOCK'
+  ? '现货作品快照'
+  : orderDetailLabels[value]
+const sections = computed<OrderDetailSection[]>(() => {
+  const detail = order.value
+  if (!detail) return []
+  const available: Record<OrderDetailSection, boolean> = {
+    address: !!detail.addressSnapshot,
+    agreement: true,
+    payment: !!detail.payment,
+    review: !!detail.originalCompletedAt,
+    refund: detail.orderType === 'CUSTOM' || !!detail.paidAt,
+    settlement: !detail.owned && !!detail.settlement,
+    request: detail.orderType === 'CUSTOM',
+    publication: showPublication.value,
+    history: true,
+  }
+  return (Object.keys(available) as OrderDetailSection[]).filter(name => available[name])
+})
+const sectionAvailable = computed(() => !!section.value && sections.value.includes(section.value))
+
+/** 资料链接记录当前概览的历史条目，直达时按同一订单回跳。 */
+function sectionTarget(value: OrderDetailSection) {
+  return { name: 'order-detail-section', params: { id: id(), section: value }, query: route.query, state: { orderReturnTo: route.fullPath } }
+}
+function returnToOrder() {
+  const orderId = id()
+  if (!orderId) return
+  if (hasOrderReturn(router, route, orderId)) router.back()
+  else void router.push({ name: 'order-detail', params: { id: orderId }, query: route.query })
+}
 const requestReturnTo = computed(() => order.value?.owned ? buyerRequestListReturn(route.query.returnTo) : undefined)
 const baseBusy = computed(() => cancelling.value || publicationBusy.value || paymentState.value === 'submitting' || fulfillmentState.value === 'submitting' || fulfillmentUploading.value)
 const baseBlocked = computed(() => fulfillmentState.value === 'unknown' || paymentState.value === 'unknown')
@@ -53,7 +88,7 @@ const busy = computed(() => baseBusy.value || refundBusy.value)
 const fulfillmentBlocked = computed(() => baseBlocked.value || refundBlocked.value)
 let revision = 0; let deferredRefresh = false; let attempt: OrderPaymentDTO | undefined
 /** 订单上下文仅在本详情路由有效，离页与其他资源的同名参数不能触发订单查询。 */
-const id = () => route.name === 'order-detail' && typeof route.params.id === 'string' && /^[1-9]\d*$/.test(route.params.id) ? route.params.id : undefined
+const id = () => orderRoute.value && typeof route.params.id === 'string' && /^[1-9]\d*$/.test(route.params.id) ? route.params.id : undefined
 const unknownMessage = '付款结果尚未确认，请刷新订单核验；核验后可重试确认同一笔支付，请勿取消订单。'
 const fulfillmentUnknownMessage = computed(() => `${fulfillmentAttempt.value ? fulfillmentActionName[fulfillmentAttempt.value.kind] : '操作'}结果尚未确认。原始输入已保留，请刷新订单核验后重试同一次操作。`)
 function currentContext() { return { userId: auth.session?.userId, orderId: id() } }
@@ -261,13 +296,14 @@ function refundLock(value: { busy: boolean; blocked: boolean }) { refundBusy.val
 function finishDeferredRefresh() { if (deferredRefresh && !busy.value) { deferredRefresh = false; void load() } }
 function refresh() { void load() }
 onBeforeRouteLeave(() => !auth.session || !busy.value); onBeforeRouteUpdate(() => !auth.session || !busy.value)
-watch([() => route.name, () => route.params.id, () => auth.session?.userId], () => {
+watch([orderRoute, () => route.params.id, () => auth.session?.userId], () => {
   revision++; order.value = undefined; loading.value = false; cancelling.value = false; publicationBusy.value = false; deferredRefresh = false; confirmationOpen.value = false; agreed.value = false; error.value = ''; paymentError.value = ''; retryChecked.value = false; fulfillmentUploading.value = false; fulfillmentError.value = ''; fulfillmentRetryChecked.value = false; refundBusy.value = false; refundBlocked.value = false
   publicationNeedsCheck.value = false
   publicationError.value = ''
   // 普通离页只重置本页内存，保留原订单的未知付款标记，返回后仍须核验再重试。
   const context = currentContext()
-  if (route.name === 'order-detail' && !context.orderId) error.value = '订单编号无效。'
+  if (orderRoute.value && !context.orderId) error.value = '订单编号无效。'
+  refundBlocked.value = !!(context.userId && context.orderId && readRefundAttempt(context.userId, context.orderId))
   attempt = context.userId && context.orderId ? readPaymentAttempt(context.userId, context.orderId) : undefined
   paymentState.value = attempt ? 'unknown' : 'idle'; if (attempt) paymentError.value = unknownMessage
   fulfillmentAttempt.value = context.userId && context.orderId ? readFulfillmentAttempt(context.userId, context.orderId) : undefined
@@ -279,21 +315,9 @@ watch(() => order.value?.status, (status, previous) => {
   if (status && previous && status !== previous) collectionRefresh.value++
 })
 watch(() => notifications.connected, (connected, previous) => { if (connected && !previous) refresh() })
-/** 会话引用和授权通知在详情加载后定位到对应区块。 */
-watch([() => route.hash, () => order.value?.id, showPublication], () => {
-  if (!order.value) return
-  void nextTick(() => {
-    const anchor = /^#progress-[1-9]\d*$/.test(route.hash) || route.hash === '#publication-consent'
-    const target = anchor
-      ? document.getElementById(route.hash.slice(1)) ?? orderHeading.value
-      : orderHeading.value
-    if (!target) return
-    // 全局导航在窄屏会折行，按实测高度留出锚点标题。
-    const headerHeight = document.querySelector('.craft-header')?.getBoundingClientRect().height || 0
-    target.style.scrollMarginTop = (headerHeight + 16) + 'px'
-    if (target !== orderHeading.value || window.scrollY > 0) target.scrollIntoView({ block: 'start' })
-    target.focus({ preventScroll: true })
-  })
+/** 聚焦标题时保持视口位置，历史位置和锚点统一交由路由处理。 */
+watch([section, () => order.value?.id], () => {
+  if (order.value && !route.hash) void nextTick(() => orderHeading.value?.focus({ preventScroll: true }))
 })
 onMounted(() => { window.addEventListener('order-updated', refresh) })
 onBeforeUnmount(() => { revision++; window.removeEventListener('order-updated', refresh) })
@@ -301,16 +325,42 @@ useActivationRead(() => JSON.stringify(currentContext()), load)
 </script>
 <template>
   <WorkLayout>
-    <div class="craftflow-order-workspace craftflow-order-detail-workspace">
+    <div
+      class="craftflow-order-workspace"
+      :class="{ 'craftflow-order-detail-workspace': orderRoute, 'craftflow-order-section-page': section }"
+    >
       <OrderCollection
-        :selected-id="order?.id"
+        v-show="!section"
+        :selected-id="id()"
+        :selected-status="order?.status"
         :default-side="orderSide"
-        :resolving-side="!order && !error"
+        :resolving-side="orderRoute && !order && !error"
         :refresh-version="collectionRefresh"
       />
-      <div class="craftflow-order-main">
+      <div
+        v-if="!orderRoute"
+        class="craftflow-order-empty-selection"
+      >
+        选择一笔订单查看详情
+      </div>
+      <div
+        v-else
+        class="craftflow-order-main"
+        :data-order-scroll-route="order || error ? route.fullPath : undefined"
+      >
         <nav class="order-back">
-          <RouterLink :to="{ path: '/orders', query: listQuery }"><span aria-hidden="true">←</span> 返回订单列表</RouterLink>
+          <button
+            v-if="section"
+            class="inline-button"
+            type="button"
+            @click="returnToOrder"
+          >
+            <span aria-hidden="true">←</span> 返回订单
+          </button>
+          <RouterLink
+            v-else
+            :to="{ name: 'orders', query: listQuery }"
+          ><span aria-hidden="true">←</span> 返回订单列表</RouterLink>
         </nav>
         <p
           v-if="error"
@@ -340,6 +390,13 @@ useActivationRead(() => JSON.stringify(currentContext()), load)
             @click="pay"
           >
             重试确认支付结果
+          </button>
+          <button
+            class="inline-button"
+            :disabled="busy || loading"
+            @click="refresh"
+          >
+            刷新订单
           </button>
         </p>
         <p
@@ -379,19 +436,12 @@ useActivationRead(() => JSON.stringify(currentContext()), load)
         </p>
 
         <template v-if="order">
-          <section class="order-overview request-summary">
+          <section
+            v-if="!section"
+            class="order-overview request-summary"
+          >
             <header class="work-section-heading order-overview-heading">
               <div>
-                <div class="order-overview-badges">
-                  <span
-                    class="order-type-badge"
-                    :data-type="order.orderType"
-                  >{{ order.orderType === 'STOCK' ? '现货直购' : '定制订单' }}</span>
-                  <span
-                    class="work-status"
-                    :data-order-status="order.status"
-                  >{{ orderStatus[order.status] || order.status }}</span>
-                </div>
                 <h1
                   ref="orderHeading"
                   tabindex="-1"
@@ -400,9 +450,6 @@ useActivationRead(() => JSON.stringify(currentContext()), load)
                 </h1>
                 <p class="order-number">
                   订单号 <span>{{ order.orderNo }}</span>
-                </p>
-                <p class="muted">
-                  买家 {{ order.buyerNickname }} · 创作者 {{ order.creatorNickname }}
                 </p>
               </div>
               <div class="order-overview-actions">
@@ -425,21 +472,9 @@ useActivationRead(() => JSON.stringify(currentContext()), load)
                 </button>
                 <RouterLink
                   v-if="order.conversationId"
-                  :to="'/messages/conversations/' + order.conversationId"
+                  :to="{ path: '/messages/conversations/' + order.conversationId, state: { orderReturnTo: route.fullPath } }"
                   class="button-secondary"
                 >进入订单沟通</RouterLink>
-                <a
-                  v-if="showPublication"
-                  class="inline-button"
-                  href="#publication-consent"
-                >查看公开授权</a>
-                <button
-                  class="inline-button"
-                  :disabled="loading || busy"
-                  @click="refresh"
-                >
-                  刷新订单
-                </button>
               </div>
             </header>
             <p
@@ -482,8 +517,48 @@ useActivationRead(() => JSON.stringify(currentContext()), load)
             </p>
           </section>
 
+          <nav
+            v-if="!section"
+            class="order-document-links editor-section"
+            aria-label="订单资料"
+          >
+            <h2>订单资料</h2>
+            <div class="order-document-grid">
+              <RouterLink
+                v-for="item in sections"
+                :key="item"
+                :to="sectionTarget(item)"
+              >{{ sectionLabel(item) }}<AppIcon name="arrow" /></RouterLink>
+            </div>
+          </nav>
           <section
-            v-if="confirmationOpen && order.paymentPreview && paymentState === 'idle'"
+            v-if="section"
+            class="order-overview request-summary order-document-heading"
+          >
+            <header class="work-section-heading order-overview-heading">
+              <div>
+                <h1
+                  ref="orderHeading"
+                  tabindex="-1"
+                >
+                  {{ sectionLabel(section) }}
+                </h1>
+                <p class="order-number">
+                  {{ order.title }} · {{ order.orderNo }}
+                </p>
+              </div>
+            </header>
+          </section>
+          <p
+            v-if="section && !sectionAvailable"
+            class="order-detail-empty"
+            role="status"
+          >
+            当前订单没有这项资料。
+          </p>
+
+          <section
+            v-if="!section && confirmationOpen && order.paymentPreview && paymentState === 'idle'"
             class="award-panel payment-confirmation"
             aria-label="确认模拟支付"
           >
@@ -549,6 +624,7 @@ useActivationRead(() => JSON.stringify(currentContext()), load)
           </section>
 
           <OrderFulfillmentPanel
+            v-if="!section"
             :key="order.id"
             :order="order"
             :busy="busy"
@@ -560,24 +636,25 @@ useActivationRead(() => JSON.stringify(currentContext()), load)
           />
 
           <section
-            v-if="order.addressSnapshot"
+            v-if="section === 'address' && order.addressSnapshot"
             class="editor-section"
           >
-            <h2>收货地址快照</h2>
             <address class="award-address">
               <strong>{{ order.addressSnapshot.recipientName }} · {{ order.addressSnapshot.phone }}</strong><br>
               {{ order.addressSnapshot.province }} {{ order.addressSnapshot.city }} {{ order.addressSnapshot.district }} {{ order.addressSnapshot.detailAddress }}
             </address>
-            <p class="field-help">
-              建单时已固定。{{ order.status === 'PENDING_PAY' ? (order.orderType === 'STOCK' ? '地址有误可取消订单后重新购买。' : '地址有误可取消订单并重新发布需求。') : '' }}
+            <p
+              v-if="order.status === 'PENDING_PAY'"
+              class="field-help"
+            >
+              {{ order.orderType === 'STOCK' ? '地址有误可取消订单后重新购买。' : '地址有误可取消订单并重新发布需求。' }}
             </p>
           </section>
 
           <section
-            v-if="order.orderType === 'STOCK'"
+            v-if="section === 'agreement' && order.orderType === 'STOCK'"
             class="editor-section"
           >
-            <h2>现货作品快照</h2>
             <dl class="order-facts">
               <div><dt>材质</dt><dd>{{ order.agreementSnapshot.request.materialPreference }}</dd></div>
               <div><dt>尺寸规格</dt><dd>{{ order.agreementSnapshot.request.specification }}</dd></div>
@@ -611,10 +688,9 @@ useActivationRead(() => JSON.stringify(currentContext()), load)
             </template>
           </section>
           <section
-            v-else
+            v-else-if="section === 'agreement'"
             class="editor-section"
           >
-            <h2>锁定的合作方案</h2>
             <dl class="order-facts">
               <div><dt>约定工期</dt><dd>{{ order.durationDays }} 个自然日</dd></div>
               <div><dt>期望发货</dt><dd>{{ order.agreementSnapshot.expectedShipDate }}</dd></div>
@@ -637,10 +713,9 @@ useActivationRead(() => JSON.stringify(currentContext()), load)
           </section>
 
           <section
-            v-if="order.payment"
+            v-if="section === 'payment' && order.payment"
             class="editor-section"
           >
-            <h2>支付记录</h2>
             <dl class="order-facts">
               <div><dt>支付流水号</dt><dd>{{ order.payment.flowNo }}</dd></div>
               <div><dt>实付金额</dt><dd>¥ {{ order.payment.amount }}</dd></div>
@@ -657,13 +732,13 @@ useActivationRead(() => JSON.stringify(currentContext()), load)
           </section>
 
           <OrderReviewPanel
-            v-if="order.originalCompletedAt"
+            v-if="section === 'review' && sectionAvailable"
             :key="'review-' + order.id"
             :order-id="order.id"
             :order-status="order.status"
           />
           <OrderRefundPanel
-            v-if="order.orderType === 'CUSTOM' || (order.orderType === 'STOCK' && order.paidAt)"
+            v-if="section === 'refund' && sectionAvailable"
             :key="'refund-' + order.id"
             :order="order"
             :busy="baseBusy"
@@ -674,11 +749,10 @@ useActivationRead(() => JSON.stringify(currentContext()), load)
             @invalid="load"
           />
           <section
-            v-if="!order.owned && order.settlement"
+            v-if="section === 'settlement' && !order.owned && order.settlement"
             class="editor-section"
             aria-label="结算信息"
           >
-            <h2>结算信息</h2>
             <dl class="order-facts work-specifications">
               <div><dt>应结算金额</dt><dd>¥ {{ order.settlement.paidAmount }}</dd></div>
               <div>
@@ -699,10 +773,9 @@ useActivationRead(() => JSON.stringify(currentContext()), load)
           </section>
 
           <section
-            v-if="order.orderType === 'CUSTOM'"
+            v-if="section === 'request' && order.orderType === 'CUSTOM'"
             class="editor-section"
           >
-            <h2>需求快照</h2>
             <p class="field-help">
               {{ order.agreementSnapshot.request.categoryPath.join(' / ') }}
             </p>
@@ -730,14 +803,14 @@ useActivationRead(() => JSON.stringify(currentContext()), load)
           </section>
 
           <section
-            v-if="showPublication"
+            v-if="section === 'publication' && showPublication"
             id="publication-consent"
             class="editor-section order-publication"
             aria-label="定制成品公开授权"
             tabindex="-1"
           >
             <header class="order-publication-heading">
-              <h2>定制成品公开授权</h2>
+              <h2>授权状态</h2>
               <span
                 class="order-service-badge"
                 :class="`is-${publicationStatus.toLowerCase()}`"
@@ -817,8 +890,10 @@ useActivationRead(() => JSON.stringify(currentContext()), load)
             </div>
           </section>
 
-          <section class="editor-section">
-            <h2>订单历史</h2>
+          <section
+            v-if="section === 'history'"
+            class="editor-section"
+          >
             <ol class="order-timeline">
               <li
                 v-for="(event, index) in order.history"

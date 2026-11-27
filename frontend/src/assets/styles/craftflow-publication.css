@@ -281,7 +281,7 @@
 
 .cf-publication-fields > .work-field ~ .work-field { margin-top: 0; }
 
-.cf-publication-section .work-field :is(input, select, textarea) {
+.cf-publication-section .work-field :is(input, textarea) {
   padding: 8px 10px;
   min-height: 39px;
   border-color: var(--craft-border);

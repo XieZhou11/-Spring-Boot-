@@ -78,8 +78,8 @@
   color: var(--craft-muted);
 }
 
-.cf-request-filters :is(select, input:not([type="checkbox"])),
-.cf-request-editor-page .work-field :is(input, select, textarea) {
+.cf-request-filters input:not([type="checkbox"]),
+.cf-request-editor-page .work-field :is(input, textarea) {
   min-width: 0;
   max-width: 100%;
   min-height: 37px;

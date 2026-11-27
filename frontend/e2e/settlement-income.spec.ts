@@ -7,6 +7,9 @@ import { refundOrder } from './refund-support'
 
 test.use({ storageMode: 'receiver', actionTimeout: 15_000, viewport: { width: 1366, height: 900 } })
 
+/** 订单详情的状态由左侧选中卡片展示。 */
+const selectedStatus = (page: Page) => page.locator('.craftflow-order-item a[aria-current="page"] [data-status]')
+
 /** 使用真实报价、定标及固定地址准备待付款订单，不绕过业务建单。 */
 async function pendingOrder(buyer: Page, creator: Page, categoryId: string, title: string, invitedCreatorId: string | null = null) {
   const content = { title, categoryId, purpose: '生日礼物', materialPreference: '天然原木', specification: '十二厘米', budgetMin: '100.00', budgetMax: '300.00', expectedShipDate: new Date(Date.now() + 8 * 86400000).toISOString().slice(0, 10), description: '希望制作一枚保留自然木纹的书签，边角圆润并刻上名字，在制作前确认字体和位置，作为生日纪念。', referenceImageIds: [], visibility: invitedCreatorId ? 'DIRECTED' : 'PUBLIC', invitedCreatorId, sourceWorkId: null }
@@ -30,7 +33,7 @@ async function payOrder(buyer: Page, orderId: string) {
   await buyer.getByRole('button', { name: '模拟支付', exact: true }).click()
   await buyer.getByLabel('我已阅读并同意定制支付条款', { exact: true }).check()
   await buyer.getByRole('button', { name: '确认模拟支付', exact: true }).click()
-  await expect(buyer.locator('.work-section-heading .work-status')).toHaveText('待开工')
+  await expect(selectedStatus(buyer)).toHaveText('待开工')
 }
 
 /** 监听两个已登录页面的真实通知连接，记录与本单相关的推送。 */
@@ -131,7 +134,7 @@ test('创作者与管理员按角色查询待结算、已结算与退款取消�
     await creator.goto('/admin/orders?orderId=' + order.id)
     await expect(creator).toHaveURL(origin + '/')
     expect((await creator.request.get(`${api}/admin/orders/${order.id}`)).status()).toBe(403)
-    await expect(page.getByRole('heading', { name: '结算信息', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: '结算信息', exact: true })).toHaveCount(0)
     expect((await (await page.request.get(`${api}/orders/${order.id}`)).json()).data.settlement).toBeNull()
 
     // 由真实普通售后裁定取消待结算，保留双方核对所需原金额。
@@ -192,6 +195,8 @@ test('创作者与管理员按角色查询待结算、已结算与退款取消�
     await admin.goto('/admin/settlements?status=SETTLED')
     await expect(admin.locator('.settlement-row').filter({ hasText: fulfilled.title })).toContainText('已结算')
     await settledRow.getByRole('link', { name: fulfilled.title }).click()
+    await creator.getByRole('link', { name: '结算信息', exact: true }).click()
+    await expect(creator).toHaveURL(url => url.pathname === `/orders/${fulfilled.id}/details/settlement`)
     await expect(creator.getByRole('heading', { name: '结算信息', exact: true })).toBeVisible()
     await expect(creator.locator('.work-specifications').filter({ hasText: '应结算金额' })).toContainText('已结算')
     const settledDetail = await getFulfilled()
@@ -237,7 +242,7 @@ test('定向订单取消后双方可从关闭通知回到原需求和会话', as
     await buyer.goto(`/orders/${order.id}`)
     await buyer.getByRole('button', { name: '取消订单', exact: true }).click()
     await buyer.getByRole('dialog').getByRole('button', { name: '确认取消订单', exact: true }).click()
-    await expect(buyer.locator('.work-section-heading .work-status')).toHaveText('已取消')
+    await expect(selectedStatus(buyer)).toHaveText('已取消')
 
     for (const participant of [buyer, creator]) {
       await participant.goto('/messages/notifications')

@@ -69,10 +69,7 @@ onBeforeUnmount(() => {
         aria-label="逐单结算记录"
         :aria-busy="loading"
       >
-        <form
-          class="cf-settlement-filters"
-          @submit.prevent="load()"
-        >
+        <div class="cf-settlement-filters">
           <label>结算状态<select
             :value="status"
             aria-label="结算状态"
@@ -87,13 +84,7 @@ onBeforeUnmount(() => {
               {{ label }}
             </option>
           </select></label>
-          <button
-            class="button-secondary"
-            :disabled="loading"
-          >
-            刷新记录
-          </button>
-        </form>
+        </div>
 
         <p
           v-if="error"

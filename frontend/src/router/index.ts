@@ -4,11 +4,15 @@ import { safeRedirect } from '@/utils/auth'
 import { scrollBehavior } from './scroll'
 import { invalidPathResource, routeFeedback } from './routeFeedback'
 import { clearCreatorDestination, creatorDestination, rememberCreatorDestination } from './creatorDestination'
+import { isOrderDetailSection, orderDetailLabels } from '@/utils/orderDetail'
 import type { RouteLocationGeneric, RouteLocationNormalized } from 'vue-router'
 
 /** 兼容 Vue Router 的大小写匹配，同时保留原路径的已编码资源段。 */
 const legacyPath = (to: RouteLocationGeneric, prefix: RegExp, target: string) =>
   ({ path: to.path.replace(prefix, target), query: to.query, hash: to.hash })
+
+// 共用订单工作区，使订单列表在切换到详情时保持挂载。
+const orderWorkspace = () => import('@/views/OrderDetailView.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -33,8 +37,9 @@ const router = createRouter({
     { path: '/requests/:id/quotes', name: 'quote-comparison', component: () => import('@/views/QuoteComparisonView.vue'), meta: { requiresAuth: true, title: '报价对比' } },
     { path: '/creator/quotes', component: () => import('@/views/MyQuotesView.vue'), meta: { requiresAuth: true, title: '我的报价' } },
     { path: '/creator/income', component: () => import('@/views/CreatorIncomeView.vue'), meta: { requiresAuth: true, title: '收入记录' } },
-    { path: '/orders', component: () => import('@/views/OrdersView.vue'), meta: { requiresAuth: true, title: '我的订单' } },
-    { path: '/orders/:id', name: 'order-detail', component: () => import('@/views/OrderDetailView.vue'), meta: { requiresAuth: true, title: '订单详情' } },
+    { path: '/orders', name: 'orders', component: orderWorkspace, meta: { requiresAuth: true, title: '我的订单' } },
+    { path: '/orders/:id', name: 'order-detail', component: orderWorkspace, meta: { requiresAuth: true, title: '订单详情' } },
+    { path: `/orders/:id/details/:section(${Object.keys(orderDetailLabels).join('|')})`, name: 'order-detail-section', component: orderWorkspace, meta: { requiresAuth: true, title: '订单资料' } },
     { path: '/my-requests', component: () => import('@/views/CustomRequestsView.vue'), props: { scope: 'mine' }, meta: { requiresAuth: true, title: '我的需求' } },
     { path: '/my-requests/new', component: () => import('@/views/CustomRequestEditorView.vue'), meta: { requiresAuth: true, title: '发布定制需求' } },
     { path: '/my-requests/:id/edit', component: () => import('@/views/CustomRequestEditorView.vue'), meta: { requiresAuth: true, title: '编辑需求草稿' } },
@@ -137,6 +142,9 @@ const router = createRouter({
 /** 业务页每次导航核验服务端身份，保留原目标的路径、查询及锚点。 */
 let latestTarget: RouteLocationNormalized | undefined
 router.beforeEach(async (to) => {
+  if (to.name === 'order-detail' && to.hash === '#publication-consent' && !invalidPathResource(to)) {
+    return { name: 'order-detail-section', params: { id: to.params.id, section: 'publication' }, query: to.query, replace: true }
+  }
   latestTarget = to
   const auth = useAuthStore()
   try {
@@ -177,7 +185,10 @@ router.afterEach((to, _from, failure) => {
   routeFeedback.value = undefined
   const auth = useAuthStore()
   if (creatorDestination(router, auth.session?.userId) === to.fullPath) clearCreatorDestination()
-  document.title = to.meta.title ? `${String(to.meta.title)} · 匠心集 CraftFlow` : '匠心集 CraftFlow'
+  const title = to.name === 'order-detail-section' && isOrderDetailSection(to.params.section)
+    ? orderDetailLabels[to.params.section]
+    : to.meta.title
+  document.title = title ? `${String(title)} · 匠心集 CraftFlow` : '匠心集 CraftFlow'
 })
 
 export default router

@@ -7,6 +7,9 @@ import { api } from './environment'
 const image = readFileSync(new URL('./avatar.png', import.meta.url))
 test.use({ storageMode: 'receiver', actionTimeout: 15_000 })
 
+/** 宽屏用订单列表上的选中卡片核对状态。 */
+const selectedStatus = (page: Page) => page.locator('.craftflow-order-item a[aria-current="page"] [data-status]')
+
 /** 走真实注册及会话，不依赖开发账号或浏览器持久化令牌。 */
 async function register(page: Page, codes: Map<string, string>, nickname = '作品访客', signIn = true) {
   const email = `works-${randomBytes(6).toString('hex')}@qq.com`
@@ -310,7 +313,7 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
     await expect(managedWork).toContainText('138.60')
     await expect(managedWork).toContainText('15 个自然日')
     await expect(managedWork).toContainText('已上架')
-    await managedWork.getByRole('link', { name: '编辑与交易设置', exact: true }).click()
+    await managedWork.getByRole('link', { name: '编辑', exact: true }).click()
     await expect(page).toHaveURL(`/creator/works/${workId}/edit`)
     await expect(page.getByLabel('成品售价（元）', { exact: true })).toHaveValue('138.60')
     const buyer = await buyerContext.newPage()
@@ -373,13 +376,13 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
     await buyer.unroute(`**/api/works/${workId}/orders`)
     await expect(buyer).toHaveURL(/\/orders\/\d+$/)
     const stockOrderId = buyer.url().match(/orders\/(\d+)$/)![1]!
-    await expect(buyer.locator('.work-section-heading .work-status')).toHaveText('待付款')
+    await expect(selectedStatus(buyer)).toHaveText('待付款')
     await buyer.getByRole('button', { name: '模拟支付', exact: true }).click()
     await expect(buyer.getByRole('region', { name: '确认模拟支付' })).toContainText('138.60')
     await expect(buyer.getByRole('region', { name: '确认模拟支付' })).toContainText('现货直购验收路一号')
     await buyer.getByLabel('我已阅读并同意现货支付条款', { exact: true }).check()
     await buyer.getByRole('button', { name: '确认模拟支付', exact: true }).click()
-    await expect(buyer.locator('.work-section-heading .work-status')).toHaveText('待发货')
+    await expect(selectedStatus(buyer)).toHaveText('待发货')
     const paidStock = (await (await buyer.request.get(`${api}/orders/${stockOrderId}`)).json()).data
     const deadline = new Date(Date.parse(paidStock.paidAt) + 48 * 60 * 60 * 1000)
     expect(Date.parse(paidStock.shipDeadlineAt)).toBe(deadline.getTime())
@@ -397,19 +400,22 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
     await expect(buyer.getByRole('log', { name: '沟通消息' })).toBeVisible()
     await expect(buyer.getByRole('region', { name: '当前会话' }).locator('a[href^="/requests/"]')).toHaveCount(0)
     await expect(buyer.getByRole('link', { name: /返回会话列表/ })).toBeVisible()
+    await expect(buyer.getByRole('button', { name: '返回订单' })).toBeVisible()
     expect(await buyer.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await buyer.screenshot({ path: testInfo.outputPath('stock-conversation-390.png'), fullPage: true })
-    await buyer.getByRole('link', { name: /关联订单.*原木手工杯垫/ }).click()
+    await buyer.getByRole('button', { name: '返回订单' }).click()
     await expect(buyer).toHaveURL(`/orders/${stockOrderId}`)
     await buyer.setViewportSize({ width: 390, height: 1000 })
     await page.goto(`/orders/${stockOrderId}`)
     await page.getByRole('button', { name: '填写运单并发货', exact: true }).click()
     await page.getByLabel('运单号', { exact: true }).fill('BROWSER123456')
     await page.getByRole('button', { name: '确认发货', exact: true }).click()
-    await expect(page.locator('.work-section-heading .work-status')).toHaveText('已发货')
+    await expect(page.getByRole('region', { name: '发货与物流信息', exact: true })).toContainText('BROWSER123456')
+    expect((await (await page.request.get(`${api}/orders/${stockOrderId}`)).json()).data.status).toBe('SHIPPED')
     await buyer.getByRole('button', { name: '确认收货', exact: true }).click()
     await buyer.getByRole('dialog').getByRole('button', { name: '确认收货', exact: true }).click()
-    await expect(buyer.locator('.work-section-heading .work-status')).toHaveText('已完成')
+    await expect(buyer.getByRole('region', { name: '发货与物流信息' })).toContainText('最初完成时间')
+    expect((await (await buyer.request.get(`${api}/orders/${stockOrderId}`)).json()).data.status).toBe('COMPLETED')
     for (const width of [1366, 1440, 1920, 390]) {
       await buyer.setViewportSize({ width, height: 1000 })
       expect(await buyer.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -453,6 +459,7 @@ test('创作者草稿、驳回补正通过、即时交易设置、买家浏览�
     // 成交图仍由原订单签发，并在买入与承接详情加载真实图片。
     for (const actor of [buyer, page]) {
       await actor.goto(`/orders/${stockOrderId}`)
+      await actor.getByRole('link', { name: '现货作品快照', exact: true }).click()
       for (const [fileId, label] of [[originalMain, '成交主图 1'], [originalSpec, '成交规格图 1']]) {
         const signed = await actor.request.get(`${api}/orders/${stockOrderId}/stock-images/${fileId}`)
         expect(signed.status()).toBe(200)
@@ -512,11 +519,11 @@ test('两位买家同时购买同一件现货，仅首个有效订单可支付',
     expect((await mutate(loser.page, `/orders/${order.id}/payment`, 'put', payment)).status()).toBe(404)
 
     await winner.page.goto(`/orders/${order.id}`)
-    await expect(winner.page.locator('.work-section-heading .work-status')).toHaveText('待付款')
+    await expect(selectedStatus(winner.page)).toHaveText('待付款')
     await winner.page.getByRole('button', { name: '模拟支付', exact: true }).click()
     await winner.page.getByLabel('我已阅读并同意现货支付条款', { exact: true }).check()
     await winner.page.getByRole('button', { name: '确认模拟支付', exact: true }).click()
-    await expect(winner.page.locator('.work-section-heading .work-status')).toHaveText('待发货')
+    await expect(selectedStatus(winner.page)).toHaveText('待发货')
     const paid = await winner.page.request.get(`${api}/orders/${order.id}`)
     expect(paid.status()).toBe(200)
     expect((await paid.json()).data).toMatchObject({ status: 'PENDING_SHIP', payment: { result: 'SUCCESS', amount: '100.00' } })
@@ -568,7 +575,7 @@ test('取消现货订单后另一位买家可下单，订单列表保留承接�
     await buyer.goto(`/orders/${firstOrderId}`)
     await buyer.getByRole('button', { name: '取消订单', exact: true }).click()
     await buyer.getByRole('dialog').getByRole('button', { name: '确认取消订单', exact: true }).click()
-    await expect(buyer.locator('.work-section-heading .work-status')).toHaveText('已取消')
+    await expect(selectedStatus(buyer)).toHaveText('已取消')
     await expect(buyer.getByRole('link', { name: '进入订单沟通', exact: true })).toBeVisible()
 
     // 通过真实建单、取消生成第二页，核验列表服务端分页与双方实际交易关系。

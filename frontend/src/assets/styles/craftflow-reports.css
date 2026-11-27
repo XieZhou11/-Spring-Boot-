@@ -2,7 +2,6 @@
 .report-queue, .report-detail { min-width: 0; padding: 18px; }
 .report-filters { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 14px; }
 .report-filters label { display: grid; flex: 1; gap: 5px; font-size: 12px; font-weight: 600; }
-.report-filters select { min-height: 36px; padding: 6px; font: inherit; }
 .report-queue-row {
   display: grid;
   gap: 5px;

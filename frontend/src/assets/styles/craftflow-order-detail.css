@@ -13,6 +13,39 @@
   color: var(--craft-muted);
 }
 .craftflow-order-main .order-back a:hover { color: var(--craft-ink); }
+.craftflow-order-main .order-back .inline-button { padding: 0; font-weight: 600; }
+.craftflow-order-workspace.craftflow-order-section-page {
+  grid-template-columns: minmax(0, 1fr);
+  width: min(100%, 980px);
+  margin-inline: auto;
+}
+.craftflow-order-main .order-document-links {
+  display: grid;
+  gap: 12px;
+}
+.craftflow-order-main .order-document-links h2 { margin: 0; }
+.order-document-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 157px), 1fr));
+  gap: 8px;
+}
+.order-document-grid a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 39px;
+  padding: 8px 10px;
+  border: 1px solid var(--craft-border);
+  border-radius: 8px;
+  color: var(--craft-ink);
+  background: var(--craft-surface);
+  font-size: 13px;
+  font-weight: 600;
+}
+.order-document-grid a:hover { background: #f4f4f5; }
+.order-document-grid .app-icon { width: 15px; height: 15px; flex: none; color: var(--craft-muted); }
+.craftflow-order-main .order-document-heading .order-number { margin-bottom: 0; }
 .craftflow-order-main > .order-overview,
 .craftflow-order-main > .editor-section,
 .craftflow-order-main > .payment-confirmation,
@@ -40,7 +73,6 @@
   font: 700 clamp(20px, 2vw, 27px)/1.35 var(--craft-font);
   letter-spacing: normal;
 }
-.craftflow-order-main .order-overview-badges,
 .craftflow-order-main .order-overview-actions {
   display: flex;
   flex-wrap: wrap;
@@ -48,7 +80,6 @@
   gap: 8px;
 }
 .craftflow-order-main .order-overview-actions { margin-block: 4px; }
-.craftflow-order-main :is(.order-type-badge, .work-status),
 .craftflow-order-main .order-node-status {
   display: inline-flex;
   padding: 3px 8px;
@@ -58,24 +89,13 @@
   color: #3f3f46;
   font: 600 12px/1.4 var(--craft-font);
 }
-.craftflow-order-main .order-type-badge[data-type=CUSTOM],
-.craftflow-order-main [data-order-status=PENDING_PAY],
 .craftflow-order-main [data-node-status=UNLOCKED] .order-node-status {
   background: #fef3c7;
   color: #92400e;
 }
-.craftflow-order-main :is([data-order-status=IN_PRODUCTION], [data-order-status=PAID]) {
-  background: #e0f2fe;
-  color: #075985;
-}
-.craftflow-order-main :is([data-order-status=SHIPPED], [data-order-status=COMPLETED]),
 .craftflow-order-main .node-handled .order-node-status {
   background: #dcfce7;
   color: #166534;
-}
-.craftflow-order-main :is([data-order-status=REFUNDED], [data-order-status=AFTER_SALE]) {
-  background: #fce7f3;
-  color: #9d174d;
 }
 .craftflow-order-main .order-number,
 .craftflow-order-main .muted,

@@ -176,6 +176,7 @@
 .craft-messages .conversation-tools { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }
 .craft-messages .conversation-reconnect { display: none; }
 .craft-messages .conversation-back { display: none; }
+.craft-messages .conversation-order-back { margin: 12px 20px 0; }
 .craft-messages .chat-state {
   display: flex;
   align-items: center;

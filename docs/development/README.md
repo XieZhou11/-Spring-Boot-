@@ -6,6 +6,8 @@ CraftFlow 前端后续修复按清单中的复现步骤、通过标准与回归�
 
 ## 当前记录
 
+[T-034 演示页面交互与订单导航](tasks/T-034-craftflow-demo-ui-feedback.md) 涵盖筛选、独立订单资料页、会话返回及创作者工作台。 [测试记录](../testing/T-034-craftflow-demo-ui-feedback.md)
+
 [T-033 CraftFlow 前端审查问题修复](tasks/T-033-craftflow-frontend-followup.md) 覆盖布局、交互、路由的修复和逐项验收。 [测试记录](../testing/T-033-craftflow-frontend-followup.md)
 
 [T-028 现货普通售后与恢复直购](tasks/T-028-stock-refund-recovery.md) 对应后端专项审查第一批。

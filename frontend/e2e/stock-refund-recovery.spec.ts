@@ -44,7 +44,8 @@ test('已发货现货全额退款后仍已售出，创作者确认退回才能�
     await buyer.getByRole('button', { name: '模拟支付', exact: true }).click()
     await buyer.getByLabel('我已阅读并同意现货支付条款', { exact: true }).check()
     await buyer.getByRole('button', { name: '确认模拟支付', exact: true }).click()
-    await expect(buyer.locator('.work-section-heading .work-status')).toHaveText('待发货')
+    const selectedStatus = (page: typeof buyer) => page.locator('.craftflow-order-item a[aria-current="page"] [data-status]')
+    await expect(selectedStatus(buyer)).toHaveText('待发货')
     const paid = (await (await buyer.request.get(`${api}${orderPath}`)).json()).data as OrderVO
     expect(Date.parse(paid.shipDeadlineAt!) - Date.parse(paid.paidAt!)).toBe(48 * 60 * 60 * 1000)
     expect(paid.startDeadlineAt).toBeNull()
@@ -54,10 +55,14 @@ test('已发货现货全额退款后仍已售出，创作者确认退回才能�
     await creator.getByRole('button', { name: '填写运单并发货', exact: true }).click()
     await creator.getByLabel('运单号', { exact: true }).fill('STOCK2026112501')
     await creator.getByRole('button', { name: '确认发货', exact: true }).click()
-    await expect(creator.locator('.work-section-heading .work-status')).toHaveText('已发货')
+    await expect(selectedStatus(creator)).toHaveText('已发货')
     await buyer.reload()
-    await expect(buyer.locator('.work-section-heading .work-status')).toHaveText('已发货')
+    await expect(selectedStatus(buyer)).toHaveText('已发货')
 
+    for (const participant of [buyer, creator]) {
+      await participant.getByRole('navigation', { name: '订单资料' }).getByRole('link', { name: '售后与退款', exact: true }).click()
+      await expect(participant).toHaveURL(`${orderPath}/details/refund`)
+    }
     const buyerPanel = buyer.getByRole('region', { name: '订单售后' })
     const creatorPanel = creator.getByRole('region', { name: '订单售后' })
     await buyerPanel.getByRole('button', { name: '申请普通退款', exact: true }).click()
@@ -68,9 +73,13 @@ test('已发货现货全额退款后仍已售出，创作者确认退回才能�
     await buyerPanel.getByRole('button', { name: '确认申请全额退款', exact: true }).click()
     await buyer.getByRole('dialog').getByRole('button', { name: '确认申请', exact: true }).click()
     expect((await applicationResponse).status()).toBe(201)
-    await expect(buyer.locator('.work-section-heading .work-status')).toHaveText('售后中')
-    await expect(creator.locator('.work-section-heading .work-status')).toHaveText('售后中')
+    const status = async (page: typeof buyer) => ((await (await page.request.get(`${api}${orderPath}`)).json()).data as OrderVO).status
+    await expect.poll(() => status(buyer)).toBe('AFTER_SALE')
+    await expect.poll(() => status(creator)).toBe('AFTER_SALE')
+    await buyer.getByRole('button', { name: '返回订单', exact: true }).click()
+    await expect(buyer.getByRole('region', { name: '现货履约' })).toBeVisible()
     await expect(buyer.getByRole('button', { name: '确认收货', exact: true })).toHaveCount(0)
+    await buyer.getByRole('navigation', { name: '订单资料' }).getByRole('link', { name: '售后与退款', exact: true }).click()
 
     await buyerPanel.getByRole('button', { name: '追加售后证据', exact: true }).click()
     await buyerPanel.getByLabel('补充证据说明', { exact: true }).fill('退回运单已交给承运人，请创作者签收。')
@@ -110,8 +119,11 @@ test('已发货现货全额退款后仍已售出，创作者确认退回才能�
     await decision.getByRole('button', { name: '确认裁定', exact: true }).click()
     await admin.getByRole('dialog').getByRole('button', { name: '确认裁定', exact: true }).click()
     await expect(admin.getByRole('region', { name: '售后处理结论' })).toContainText('STOCKRETURN20261125')
-    await expect(buyer.locator('.work-section-heading .work-status')).toHaveText('已退款')
+    await expect.poll(() => status(buyer)).toBe('REFUNDED')
+    await buyer.getByRole('button', { name: '返回订单', exact: true }).click()
     await expect(buyer.getByRole('link', { name: '进入订单沟通', exact: true })).toBeVisible()
+    await creator.getByRole('button', { name: '返回订单', exact: true }).click()
+    await creator.getByRole('navigation', { name: '订单资料' }).getByRole('link', { name: '结算信息', exact: true }).click()
     await expect(creator.getByRole('region', { name: '结算信息' })).toContainText('已取消')
     const refunded = (await (await admin.request.get(`${api}/admin/orders/${order.id}`)).json()).data as {
       fundFlows: { type: string; amount: string }[]

@@ -24,6 +24,7 @@ const children = computed(() => categories.value.find(category => category.id ==
 const rows = ref<WorkVO[]>([])
 const total = ref(0)
 const loading = ref(false)
+const hasResult = ref(false)
 const error = ref('')
 let revision = 0
 let disposed = false
@@ -57,8 +58,12 @@ async function load() {
     if (current !== revision) return
     rows.value = result.items
     total.value = result.total
+    hasResult.value = true
   } catch (failure) {
-    if (current === revision) error.value = failure instanceof Error ? failure.message : '作品读取失败'
+    if (current === revision) {
+      hasResult.value = false
+      error.value = failure instanceof Error ? failure.message : '作品读取失败'
+    }
   } finally {
     if (current === revision) loading.value = false
   }
@@ -210,28 +215,30 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
-        <nav
-          v-if="children.length"
-          class="cf-work-categories cf-work-subcategories"
-          aria-label="二级品类"
-        >
-          <button
-            type="button"
-            :aria-pressed="query.categoryId === parentId"
-            @click="selectCategory(parentId)"
+        <div class="cf-work-subcategory-row">
+          <nav
+            v-if="children.length"
+            class="cf-work-categories cf-work-subcategories"
+            aria-label="二级品类"
           >
-            全部
-          </button>
-          <button
-            v-for="category in children"
-            :key="category.id"
-            type="button"
-            :aria-pressed="query.categoryId === category.id"
-            @click="selectCategory(category.id)"
-          >
-            {{ category.name }}
-          </button>
-        </nav>
+            <button
+              type="button"
+              :aria-pressed="query.categoryId === parentId"
+              @click="selectCategory(parentId)"
+            >
+              全部
+            </button>
+            <button
+              v-for="category in children"
+              :key="category.id"
+              type="button"
+              :aria-pressed="query.categoryId === category.id"
+              @click="selectCategory(category.id)"
+            >
+              {{ category.name }}
+            </button>
+          </nav>
+        </div>
         <p
           v-if="categoryError"
           class="cf-work-error"
@@ -276,39 +283,45 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <p
-          v-else-if="loading"
-          class="cf-work-state cf-work-status"
+          v-if="loading"
+          :class="hasResult ? 'sr-only' : 'cf-work-state cf-work-status'"
           role="status"
         >
           正在读取作品…
         </p>
+        <!-- 查询中保留上一组结果的高度，禁用其链接和分页，避免错用旧结果。 -->
         <div
-          v-else-if="!rows.length"
-          class="cf-work-state"
+          v-if="hasResult"
+          class="cf-work-result-content"
+          :inert="loading"
         >
-          <h2>还没有符合条件的作品</h2>
-          <p>试试其他关键词，或放宽筛选条件。</p>
-        </div>
-        <template v-else>
-          <p class="cf-work-count">
-            共 {{ total }} 件作品
-          </p>
-          <div class="work-grid">
-            <WorkCard
-              v-for="work in rows"
-              :key="work.id"
-              :work="work"
-              :browse-path="route.fullPath"
-            />
+          <div
+            v-if="!rows.length"
+            class="cf-work-state"
+          >
+            <h2>还没有符合条件的作品</h2>
+            <p>试试其他关键词，或放宽筛选条件。</p>
           </div>
-        </template>
-        <WorkPagination
-          v-if="!error"
-          :page="applied.page || 1"
-          :total="total"
-          :loading="loading"
-          @change="changePage"
-        />
+          <template v-else>
+            <p class="cf-work-count">
+              共 {{ total }} 件作品
+            </p>
+            <div class="work-grid">
+              <WorkCard
+                v-for="work in rows"
+                :key="work.id"
+                :work="work"
+                :browse-path="route.fullPath"
+              />
+            </div>
+          </template>
+          <WorkPagination
+            :page="applied.page || 1"
+            :total="total"
+            :loading="loading"
+            @change="changePage"
+          />
+        </div>
       </section>
     </div>
   </WorkLayout>

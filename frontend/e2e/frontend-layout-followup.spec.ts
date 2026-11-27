@@ -79,6 +79,57 @@ test('广场等待卡片渲染后恢复浏览位置，直接打开结果锚点�
   })).toBe(true)
 })
 
+test('广场切换一级品类时保持阅读位置和原结果高度，查询完成后更换卡片', async ({ page }) => {
+  const initial = Array.from({ length: 20 }, (_, index) => ({
+    ...work, id: String(index + 1), title: '全部作品样例 ' + (index + 1),
+  }))
+  const category = { id: '3', name: '家居器物', children: [{ id: '4', name: '木工挂饰', children: [] }] }
+  const filtered = [{ ...work, id: '21', title: '家居器物样例' }]
+  await mockApi(page, (path, url) => {
+    if (path === '/categories') return { data: [category] }
+    if (path === '/works') {
+      const items = url.searchParams.has('categoryId') ? filtered : initial
+      return { data: { ...empty, items, total: items.length } }
+    }
+    return undefined
+  })
+  let releaseQuery: () => void = () => {}
+  const waitForQuery = new Promise<void>(resolve => { releaseQuery = resolve })
+  await page.route(url => url.pathname === '/api/works' && url.searchParams.has('categoryId'), async route => {
+    await waitForQuery
+    await route.fallback()
+  })
+  await page.goto('/')
+  const cards = page.locator('.work-grid .work-card')
+  await expect(cards).toHaveCount(initial.length)
+  const categories = page.getByRole('navigation', { name: '一级品类' })
+  const filteredCategory = categories.getByRole('button', { name: category.name })
+  await expect(filteredCategory).toBeVisible()
+  await page.evaluate(() => scrollTo(0, 48))
+  const results = page.getByRole('region', { name: '搜索结果' })
+  const before = await results.evaluate(element => {
+    const { top, height } = element.getBoundingClientRect()
+    return { top, height, scroll: scrollY }
+  })
+  try {
+    await filteredCategory.click()
+    await expect(results).toHaveAttribute('aria-busy', 'true')
+    await expect(cards).toHaveCount(initial.length)
+    await expect(results.locator('.cf-work-result-content')).toHaveAttribute('inert', '')
+    await expect.poll(() => results.evaluate(element => {
+      const { top, height } = element.getBoundingClientRect()
+      return { top, height, scroll: scrollY }
+    })).toEqual(before)
+  } finally {
+    releaseQuery()
+  }
+  await expect(results).toHaveAttribute('aria-busy', 'false')
+  await expect(page.getByRole('link', { name: filtered[0].title, exact: true })).toBeVisible()
+  await expect(cards).toHaveCount(1)
+  await categories.getByRole('button', { name: '全部作品' }).click()
+  await expect(cards).toHaveCount(initial.length)
+})
+
 test('需求报价锚点和首个输入框在桌面及窄窗中都避开页头', async ({ page }) => {
   await mockApi(page, path => {
     if (path === '/sessions/current') return { data: { ...session, roles: ['BUYER', 'CREATOR'], activeRole: 'CREATOR' } }
@@ -270,7 +321,7 @@ test('认证三页布局对齐，矮窗出现错误后仍可键盘到达提交�
   await expect(submit).toBeInViewport()
 })
 
-test('订单公开授权和制作进度锚点均完整定位', async ({ page }) => {
+test('订单公开授权资料页和制作进度锚点均完整定位', async ({ page }) => {
   const order: OrderVO = {
     id: '1', orderNo: 'T033-ORDER-1', orderType: 'CUSTOM', buyerId: '1', buyerNickname: '测试买家',
     creatorId: '2', creatorNickname: '手艺人', requestId: '7', quoteId: '8', status: 'COMPLETED',
@@ -301,9 +352,10 @@ test('订单公开授权和制作进度锚点均完整定位', async ({ page }) 
     return undefined
   })
   const section = page.getByRole('region', { name: '定制成品公开授权' })
+  const heading = page.getByRole('heading', { name: '定制成品公开授权', level: 1 })
   const authorizationBounds = () => page.evaluate(() => {
     const header = document.querySelector('.craft-header')?.getBoundingClientRect()
-    const title = document.querySelector('#publication-consent h2')?.getBoundingClientRect()
+    const title = document.querySelector('.order-document-heading h1')?.getBoundingClientRect()
     return {
       width: innerWidth,
       headerBottom: header?.bottom,
@@ -317,12 +369,15 @@ test('订单公开授权和制作进度锚点均完整定位', async ({ page }) 
     // 每个尺寸从一个新文档访问深链，避免测到上一轮浏览器保留的滚动值。
     await page.goto('about:blank')
     await page.goto('/orders/1#publication-consent')
-    await expect(section).toBeFocused()
+    await expect(page).toHaveURL('/orders/1/details/publication')
+    await expect(heading).toBeFocused()
+    await expect(section).toBeVisible()
     await expect.poll(authorizationBounds).toMatchObject({ width, visible: true })
     await page.goto('/orders/1')
-    await page.getByRole('link', { name: '查看公开授权' }).click()
-    await expect(page).toHaveURL('/orders/1#publication-consent')
-    await expect(section).toBeFocused()
+    await page.getByRole('link', { name: '定制成品公开授权', exact: true }).click()
+    await expect(page).toHaveURL('/orders/1/details/publication')
+    await expect(heading).toBeFocused()
+    await expect(section).toBeVisible()
     await expect.poll(authorizationBounds).toMatchObject({ width, visible: true })
     await page.goto('/orders/1#progress-9')
     const progress = page.locator('#progress-9')

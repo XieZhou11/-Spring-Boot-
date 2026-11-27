@@ -91,8 +91,85 @@
 .craft-account-panel .account-field > input[readonly] { background: #f4f4f5; color: var(--craft-muted); }
 .craft-account-panel .account-field.has-error > :is(input, textarea),
 .craft-account-panel .account-field.has-error .el-input__wrapper { border-color: #dc2626; box-shadow: 0 0 0 1px #dc2626; }
-.craft-account-panel .region-fieldset .el-cascader { --el-color-primary: var(--craft-ink); --el-border-color: var(--craft-border); --el-fill-color-blank: var(--craft-surface); }
-.craft-account-panel .region-fieldset .el-input__wrapper { min-height: 43px; border-radius: 8px; padding-inline: 12px; }
+.craft-account-panel .region-fieldset .el-cascader .el-input {
+  --el-input-text-color: var(--craft-ink);
+  --el-input-bg-color: var(--craft-bg);
+  --el-input-border-color: var(--craft-border);
+  --el-input-hover-border-color: var(--craft-select-hover-border, #a1a1aa);
+  --el-input-focus-border-color: #a15c08;
+  --el-input-icon-color: var(--craft-muted);
+  --el-input-placeholder-color: var(--craft-muted);
+  --el-disabled-bg-color: #f4f4f5;
+  --el-disabled-border-color: var(--craft-border);
+  --el-disabled-text-color: var(--craft-muted);
+}
+.craft-account-panel .region-fieldset .el-input__wrapper {
+  min-height: var(--craft-select-height);
+  padding: 0 12px;
+  border-radius: var(--craft-select-radius);
+  font: 500 13px/1.4 var(--craft-font);
+}
+.craft-account-panel .region-fieldset .el-input:not(.is-disabled) .el-input__wrapper:is(:hover, :focus-within) {
+  background: var(--craft-surface);
+}
+.craft-account-panel .region-fieldset .el-input__wrapper:has(input:focus-visible) {
+  outline: 2px solid #a15c08;
+  outline-offset: 2px;
+}
+
+/* 级联面板传送到页面根部，用独立类统一省、市、区各列样式。 */
+.cf-address-region-popper.el-cascader__dropdown.el-popper {
+  --el-cascader-menu-fill: var(--craft-surface);
+  --el-cascader-menu-border: 1px solid var(--craft-border);
+  --el-cascader-menu-shadow: var(--craft-picker-shadow);
+  border-radius: var(--craft-picker-radius);
+  font: 500 13px/1.4 var(--craft-font);
+}
+.cf-address-region-popper .el-popper__arrow { display: none; }
+.cf-address-region-popper .el-cascader-panel {
+  --el-cascader-menu-border: 1px solid var(--craft-border);
+  --el-cascader-menu-text-color: var(--craft-ink);
+  --el-cascader-menu-selected-text-color: var(--craft-picker-selected-ink);
+  --el-cascader-node-background-hover: var(--craft-picker-hover-bg);
+  --el-cascader-node-color-disabled: #71717a;
+  border-radius: inherit;
+  font: inherit;
+}
+.cf-address-region-popper .el-cascader-menu {
+  inline-size: min(176px, calc((100vw - 30px) / 3));
+  min-inline-size: 0;
+}
+.cf-address-region-popper .el-cascader-menu__wrap.el-scrollbar__wrap {
+  block-size: min(280px, 50vh);
+}
+.cf-address-region-popper .el-cascader-menu__list { padding: 4px; }
+.cf-address-region-popper .el-cascader-menu .el-cascader-node {
+  min-height: 34px;
+  height: auto;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  line-height: 1.4;
+}
+.cf-address-region-popper .el-cascader-node__label {
+  padding: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.cf-address-region-popper :is(.el-cascader-node__prefix, .el-cascader-node__postfix) { position: static; }
+.cf-address-region-popper .el-cascader-node:is(.is-active, .in-active-path, .in-checked-path):not(.is-disabled) {
+  background: var(--craft-picker-selected-bg);
+  color: var(--el-cascader-menu-selected-text-color);
+  font-weight: 600;
+}
+.cf-address-region-popper .el-cascader-node:is(.is-active, .in-active-path, .in-checked-path):not(.is-disabled):is(:hover, :focus) {
+  background: #fef3c7;
+}
+.cf-address-region-popper .el-cascader-node:focus-visible {
+  outline: 2px solid #a15c08;
+  outline-offset: -2px;
+}
+
 .craft-account-panel .account-checkbox { font-size: 13px; }
 .craft-account-panel .account-form-footer { padding-top: 0; gap: 12px; }
 .craft-account-panel .account-form-footer > p.save-success { color: #166534; }

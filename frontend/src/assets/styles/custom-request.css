@@ -13,7 +13,8 @@
 .request-images .work-image img { width:100%; height:100%; object-fit:contain; }
 .request-filters { display:flex; flex-wrap:wrap; gap:14px; padding:20px; border:1px solid var(--border); align-items:flex-end; margin-bottom:24px; }
 .request-filters label { display:flex; flex-direction:column; gap:7px; font-size:12px; min-width:0; }
-.request-filters input, .request-filters select { padding:9px; background:transparent; border:1px solid var(--border); max-width:210px; min-height:38px; }
+.request-filters select { max-width: 210px; }
+.request-filters input { padding:9px; background:transparent; border:1px solid var(--border); max-width:210px; min-height:38px; }
 .request-filters input[inputmode=decimal] { width:110px; }
 .request-filters .request-check { flex-direction:row; align-items:center; padding:10px 0; }
 .request-list { display:grid; gap:16px; }

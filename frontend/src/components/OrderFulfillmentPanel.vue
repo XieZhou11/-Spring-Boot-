@@ -128,8 +128,12 @@ watch(() => props.pending, pending => {
   >
     <header class="fulfillment-heading">
       <div>
-        <h2>{{ stock ? '现货履约' : '制作进度' }}</h2><p class="field-help">
-          {{ stock ? '现货不经过制作节点，支付后 48 小时内发货。' : '参考计划在支付时确定，时间均为北京时间。' }}
+        <h2>{{ stock ? '现货履约' : '制作进度' }}</h2>
+        <p
+          v-if="stock"
+          class="field-help"
+        >
+          现货不经过制作节点，支付后 48 小时内发货。
         </p>
       </div>
       <strong
@@ -177,12 +181,6 @@ watch(() => props.pending, pending => {
       class="review-reason"
     >
       售后处理中，开工、节点推进、发货与收货暂停；可在原会话补充证据。
-    </p>
-    <p
-      v-else-if="terminal"
-      class="field-help"
-    >
-      订单已{{ order.status === 'REFUNDED' ? '退款' : order.status === 'CANCELLED' ? '取消' : '完成' }}。{{ stock ? '' : '制作节点和初始计划只读。' }}补充证据请进入订单会话。
     </p>
     <div
       v-if="order.canStart || order.canRequestNoStartRefund"
@@ -252,7 +250,6 @@ watch(() => props.pending, pending => {
             class="shipping-warning"
           >已超参考日</span><span v-if="node.handledAt || node.overdue">{{ deviation(node) }}</span>
         </div>
-        <time v-if="node.handledAt">{{ node.status === 'SKIPPED' ? '实际跳过' : '实际打卡' }} {{ formatTime(node.handledAt) }}</time>
         <article
           v-for="(record, index) in node.records || []"
           :key="record.id"
@@ -308,7 +305,7 @@ watch(() => props.pending, pending => {
           </button>
           <RouterLink
             v-if="order.conversationId"
-            :to="{ path: `/messages/conversations/${order.conversationId}`, query: { progressNodeId: node.id } }"
+            :to="{ path: `/messages/conversations/${order.conversationId}`, query: { progressNodeId: node.id }, state: { orderReturnTo: $route.fullPath } }"
           >讨论此进度 ↗</RouterLink>
         </div>
       </li>

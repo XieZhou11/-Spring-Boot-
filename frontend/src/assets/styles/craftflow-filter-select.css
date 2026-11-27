@@ -1,0 +1,68 @@
+/* 前后台使用同一套下拉控件样式，地区选择器复用选项面板的色值和尺寸。 */
+:root {
+  --craft-select-height: 37px;
+  --craft-select-radius: 8px;
+  --craft-picker-radius: 10px;
+  --craft-picker-shadow: 0 8px 24px #18181b1a;
+  --craft-picker-selected-bg: #fffbeb;
+  --craft-picker-selected-ink: #78350f;
+  --craft-picker-hover-bg: #f4f4f5;
+}
+
+select:where(:not([multiple], [size])) {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  min-height: var(--craft-select-height);
+  padding: 7px 11px;
+  border: 1px solid var(--craft-border);
+  border-radius: var(--craft-select-radius);
+  background: var(--craft-bg);
+  color: var(--craft-ink);
+  font: 500 13px/1.4 var(--craft-font);
+  cursor: pointer;
+}
+
+select:where(:not([multiple], [size], :disabled)):hover {
+  border-color: var(--craft-select-hover-border, #a1a1aa);
+  background: var(--craft-surface);
+}
+
+select:focus-visible { outline: 2px solid #a15c08; outline-offset: 2px; }
+select:disabled { opacity: .65; cursor: not-allowed; }
+
+/* 浏览器支持可定制下拉时统一绘制选项面板，沿用原生选择与键盘交互。 */
+@supports (appearance: base-select) {
+  select:where(:not([multiple], [size])),
+  select:where(:not([multiple], [size]))::picker(select) { appearance: base-select; }
+
+  select:where(:not([multiple], [size])) { gap: 12px; }
+  select::picker-icon { color: var(--craft-muted); }
+  select:open::picker-icon { transform: rotate(180deg); }
+
+  select::picker(select) {
+    margin-block: 5px;
+    max-block-size: min(320px, 50vh);
+    max-inline-size: calc(100vw - 24px);
+    padding: 4px;
+    border: 1px solid var(--craft-border);
+    border-radius: var(--craft-picker-radius);
+    background: var(--craft-surface);
+    box-shadow: var(--craft-picker-shadow);
+  }
+
+  select:where(:not([multiple], [size])) option {
+    min-height: 34px;
+    gap: 7px;
+    padding: 7px 9px;
+    border-radius: 6px;
+    color: var(--craft-ink);
+    font: 500 13px/1.4 var(--craft-font);
+    overflow-wrap: anywhere;
+  }
+
+  option:checked { background: var(--craft-picker-selected-bg); color: var(--craft-picker-selected-ink); }
+  option:where(:hover, :focus-visible) { background: var(--craft-picker-hover-bg); }
+  option:checked:where(:hover, :focus-visible) { background: #fef3c7; }
+  option:disabled { opacity: .65; }
+}

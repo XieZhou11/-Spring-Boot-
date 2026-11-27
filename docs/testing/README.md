@@ -1,5 +1,7 @@
 # 测试结果记录
 
+演示页面的订单资料拆页、会话返回、作品筛选和创作者工作台验收见 [T-034 测试记录](T-034-craftflow-demo-ui-feedback.md)。
+
 CraftFlow 前端审查后的 22 项修复和 11 项回归证据见 [T-033 测试记录](T-033-craftflow-frontend-followup.md)。
 
 CraftFlow 第 7 批全站联验、新版切换、V1.5 UC-01 至 UC-40 证据及遗留项见 [T-027 测试记录](T-027-craftflow-cutover.md)。

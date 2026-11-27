@@ -138,12 +138,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('work-updated', r
   <CreatorLayout>
     <section class="cf-publication cf-publication-card">
       <header class="cf-publication-heading">
-        <div>
-          <h1>我的作品</h1>
-          <p v-if="quota">
-            今日首次提交 <strong>{{ quota.used }} / {{ quota.limit }}</strong> 件，保存草稿和同一作品重提不计入额度。
-          </p>
-        </div>
+        <h1>我的作品</h1>
         <RouterLink
           class="button-primary"
           to="/creator/works/new"
@@ -285,28 +280,28 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('work-updated', r
                   :class="work.reviewStatus"
                 >{{ workStatusLabels[work.reviewStatus] }}</span>
                 <small
-                  v-if="work.reviewReason"
+                  v-if="work.reviewStatus !== 'OFFLINE' && work.reviewReason"
                   class="field-error"
                 >{{ work.reviewReason }}</small>
               </td>
               <td>
                 <div class="cf-publication-row-actions">
                   <RouterLink
-                    class="inline-button"
+                    class="button-secondary"
                     :to="`/creator/works/${work.id}/edit`"
                   >
-                    {{ work.reviewStatus === 'PENDING' ? '查看材料' : work.reviewStatus === 'ONLINE' ? '编辑与交易设置' : '编辑作品' }}
+                    {{ work.reviewStatus === 'PENDING' ? '查看材料' : '编辑' }}
                   </RouterLink>
                   <RouterLink
                     v-if="work.reviewStatus === 'ONLINE'"
                     :to="`/works/${work.id}`"
-                    class="inline-button"
+                    class="button-secondary"
                   >
-                    查看公开页
+                    公开页
                   </RouterLink>
                   <button
                     v-if="work.stockRecovery"
-                    class="inline-button"
+                    class="button-secondary"
                     type="button"
                     aria-haspopup="dialog"
                     :disabled="Boolean(busy)"
@@ -316,7 +311,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('work-updated', r
                   </button>
                   <button
                     v-if="work.reviewStatus === 'DRAFT'"
-                    class="inline-button"
+                    class="button-secondary"
                     type="button"
                     :disabled="Boolean(busy)"
                     @click="action(work, 'delete')"
@@ -325,7 +320,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('work-updated', r
                   </button>
                   <button
                     v-if="work.reviewStatus === 'PENDING'"
-                    class="inline-button"
+                    class="button-secondary"
                     type="button"
                     :disabled="Boolean(busy)"
                     @click="action(work, 'withdraw')"
@@ -334,7 +329,7 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('work-updated', r
                   </button>
                   <button
                     v-if="work.reviewStatus === 'ONLINE'"
-                    class="inline-button"
+                    class="button-secondary"
                     type="button"
                     :disabled="Boolean(busy)"
                     @click="action(work, 'offline')"
@@ -418,6 +413,22 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('work-updated', r
 </template>
 
 <style scoped>
+/* 为同一作品的操作留出整行宽度，窄屏沿用作品表格的横向滚动。 */
+.cf-publication-table { min-width: 820px; }
+.cf-publication-table th:first-child { width: 23%; }
+.cf-publication-table th:nth-child(2) { width: 14%; }
+.cf-publication-table th:nth-child(3),
+.cf-publication-table th:nth-child(4) { width: 11%; }
+.cf-publication-table th:nth-child(5) { width: auto; }
+.cf-publication-table th:last-child { width: 244px; }
+.cf-publication-row-actions { flex-wrap: nowrap; gap: 5px; }
+.cf-publication-row-actions .button-secondary {
+  min-height: 30px;
+  padding: 4px 8px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
 .stock-recovery-dialog {
   width: min(480px, calc(100% - 32px));
   max-height: calc(100dvh - 32px);

@@ -1,5 +1,4 @@
-import { test, expect } from './fixtures'
-import type { Page } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { api } from './environment'
 import type { RefundApplicationVO, RefundEvidenceDTO, RefundEvidenceVO } from '../src/types/refund'
 
@@ -9,6 +8,7 @@ const snapshot = {
 }
 async function prepare(page: Page, administrator = false) {
   page.on('pageerror', error => console.log('退款测试页面异常:', error.message))
+  await page.routeWebSocket('**/api/ws', () => {})
   await page.route(`${api}/**`, async route => {
     const path = new URL(route.request().url()).pathname
     let data: unknown = { items: [], total: 0, page: 1, size: 20, count: 0 }
@@ -17,7 +17,11 @@ async function prepare(page: Page, administrator = false) {
     if (path === '/api/orders/71') data = snapshot
     await route.fulfill({ json: { code: 0, message: '成功', data } })
   })
-  if (!administrator) { await page.goto('/orders/71'); await expect(page.getByRole('heading', { name: snapshot.title })).toBeVisible() }
+  if (!administrator) {
+    await page.goto('/orders/71/details/refund')
+    await expect(page.getByRole('heading', { name: '售后与退款', exact: true, level: 1 })).toBeVisible()
+    await expect(page.getByText(`${snapshot.title} · ${snapshot.orderNo}`, { exact: true })).toBeVisible()
+  }
 }
 
 const application: RefundApplicationVO = { id: '301', orderId: '71', orderNo: 'CUSTOM71', buyerId: '11', creatorId: '12', applicationType: 'NORMAL', originalOrderStatus: 'IN_PRODUCTION', reasonCode: 'MISMATCH', description: '制作细节与原始约定存在差异，请管理员核查原始约定与照片。', imageIds: [], status: 'WAIT_ADMIN', createRequestKey: 'initial-request', version: 0, createdAt: '2026-11-19T09:00:00+08:00', finishedAt: null, handlerId: null, decisionReason: null, returnRequired: null, returnTrackingNo: null, returnConfirmedAt: null, returnConfirmedBy: null, noReturnBasis: null, canSupplement: true, canWithdraw: true, refundAmount: '180.00', conversationId: '101' }
@@ -248,7 +252,7 @@ test('同账号管理员资格被撤销立即清理详情及待确认输入', as
   expect(await page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('order-refund:19:')))).toEqual([])
 })
 
-test('退款提交开始废弃旧订单GET且迟到快照不能恢复履约按钮', async ({ page }) => {
+test('退款提交开始废弃旧订单GET且迟到快照不能恢复申请入口', async ({ page }) => {
   await prepare(page)
   let release = () => {}; let captured = () => {}; const gate = new Promise<void>(resolve => { release = resolve }); const seen = new Promise<void>(resolve => { captured = resolve }); let hold = true; let created = false
   await page.route(`${api}/orders/71`, async route => { if (hold) { hold = false; captured(); await gate; await route.fulfill({ json: success(snapshot) }); return }; await route.fulfill({ json: success(created ? { ...snapshot, status: 'AFTER_SALE', canRequestRefund: false, currentRefund: application } : snapshot) }) })
@@ -258,12 +262,14 @@ test('退款提交开始废弃旧订单GET且迟到快照不能恢复履约按�
   const panel = page.getByRole('region', { name: '订单售后' });
   try {
     await panel.getByRole('button', { name: '申请普通退款', exact: true }).click(); await panel.getByLabel('退款说明', { exact: true }).fill(application.description)
-    await page.getByRole('button', { name: '刷新订单', exact: true }).click(); await seen
+    await page.evaluate(() => window.dispatchEvent(new Event('focus'))); await seen
     await panel.getByRole('button', { name: '确认申请全额退款', exact: true }).click()
     await page.getByRole('dialog').getByRole('button', { name: '确认申请', exact: true }).click()
-    await expect(page.locator('.work-section-heading .work-status')).toHaveText('售后中')
+    await expect(panel.getByRole('button', { name: '撤回退款申请', exact: true })).toBeVisible()
+    await expect(panel.getByRole('button', { name: '申请普通退款', exact: true })).toHaveCount(0)
     release(); await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
-    await expect(page.locator('.work-section-heading .work-status')).toHaveText('售后中')
+    await expect(panel.getByRole('button', { name: '撤回退款申请', exact: true })).toBeVisible()
+    await expect(panel.getByRole('button', { name: '申请普通退款', exact: true })).toHaveCount(0)
   } finally { release() }
 })
 
@@ -362,7 +368,6 @@ test('撤回响应丢失且核验暂时失败时保留未知操作，刷新按�
   expect(await page.evaluate(() => Object.keys(sessionStorage).some(key => key.includes(':attempt:')))).toBe(true)
   canRead = true; await page.reload()
   await expect(panel.getByText('已精确核验原操作提交成功。')).toBeVisible()
-  await expect(page.locator('.work-section-heading .work-status')).toHaveText('制作中')
   await expect(panel.getByRole('button', { name: '申请普通退款', exact: true })).toBeEnabled()
   await expect(panel.getByRole('button', { name: '撤回退款申请', exact: true })).toHaveCount(0)
   expect(withdrawals).toBe(1)

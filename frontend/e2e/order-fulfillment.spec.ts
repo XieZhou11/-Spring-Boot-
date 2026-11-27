@@ -5,6 +5,9 @@ import { api, image, mutate, origin, prepareCreator, register } from './custom-r
 
 test.use({ storageMode: 'receiver', actionTimeout: 15_000 })
 
+/** 订单详情的状态由左侧选中卡片展示。 */
+const selectedStatus = (page: Page) => page.locator('.craftflow-order-item a[aria-current="page"] [data-status]')
+
 /** 从真实需求、报价、地址和付款准备履约，不能直接插入已付款状态掩盖调用链问题。 */
 async function paidOrder(buyer: Page, creator: Page, categoryId: string, title: string) {
   const fields = { title, categoryId, purpose: '生日纪念', materialPreference: '天然原木', specification: '长十二厘米', budgetMin: '100.00', budgetMax: '300.00', expectedShipDate: new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10), description: '定制一枚保留原木纹理的书签，边缘圆润并刻上名字，制作前确认字体和位置，作为朋友的生日纪念。', referenceImageIds: [], visibility: 'PUBLIC', invitedCreatorId: null, sourceWorkId: null }
@@ -42,7 +45,8 @@ test('已付款订单由本单创作者确认开工，双方读取解锁节点�
     const creatorSecond = await creatorContext.newPage()
     await creatorSecond.goto(`/orders/${order.id}`)
     await expect(page.getByRole('button', { name: '确认开工', exact: true })).toHaveCount(0)
-    await expect(creator.getByText('履约快照测试路一号', { exact: false })).toHaveCount(0)
+    await expect(creator.getByRole('link', { name: '收货地址快照', exact: true })).toHaveCount(0)
+    expect((await (await creator.request.get(`${api}/orders/${order.id}`)).json()).data.addressSnapshot).toBeNull()
     const start = creator.getByRole('button', { name: '确认开工', exact: true })
     await expect(start).toBeVisible()
     let captured = () => {}; const oldCaptured = new Promise<void>(resolve => { captured = resolve })
@@ -52,15 +56,18 @@ test('已付款订单由本单创作者确认开工，双方读取解锁节点�
       hold = false; const response = await route.fetch(); expect((await response.json()).data.status).toBe('PAID')
       captured(); await oldGate; await route.fulfill({ response })
     })
-    await creator.getByRole('button', { name: '刷新订单', exact: true }).click(); await oldCaptured
+    await creator.evaluate(() => window.dispatchEvent(new Event('order-updated')))
+    await oldCaptured
     await start.click()
-    await expect(creator.locator('.work-section-heading .work-status')).toHaveText('制作中')
-    await expect(page.locator('.work-section-heading .work-status')).toHaveText('制作中')
-    await expect(creatorSecond.locator('.work-section-heading .work-status')).toHaveText('制作中')
+    await expect(selectedStatus(creator)).toHaveText('制作中')
+    await expect(selectedStatus(page)).toHaveText('制作中')
+    await expect(selectedStatus(creatorSecond)).toHaveText('制作中')
     const returned = creator.waitForResponse(response => response.url().endsWith(`/api/orders/${order.id}`))
     releaseOld(); await returned
     await creator.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
-    await expect(creator.locator('.work-section-heading .work-status')).toHaveText('制作中')
+    await expect(selectedStatus(creator)).toHaveText('制作中')
+    await expect(start).toHaveCount(0)
+    await expect(creator.locator('.order-progress > li[data-node-code="MATERIAL"]').getByRole('button', { name: '提交打卡', exact: true })).toBeVisible()
     const latest = (await (await page.request.get(`${api}/orders/${order.id}`)).json()).data
     expect(latest.startedAt).toBeTruthy()
     expect(latest.progressNodes[0].status).toBe('UNLOCKED')
@@ -169,8 +176,12 @@ test('五节点图文制作、跳过打样、补充、发货更正到买家收�
       await form.getByRole('button', { name: '提交打卡', exact: true }).click()
       await expect(node).toContainText('已打卡')
     }
-    await expect(creator.locator('.work-section-heading .work-status')).toHaveText('待发货')
+    await expect(selectedStatus(creator)).toHaveText('待发货')
+    await creator.getByRole('link', { name: '收货地址快照', exact: true }).click()
+    await expect(creator).toHaveURL(`/orders/${order.id}/details/address`)
     await expect(creator.getByText('履约快照测试路一号', { exact: false })).toBeVisible()
+    await creator.getByRole('button', { name: '返回订单', exact: true }).click()
+    await expect(creator).toHaveURL(`/orders/${order.id}`)
     const shipping = creator.locator('.order-progress > li[data-node-code="SHIPPING"]')
     await shipping.getByRole('button', { name: '包装并发货', exact: true }).click()
     const shipment = creator.getByRole('form', { name: '确认发货', exact: true })
@@ -178,12 +189,12 @@ test('五节点图文制作、跳过打样、补充、发货更正到买家收�
     await shipment.getByLabel('运单号', { exact: true }).fill('CRAFT20261119002')
     await shipment.getByRole('button', { name: '确认发货', exact: true }).click()
     await expect(shipment.getByRole('alert')).toContainText('1—6张阶段实拍图')
-    await expect(creator.locator('.work-section-heading .work-status')).toHaveText('待发货')
+    await expect(selectedStatus(creator)).toHaveText('待发货')
     await shipment.getByLabel('阶段实拍图', { exact: true }).setInputFiles({ name: 'shipping.png', mimeType: 'image/png', buffer: image })
     await expect(shipment.getByRole('button', { name: '确认发货', exact: true })).toBeEnabled()
     await shipment.getByRole('button', { name: '确认发货', exact: true }).click()
-    await expect(creator.locator('.work-section-heading .work-status')).toHaveText('已发货')
-    await expect(page.locator('.work-section-heading .work-status')).toHaveText('已发货')
+    await expect(selectedStatus(creator)).toHaveText('已发货')
+    await expect(selectedStatus(page)).toHaveText('已发货')
     await expect(page.getByRole('timer', { name: '自动确认收货倒计时', exact: true })).toContainText('剩余')
     const beforeCorrection = (await (await page.request.get(`${api}/orders/${order.id}`)).json()).data
     expect(beforeCorrection.progressNodes.every((node: { status: string }) => ['CHECKED', 'SKIPPED'].includes(node.status))).toBe(true)
@@ -207,8 +218,8 @@ test('五节点图文制作、跳过打样、补充、发货更正到买家收�
     await creator.screenshot({ path: testInfo.outputPath('shipped-logistics.png') })
     await page.getByRole('button', { name: '确认收货', exact: true }).click()
     await page.getByRole('dialog').getByRole('button', { name: '确认收货', exact: true }).click()
-    await expect(page.locator('.work-section-heading .work-status')).toHaveText('已完成')
-    await expect(creator.locator('.work-section-heading .work-status')).toHaveText('已完成')
+    await expect(selectedStatus(page)).toHaveText('已完成')
+    await expect(selectedStatus(creator)).toHaveText('已完成')
     await expect(creator.getByRole('button', { name: /提交打卡|追加补充|包装并发货|更正运单号/ })).toHaveCount(0)
     const completed = (await (await page.request.get(`${api}/orders/${order.id}`)).json()).data
     expect(completed.originalCompletedAt).toBeTruthy()
@@ -270,8 +281,8 @@ test('满48小时未开工申请无责全额退款，取消待结算且会话可
     await expect(page.getByRole('button', { name: '重试确认操作结果', exact: true })).toBeDisabled()
     failReads = false
     await page.getByRole('button', { name: '刷新订单', exact: true }).first().click()
-    await expect(page.locator('.work-section-heading .work-status')).toHaveText('已退款')
-    await expect(creator.locator('.work-section-heading .work-status')).toHaveText('已退款')
+    await expect(selectedStatus(page)).toHaveText('已退款')
+    await expect(selectedStatus(creator)).toHaveText('已退款')
     await expect(creator.getByRole('button', { name: '确认开工', exact: true })).toHaveCount(0)
     const refunded = (await (await creator.request.get(`${api}/orders/${order.id}`)).json()).data
     expect(refunded.noStartRefund.amount).toBe('180.00')
@@ -374,7 +385,7 @@ test('定时自动收货与售后窗口后需求完结，结算自动生效', as
     await page.goto(`/orders/${order.id}`)
     await mailbox.expireFulfillmentBoundary(order.id, 'AUTO_RECEIPT')
     await expect.poll(async () => (await (await page.request.get(`${api}/orders/${order.id}`)).json()).data.status, { timeout: 90_000, intervals: [1000] }).toBe('COMPLETED')
-    await expect(page.locator('.work-section-heading .work-status')).toHaveText('已完成')
+    await expect(selectedStatus(page)).toHaveText('已完成')
     const completed = (await (await creator.request.get(`${api}/orders/${order.id}`)).json()).data
     expect(completed.originalCompletedAt).toBeTruthy(); expect(completed.settlement.status).toBe('PENDING')
     expect((await (await page.request.get(`${api}/custom-requests/${order.requestId}`)).json()).data.status).toBe('IN_TRADE')

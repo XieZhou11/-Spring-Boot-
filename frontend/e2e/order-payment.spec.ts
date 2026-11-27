@@ -24,6 +24,14 @@ async function pendingOrder(buyer: Page, creator: Page, categoryId: string, titl
 
 function plusDays(day: string, days: number) { return new Date(Date.parse(`${day}T00:00:00+08:00`) + days * 86400000).toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' }) }
 
+/** 订单当前状态由左栏所选卡片展示，完整支付记录在资料子页。 */
+const selectedStatus = (page: Page) => page.locator('.craftflow-order-item a[aria-current="page"] [data-status]')
+
+async function openPaymentRecord(page: Page) {
+  await page.getByRole('navigation', { name: '订单资料', exact: true }).getByRole('link', { name: '支付记录', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '支付记录', exact: true })).toBeVisible()
+}
+
 test('买家确认模拟条款后付款，双方实时查看金额、固定五节点和需求会话状态', async ({ page, browser, mailbox }, testInfo) => {
   test.setTimeout(180_000)
   const adminContext = await browser.newContext({ baseURL: origin }); const creatorContext = await browser.newContext({ baseURL: origin })
@@ -63,16 +71,16 @@ test('买家确认模拟条款后付款，双方实时查看金额、固定五�
     await expect(page.getByRole('button', { name: '确认模拟支付', exact: true })).toBeDisabled()
     await page.getByLabel('我已阅读并同意定制支付条款', { exact: true }).check()
     await page.getByRole('button', { name: '确认模拟支付', exact: true }).click()
-    await expect(page.locator('.work-section-heading .work-status')).toHaveText('待开工')
+    await expect(selectedStatus(page)).toHaveText('待开工')
     await expect.soft(page.locator('.request-summary')).not.toContainText('订单取消后')
     await expect.soft(page.locator('.request-summary')).toContainText('等待创作者确认开工')
-    await expect(page.getByRole('heading', { name: '支付记录', exact: true })).toBeVisible()
-    await expect(page.getByRole('heading', { name: '结算信息', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: '结算信息', exact: true })).toHaveCount(0)
     await expect(page.getByRole('button', { name: '取消订单', exact: true })).toHaveCount(0)
     await expect(page.getByRole('button', { name: /确认开工|申请退款/ })).toHaveCount(0)
     await expect(page.locator('.order-progress li')).toHaveCount(5)
     await expect(page.locator('.order-progress li').filter({ hasText: '未开始' })).toHaveCount(5)
-    await expect(creator.locator('.work-section-heading .work-status')).toHaveText('待开工')
+    await expect(selectedStatus(creator)).toHaveText('待开工')
+    await creator.getByRole('navigation', { name: '订单资料', exact: true }).getByRole('link', { name: '结算信息', exact: true }).click()
     await expect(creator.getByRole('heading', { name: '结算信息', exact: true })).toBeVisible()
     await expect(creator.getByText('支付快照测试路一号', { exact: false })).toHaveCount(0)
     await expect(requestCard).toContainText('交易进行中')
@@ -87,6 +95,7 @@ test('买家确认模拟条款后付款，双方实时查看金额、固定五�
     expect(paid.progressNodes.map((node: { plannedFinishDate: string }) => node.plannedFinishDate)).toEqual([2, 4, 8, 9, 10].map(days => plusDays(paymentDay, days)))
     const creatorPaid = (await (await creator.request.get(`${api}/orders/${order.id}`)).json()).data
     expect(creatorPaid.settlement.paidAmount).toBe('180.00'); expect(creatorPaid.settlement.status).toBe('PENDING'); expect(creatorPaid.settlement.maskedPayee).toContain('*')
+    await openPaymentRecord(page)
     await page.screenshot({ path: testInfo.outputPath('paid-order.png'), fullPage: true })
     await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '我的订单', exact: true }).click()
     await page.getByLabel('订单状态', { exact: true }).selectOption('PAID')
@@ -129,7 +138,8 @@ test('付款真实成功丢响应且核验暂时失败，刷新保留未知确�
     await expect(page.getByRole('alert').filter({ hasText: '付款结果尚未确认' })).toBeVisible()
     unavailable = false
     await page.getByRole('button', { name: '刷新订单', exact: true }).first().click()
-    await expect(page.locator('.work-section-heading .work-status')).toHaveText('待开工')
+    await expect(selectedStatus(page)).toHaveText('待开工')
+    await openPaymentRecord(page)
     await expect(page.getByText(paidFlow, { exact: true })).toBeVisible()
     expect(await page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('order-payment:')))).toHaveLength(0)
   } finally { await adminContext.close(); await creatorContext.close() }
@@ -154,7 +164,9 @@ test('双端付款复用唯一流水，付款前延迟的旧详情不能覆盖�
       if (!hold) { await route.continue(); return }
       hold = false; const response = await route.fetch(); expect((await response.json()).data.status).toBe('PENDING_PAY'); oldCaptured(); await oldGate; await route.fulfill({ response })
     })
-    await page.getByRole('button', { name: '刷新订单', exact: true }).click(); await captured
+    await expect(page.getByRole('button', { name: '刷新订单', exact: true })).toHaveCount(0)
+    await page.evaluate(() => window.dispatchEvent(new Event('order-updated')))
+    await captured
     let recorded = () => {}; const recordedPromise = new Promise<void>(resolve => { recorded = resolve })
     const paymentGate = new Promise<void>(resolve => { releasePayment = resolve }); let firstFlow = ''
     // 第二端尚未收到付款后核验结果时，保留它已确认的原支付输入以验证真实幂等。
@@ -166,13 +178,15 @@ test('双端付款复用唯一流水，付款前延迟的旧详情不能覆盖�
     await expect(page.getByRole('button', { name: '取消订单', exact: true })).toBeDisabled()
     const replay = second.waitForResponse(response => response.url().endsWith(`/orders/${order.id}/payment`))
     await second.getByRole('button', { name: '确认模拟支付', exact: true }).click()
-    const replayResponse = await replay; expect(replayResponse.status()).toBe(200); expect((await replayResponse.json()).data.payment.flowNo).toBe(firstFlow)
-    await expect(second.locator('.work-section-heading .work-status')).toHaveText('待开工')
-    releasePayment(); await expect(page.locator('.work-section-heading .work-status')).toHaveText('待开工')
+    const replayResponse = await replay; expect(replayResponse.status()).toBe(200)
+    expect((await replayResponse.json()).data).toMatchObject({ status: 'PAID', payment: { flowNo: firstFlow } })
+    await expect(second.locator('.request-summary')).toContainText('等待创作者确认开工')
+    releasePayment(); await expect(selectedStatus(page)).toHaveText('待开工')
     const oldReturned = page.waitForResponse(response => response.url().endsWith(`/api/orders/${order.id}`))
     releaseOld(); await oldReturned
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
-    await expect(page.locator('.work-section-heading .work-status')).toHaveText('待开工')
+    await expect(selectedStatus(page)).toHaveText('待开工')
+    await openPaymentRecord(page)
     await expect(page.getByText(firstFlow, { exact: true })).toBeVisible()
     const latest = (await (await page.request.get(`${api}/orders/${order.id}`)).json()).data
     expect(latest.history.filter((item: { toStatus: string }) => item.toStatus === 'PAID')).toHaveLength(1)
@@ -207,7 +221,7 @@ test('未知付款仅可核验后以原确认重试，跨订单与退出账号�
     await page.goto(`/orders/${first.id}`)
     await expect(page.getByRole('button', { name: '重试确认支付结果', exact: true })).toBeEnabled()
     await page.getByRole('button', { name: '重试确认支付结果', exact: true }).click()
-    await expect(page.locator('.work-section-heading .work-status')).toHaveText('待开工')
+    await expect(selectedStatus(page)).toHaveText('待开工')
     expect(bodies).toHaveLength(2); expect(bodies[1]).toBe(bodies[0])
     await page.goto(`/orders/${second.id}`); await page.getByRole('button', { name: '模拟支付', exact: true }).click(); await page.getByLabel('我已阅读并同意定制支付条款', { exact: true }).check()
     await page.route(`**/api/orders/${second.id}/payment`, route => route.abort('failed'))
@@ -253,13 +267,15 @@ test('未知付款遇到无流水的已取消投影仍保留确认，原支付�
       }
     })
     await page.getByRole('button', { name: '确认模拟支付', exact: true }).click()
-    await expect(page.locator('.work-section-heading .work-status')).toHaveText('已取消')
+    await expect(page.getByRole('button', { name: '取消订单', exact: true })).toHaveCount(0)
+    await expect(selectedStatus(page)).toHaveText('已取消')
     await expect(page.getByRole('alert').filter({ hasText: '付款结果尚未确认' })).toBeVisible()
     await expect(page.getByRole('button', { name: '重试确认支付结果', exact: true })).toBeEnabled()
     const stored = await page.evaluate(() => Object.entries(sessionStorage).filter(([key]) => key.startsWith('order-payment:')))
     expect(stored).toHaveLength(1); expect(JSON.parse(stored[0]![1]).input).toEqual(JSON.parse(bodies[0]!))
     await page.getByRole('button', { name: '重试确认支付结果', exact: true }).click()
-    await expect(page.locator('.work-section-heading .work-status')).toHaveText('待开工')
+    await expect(selectedStatus(page)).toHaveText('待开工')
+    await openPaymentRecord(page)
     await expect(page.getByText(paidFlow, { exact: true })).toBeVisible()
     expect(bodies).toHaveLength(2); expect(bodies[1]).toBe(bodies[0])
     expect(await page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('order-payment:')))).toHaveLength(0)

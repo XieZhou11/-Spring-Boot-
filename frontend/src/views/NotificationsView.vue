@@ -78,7 +78,12 @@ function notificationAction({ businessReference: reference, eventType }: Notific
       if (reference.requestId) return { label: '查看报价', to: { path: `/requests/${reference.requestId}`, hash: '#quotes' } }
       return
     case 'ORDER':
-      return { label: '查看订单', to: { path: `/orders/${reference.id}`, hash: eventType.startsWith('PUBLICATION_') ? '#publication-consent' : undefined } }
+      return {
+        label: '查看订单',
+        to: eventType.startsWith('PUBLICATION_')
+          ? { name: 'order-detail-section', params: { id: reference.id, section: 'publication' } }
+          : { name: 'order-detail', params: { id: reference.id } },
+      }
     case 'REPORT':
       return { label: '查看举报', to: `/reports/${reference.id}` }
     case 'REVIEW_REPORT':

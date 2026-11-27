@@ -166,7 +166,7 @@
   border-color: var(--craft-border);
 }
 .craft-admin :is(.review-queue, .review-detail, .category-dialog)
-  :is(input:not([type='checkbox']), textarea, select) {
+  :is(input:not([type='checkbox']), textarea) {
   color: var(--craft-ink);
   background: var(--craft-surface);
   border: 1px solid var(--craft-border);

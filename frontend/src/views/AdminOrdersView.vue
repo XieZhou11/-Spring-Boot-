@@ -500,7 +500,8 @@ watch([() => route.query, adminId], () => {
 <style scoped>
 .order-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 10px; margin-bottom: 16px; }
 .order-filters label { display: grid; gap: 4px; color: var(--craft-muted); font-size: 12px; font-weight: 600; }
-.order-filters :is(input, select) { width: 100%; min-width: 0; min-height: 36px; padding: 6px 10px; border: 1px solid var(--craft-border); border-radius: 8px; background: var(--craft-surface); color: var(--craft-ink); font: inherit; }
+.order-filters select { width: 100%; }
+.order-filters input { width: 100%; min-width: 0; min-height: 36px; padding: 6px 10px; border: 1px solid var(--craft-border); border-radius: 8px; background: var(--craft-surface); color: var(--craft-ink); font: inherit; }
 .order-number-filter, .order-filters > .admin-date-range { grid-column: span 2; }
 .order-filters button { grid-column: 1 / -1; justify-self: end; }
 .order-panel { min-width: 0; padding: 16px; border: 1px solid var(--craft-border); border-radius: 14px; background: var(--craft-surface); }

@@ -95,8 +95,9 @@
 .editor-section h2 { font: 22px var(--serif); }
 .editor-section header p { font-size: 11px; color: #909b83; margin-top: 6px; }
 .work-field { display: flex; flex-direction: column; gap: 9px; color: #4a6140; font-size: 13px; margin: 20px 0; min-width: 0; }
-.work-field input, .work-field select, .work-field textarea { width: 100%; min-width: 0; border: 1px solid #d9dece; background: #fffefa; border-radius: 4px; font: inherit; line-height: 1.7; padding: 10px 12px; color: #3a5232; }
-.work-field input:focus, .work-field textarea:focus, .work-field select:focus { outline: 2px solid #9db38d; outline-offset: 1px; }
+.work-field select { width: 100%; }
+.work-field input, .work-field textarea { width: 100%; min-width: 0; border: 1px solid #d9dece; background: #fffefa; border-radius: 4px; font: inherit; line-height: 1.7; padding: 10px 12px; color: #3a5232; }
+.work-field input:focus, .work-field textarea:focus { outline: 2px solid #9db38d; outline-offset: 1px; }
 .work-field [aria-invalid=true] { border-color: #b16a4c; }
 .work-field small { font-size: 11px; line-height: 1.7; }
 .work-fields-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }

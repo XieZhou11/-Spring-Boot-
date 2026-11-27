@@ -75,6 +75,7 @@ function choose(values: unknown) {
         :options="options"
         :disabled="disabled"
         placeholder="请选择省 / 市 / 区"
+        popper-class="cf-address-region-popper"
         aria-label="所在地区"
         :aria-invalid="Boolean(props.errors.province || props.errors.city || props.errors.district)"
         :aria-describedby="`${id}-help`"

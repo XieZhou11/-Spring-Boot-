@@ -481,7 +481,7 @@ watch([selected, adminId], () => {
 <style scoped>
 .user-filters { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
 .user-filters label { display: grid; gap: 4px; color: var(--craft-muted); font-size: 12px; font-weight: 600; }
-.user-filters :is(input, select) { min-height: 36px; padding: 6px 10px; border: 1px solid var(--craft-border); border-radius: 8px; background: var(--craft-surface); color: var(--craft-ink); font: inherit; }
+.user-filters input { min-height: 36px; padding: 6px 10px; border: 1px solid var(--craft-border); border-radius: 8px; background: var(--craft-surface); color: var(--craft-ink); font: inherit; }
 .user-workspace { display: grid; grid-template-columns: minmax(240px, .9fr) minmax(0, 1.65fr); align-items: start; gap: 16px; }
 .user-panel { min-width: 0; padding: 16px; border: 1px solid var(--craft-border); border-radius: 14px; background: var(--craft-surface); }
 .user-panel header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }

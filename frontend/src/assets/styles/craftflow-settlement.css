@@ -33,7 +33,8 @@
   font-size: 12px;
   font-weight: 550;
 }
-.cf-settlement-filters :is(input, select) {
+.cf-settlement-filters select { width: 100%; }
+.cf-settlement-filters input {
   width: 100%;
   min-height: 38px;
   padding: 8px 9px;

@@ -57,6 +57,7 @@
 已完成。实现及验收见 [T-024](../development/tasks/T-024-craftflow-orders-payment-fulfillment.md) 和 [专项测试记录](../testing/T-024-craftflow-orders-payment-fulfillment.md)。
 
 - 作品详情通过地址弹窗直购，定标后打开共用订单详情。订单双栏保留交易身份、状态和页码，详情显示服务端金额、方案及地址快照。现货建单未知时用原请求键恢复，付款未知时查询详情并按订单重试原条款确认。依据服务端返回的操作资格与时间显示动作和期限。
+- 订单概览提供当前操作、制作进度和资料入口。方案、地址、支付、评价、售后、结算、需求、授权和历史分别在独立资料页呈现。资料页和订单会话通过浏览器历史恢复订单的筛选、锚点和滚动位置，原公开授权链接仍可进入授权页。 [T-034](../development/tasks/T-034-craftflow-demo-ui-feedback.md)
 - 现货付款后进入待发货，使用服务端的精确截止时间。定制付款后进入待开工，保留五节点计划、图文打卡、补充记录、偏差和超期提示。接通运单更正、确认收货及节点跳会话。在订单完成、取消或退款后保持双方会话可达。
 - 验收现货付款、发货和收货，以及定制付款、开工、打卡、发货和收货。补查取消释放、付款应答丢失和满 48 小时未开工的无责退款。复测 `work-publication.spec.ts` 的现货主流程、`order-payment.spec.ts`、`order-fulfillment.spec.ts`。 [订单原型](../prototypes/craftflow/OrderView.tsx) · [订单详情](../../frontend/src/views/OrderDetailView.vue) · [订单返回字段](../../backend/src/main/java/com/handcraft/platform/modules/vo/OrderVO.java)
 

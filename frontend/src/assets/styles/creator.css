@@ -138,7 +138,6 @@
 .category-dialog { width: min(500px, calc(100% - 36px)); }
 .category-dialog form { display: grid; gap: 19px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; }
-.account-field > select, .queue-toolbar select { padding: 11px 14px; border: 1px solid #d8dfcb; border-radius: 4px; background: #fcfdf7; color: var(--green); font: inherit; font-size: 12px; }
 .account-field > select { width: 100%; }
 @media (max-width: 1100px) {
   .admin-shell { width: calc(100% - 50px); grid-template-columns: 185px minmax(0, 1fr); }

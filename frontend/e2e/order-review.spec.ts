@@ -63,7 +63,7 @@ test('定制与现货图文评价、未知结果只读核验和退款后的公�
     await register(page, mailbox.codes, '图文评价买家')
     const custom = await refundOrder(page, creator, categoryId, '定制图文评价验收书签')
     expect((await mutate(page, `/orders/${custom.id}/receipt`, undefined, 'put')).status()).toBe(201)
-    await page.goto(`/orders/${custom.id}`)
+    await page.goto(`/orders/${custom.id}/details/review`)
     const panel = page.getByRole('region', { name: '订单评价' })
     const submit = panel.getByRole('button', { name: '提交评价', exact: true })
     const customReview = '成品刻字清晰，但边缘有细小开裂，整体体验仍有改善空间。'
@@ -86,7 +86,7 @@ test('定制与现货图文评价、未知结果只读核验和退款后的公�
     await expect(submit).toHaveCount(0)
 
     const stock = await completedStock(page, creator, admin, categoryId)
-    await page.goto(`/orders/${stock.id}`)
+    await page.goto(`/orders/${stock.id}/details/review`)
     const stockReview = '现货杯垫尺寸与展示一致，包装完整，木纹自然细腻。'
     await panel.getByLabel('交易体验').fill(stockReview)
     await panel.getByRole('radio', { name: '5 星', exact: true }).check()
@@ -147,10 +147,10 @@ test('定制与现货图文评价、未知结果只读核验和退款后的公�
     await expect(publicReviews.getByText(customReview, { exact: true })).toHaveCount(0)
     await expect(reviewPages).toHaveCount(0)
 
-    await page.goto(`/orders/${custom.id}`)
+    await page.goto(`/orders/${custom.id}/details/review`)
     await expect(panel.getByText(customReview, { exact: true })).toBeVisible()
     await expect(submit).toHaveCount(0)
-    await creator.goto(`/orders/${custom.id}`)
+    await creator.goto(`/orders/${custom.id}/details/review`)
     await expect(creator.getByRole('region', { name: '订单评价' }).getByText(customReview, { exact: true })).toBeVisible()
   } finally {
     await creatorContext.close()

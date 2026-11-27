@@ -17,13 +17,24 @@ async function readOrder(page: Page, orderId: string): Promise<OrderVO> {
   return (await response.json()).data
 }
 
-async function applyInBrowser(buyer: Page, description = application.description) {
+/** 从订单概览进入售后，沿用实际订单资料入口。 */
+async function openRefund(page: Page, orderId: string) {
+  await page.getByRole('navigation', { name: '订单资料' }).getByRole('link', { name: '售后与退款', exact: true }).click()
+  await expect(page).toHaveURL(new RegExp(`/orders/${orderId}/details/refund(?:\\?|$)`))
+}
+
+async function expectOrderStatus(page: Page, orderId: string, status: OrderVO['status']) {
+  await expect.poll(async () => (await readOrder(page, orderId)).status).toBe(status)
+}
+
+async function applyInBrowser(buyer: Page, orderId: string, description = application.description) {
   const panel = buyer.getByRole('region', { name: '订单售后' })
   await panel.getByRole('button', { name: '申请普通退款', exact: true }).click()
   await panel.getByLabel('退款说明', { exact: true }).fill(description)
   await panel.getByRole('button', { name: '确认申请全额退款', exact: true }).click()
   await buyer.getByRole('dialog').getByRole('button', { name: '确认申请', exact: true }).click()
-  await expect(buyer.locator('.work-section-heading .work-status')).toHaveText('售后中')
+  await expectOrderStatus(buyer, orderId, 'AFTER_SALE')
+  await expect(panel.getByRole('button', { name: '撤回退款申请', exact: true })).toBeVisible()
 }
 
 /** 上传仍通过真实SDK协议接收器，仅用于准备应被管理员拒绝的临时图和会话图。 */
@@ -44,6 +55,7 @@ test.describe('真实订单普通售后', () => {
       await register(page, mailbox.codes, '售后验收买家')
       const order = await refundOrder(page, creator, categoryId, '完整普通售后与管理员退款裁定')
       await page.goto(`/orders/${order.id}`); await creator.goto(`/orders/${order.id}`)
+      await openRefund(page, order.id); await openRefund(creator, order.id)
       const buyerPanel = page.getByRole('region', { name: '订单售后' }); const creatorPanel = creator.getByRole('region', { name: '订单售后' })
       await buyerPanel.getByRole('button', { name: '申请普通退款', exact: true }).click()
       await buyerPanel.getByLabel('退款说明', { exact: true }).fill(application.description)
@@ -51,10 +63,15 @@ test.describe('真实订单普通售后', () => {
       await expect(buyerPanel.getByRole('button', { name: '确认申请全额退款', exact: true })).toBeEnabled()
       await buyerPanel.getByRole('button', { name: '确认申请全额退款', exact: true }).click()
       await page.getByRole('dialog').getByRole('button', { name: '确认申请', exact: true }).click()
-      await expect(page.locator('.work-section-heading .work-status')).toHaveText('售后中')
-      await expect(creator.locator('.work-section-heading .work-status')).toHaveText('售后中')
+      await expectOrderStatus(page, order.id, 'AFTER_SALE')
+      await expectOrderStatus(creator, order.id, 'AFTER_SALE')
+      await page.getByRole('button', { name: '返回订单', exact: true }).click()
+      await creator.getByRole('button', { name: '返回订单', exact: true }).click()
+      await expect(page.getByRole('region', { name: '订单制作履约' })).toBeVisible()
+      await expect(creator.getByRole('region', { name: '订单制作履约' })).toBeVisible()
       await expect(page.getByRole('button', { name: '确认收货', exact: true })).toHaveCount(0)
       await expect(creator.getByRole('button', { name: '更正运单号', exact: true })).toHaveCount(0)
+      await openRefund(page, order.id); await openRefund(creator, order.id)
       await creatorPanel.getByRole('button', { name: '追加售后证据', exact: true }).click()
       await creatorPanel.getByLabel('售后凭证', { exact: true }).setInputFiles({ name: 'creator-evidence.png', mimeType: 'image/png', buffer: image })
       await expect(creatorPanel.getByRole('button', { name: '提交补充证据', exact: true })).toBeEnabled()
@@ -79,7 +96,7 @@ test.describe('真实订单普通售后', () => {
       await decision.getByRole('button', { name: '已重新查阅当前材料' }).click()
       await decision.getByRole('button', { name: '确认裁定', exact: true }).click()
       await admin.getByRole('dialog').getByRole('button', { name: '确认裁定', exact: true }).click()
-      await expect(page.locator('.work-section-heading .work-status')).toHaveText('已发货')
+      await expectOrderStatus(page, order.id, 'SHIPPED')
       const restored = (await (await page.request.get(`${api}/orders/${order.id}`)).json()).data
       expect(restored.shippedAt).toBe(order.shippedAt); expect(Date.parse(restored.autoConfirmAt)).toBeGreaterThan(Date.parse(order.autoConfirmAt!))
       // 驳回后新申请再撤回，证明原申请保留、恢复状态且不重开窗口。
@@ -88,8 +105,8 @@ test.describe('真实订单普通售后', () => {
       await page.getByRole('dialog').getByRole('button', { name: '确认申请', exact: true }).click()
       await buyerPanel.getByRole('button', { name: '撤回退款申请', exact: true }).click()
       await page.getByRole('dialog').getByRole('button', { name: '确认撤回', exact: true }).click()
-      await expect(page.locator('.work-section-heading .work-status')).toHaveText('已发货')
-      await applyInBrowser(page, '原成品已协商退回，需要管理员核查退回运单与双方证据后执行全额退款。')
+      await expectOrderStatus(page, order.id, 'SHIPPED')
+      await applyInBrowser(page, order.id, '原成品已协商退回，需要管理员核查退回运单与双方证据后执行全额退款。')
       const finalApplication = (await (await page.request.get(`${api}/orders/${order.id}`)).json()).data.currentRefund as RefundApplicationVO
       await admin.goto(`/admin/refunds/${finalApplication.id}?orderNo=${order.orderNo}`)
       await decision.getByLabel('裁定结果').selectOption('APPROVE'); await decision.getByLabel('裁定原因').fill('已核实原成品退回，依据交易约定批准退还原实付金额。'); await decision.getByLabel('退货核查').selectOption('true')
@@ -100,10 +117,11 @@ test.describe('真实订单普通售后', () => {
       await decision.getByRole('button', { name: '确认裁定', exact: true }).click()
       await admin.getByRole('dialog').getByRole('button', { name: '确认裁定', exact: true }).click()
       await expect(admin.getByText('已精确核验原管理员及完整裁定参数，原裁定提交成功。')).toBeVisible()
-      await expect(page.locator('.work-section-heading .work-status')).toHaveText('已退款')
-      await expect(creator.locator('.work-section-heading .work-status')).toHaveText('已退款')
+      await expectOrderStatus(page, order.id, 'REFUNDED')
+      await expectOrderStatus(creator, order.id, 'REFUNDED')
       const final = (await (await creator.request.get(`${api}/orders/${order.id}`)).json()).data
       expect(final.settlement.status).toBe('CANCELLED'); expect(final.settlement.paidAmount).toBe('180.00')
+      await page.getByRole('button', { name: '返回订单', exact: true }).click()
       await expect(page.getByRole('link', { name: '进入订单沟通', exact: true })).toBeVisible()
       await admin.setViewportSize({ width: 1366, height: 1000 })
       await admin.getByRole('region', { name: '售后处理结论' }).scrollIntoViewIfNeeded()
@@ -120,6 +138,7 @@ test.describe('真实订单普通售后', () => {
       await register(page, mailbox.codes, '补证边界买家')
       const order = await refundOrder(page, creator, categoryId, '未开工普通售后图文证据验收', false)
       await page.goto(`/orders/${order.id}`); await creator.goto(`/orders/${order.id}`)
+      await openRefund(page, order.id); await openRefund(creator, order.id)
       const buyerPanel = page.getByRole('region', { name: '订单售后' }); const sellerPanel = creator.getByRole('region', { name: '订单售后' })
       await buyerPanel.getByRole('button', { name: '申请普通退款', exact: true }).click()
       await buyerPanel.getByLabel('退款说明', { exact: true }).fill('核'.repeat(19))
@@ -136,11 +155,14 @@ test.describe('真实订单普通售后', () => {
       await buyerPanel.getByLabel('退款说明', { exact: true }).fill('核'.repeat(20))
       await buyerPanel.getByRole('button', { name: '确认申请全额退款', exact: true }).click()
       await page.getByRole('dialog').getByRole('button', { name: '确认申请', exact: true }).click()
-      await expect(page.locator('.work-section-heading .work-status')).toHaveText('售后中')
-      await expect(creator.locator('.work-section-heading .work-status')).toHaveText('售后中')
+      await expectOrderStatus(page, order.id, 'AFTER_SALE')
+      await expectOrderStatus(creator, order.id, 'AFTER_SALE')
       const current = (await readOrder(page, order.id)).currentRefund!
       expect(current.originalOrderStatus).toBe('PAID'); expect(current.imageIds).toHaveLength(3)
+      await creator.getByRole('button', { name: '返回订单', exact: true }).click()
+      await expect(creator.getByRole('region', { name: '订单制作履约' })).toBeVisible()
       await expect(creator.getByRole('button', { name: '确认开工', exact: true })).toHaveCount(0)
+      await openRefund(creator, order.id)
 
       await buyerPanel.getByRole('button', { name: '追加售后证据', exact: true }).click()
       await buyerPanel.getByRole('button', { name: '提交补充证据', exact: true }).click()
@@ -210,8 +232,8 @@ test.describe('真实订单普通售后', () => {
       await expect(decision).toContainText('全额退款 ¥ 180.00')
       await decision.getByRole('button', { name: '确认裁定', exact: true }).click()
       await admin.getByRole('dialog').getByRole('button', { name: '确认裁定', exact: true }).click()
-      await expect(page.locator('.work-section-heading .work-status')).toHaveText('已退款')
-      await expect(creator.locator('.work-section-heading .work-status')).toHaveText('已退款')
+      await expectOrderStatus(page, order.id, 'REFUNDED')
+      await expectOrderStatus(creator, order.id, 'REFUNDED')
       const result = (await (await admin.request.get(`${api}/admin/refund-applications/${current.id}`)).json()).data as AdminRefundDetailVO
       expect(result.application.status).toBe('REFUNDED'); expect(result.application.returnRequired).toBe(false)
       expect(result.application.noReturnBasis).toContain('从未发货')
@@ -241,17 +263,18 @@ test.describe('真实订单普通售后', () => {
       await page.goto(`/orders/${order.id}`)
       await page.getByRole('button', { name: '确认收货', exact: true }).click()
       await page.getByRole('dialog').getByRole('button', { name: '确认收货', exact: true }).click()
-      await expect(page.locator('.work-section-heading .work-status')).toHaveText('已完成')
+      await expect(page.locator('.craftflow-order-item a[aria-current="page"] [data-status]')).toHaveText('已完成')
       const original = await readOrder(page, order.id)
       expect(original.originalCompletedAt).toBeTruthy(); expect(original.refundWindowEndsAt).toBeTruthy()
+      await openRefund(page, order.id)
       const panel = page.getByRole('region', { name: '订单售后' })
-      await applyInBrowser(page)
+      await applyInBrowser(page, order.id)
       await panel.getByRole('button', { name: '撤回退款申请', exact: true }).click()
       await page.getByRole('dialog').getByRole('button', { name: '确认撤回', exact: true }).click()
-      await expect(page.locator('.work-section-heading .work-status')).toHaveText('已完成')
+      await expectOrderStatus(page, order.id, 'COMPLETED')
       const withdrawn = await readOrder(page, order.id)
       expect(withdrawn.originalCompletedAt).toBe(original.originalCompletedAt); expect(withdrawn.refundWindowEndsAt).toBe(original.refundWindowEndsAt)
-      await applyInBrowser(page, '收到作品后补充请求核对原方案，售后窗口应始终从最初确认完成时间起算。')
+      await applyInBrowser(page, order.id, '收到作品后补充请求核对原方案，售后窗口应始终从最初确认完成时间起算。')
       const current = (await readOrder(page, order.id)).currentRefund!
       expect(current.originalOrderStatus).toBe('COMPLETED')
       await admin.goto(`/admin/refunds/${current.id}?orderNo=${order.orderNo}`)
@@ -260,7 +283,7 @@ test.describe('真实订单普通售后', () => {
       await decision.getByRole('button', { name: '已重新查阅当前材料' }).click()
       await decision.getByRole('button', { name: '确认裁定', exact: true }).click()
       await admin.getByRole('dialog').getByRole('button', { name: '确认裁定', exact: true }).click()
-      await expect(page.locator('.work-section-heading .work-status')).toHaveText('已完成')
+      await expectOrderStatus(page, order.id, 'COMPLETED')
       const rejected = await readOrder(page, order.id)
       expect(rejected.originalCompletedAt).toBe(original.originalCompletedAt); expect(rejected.refundWindowEndsAt).toBe(original.refundWindowEndsAt)
       // 仅在隔离数据库移动时间边界；业务完成/恢复状态始终由真实接口产生。
@@ -285,7 +308,8 @@ test.describe('真实订单普通售后', () => {
       await register(page, mailbox.codes, '发货免退验收买家')
       const order = await refundOrder(page, creator, categoryId, '原成品无需退回管理员核验')
       await page.goto(`/orders/${order.id}`); await creator.goto(`/orders/${order.id}`)
-      await applyInBrowser(page)
+      await openRefund(page, order.id); await openRefund(creator, order.id)
+      await applyInBrowser(page, order.id)
       const current = (await readOrder(page, order.id)).currentRefund!
       await admin.goto(`/admin/refunds/${current.id}?orderNo=${order.orderNo}`)
       const decision = admin.getByRole('region', { name: '管理员退款裁定' })
@@ -300,8 +324,8 @@ test.describe('真实订单普通售后', () => {
       await decision.getByLabel('无需退货依据').fill(basis)
       await decision.getByRole('button', { name: '确认裁定', exact: true }).click()
       await admin.getByRole('dialog').getByRole('button', { name: '确认裁定', exact: true }).click()
-      await expect(page.locator('.work-section-heading .work-status')).toHaveText('已退款')
-      await expect(creator.locator('.work-section-heading .work-status')).toHaveText('已退款')
+      await expectOrderStatus(page, order.id, 'REFUNDED')
+      await expectOrderStatus(creator, order.id, 'REFUNDED')
       const result = (await (await admin.request.get(`${api}/admin/refund-applications/${current.id}`)).json()).data as AdminRefundDetailVO
       expect(result.application.returnRequired).toBe(false); expect(result.application.noReturnBasis).toBe(basis)
       expect(result.application.returnTrackingNo).toBeNull(); expect(result.application.returnConfirmedAt).toBeNull()

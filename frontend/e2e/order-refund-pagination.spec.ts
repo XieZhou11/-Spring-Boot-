@@ -45,7 +45,7 @@ test('用户证据afterId与后台证据cursor各自排他分页，后台会话�
     const items = evidence.filter(item => !cursor || BigInt(item.id) > BigInt(cursor)).slice(0, 20)
     return route.fulfill({ json: success({ items, nextCursor: items.at(-1)?.id || null, hasMore: !cursor }) })
   })
-  await page.goto('/orders/71')
+  await page.goto('/orders/71/details/refund')
   const userPanel = page.getByRole('region', { name: '订单售后' })
   await expect(userPanel.getByText('分页证据 20', { exact: true })).toBeVisible()
   await userPanel.getByRole('button', { name: '继续读取证据', exact: true }).click()

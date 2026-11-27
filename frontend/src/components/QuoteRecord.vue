@@ -68,7 +68,7 @@ async function withdraw() {
       </p><QuoteImages :image-ids="quote.imageIds" />
     </details>
     <p
-      v-if="quote.invalidReason"
+      v-if="quote.invalidReason && (!showRequest || !quote.owned)"
       class="field-help"
     >
       {{ invalidQuoteReason(quote.invalidReason) }}
@@ -84,10 +84,16 @@ async function withdraw() {
       {{ error }}
     </p>
     <footer v-if="quote.owned">
+      <p
+        v-if="showRequest && quote.invalidReason"
+        class="quote-invalidation-reason"
+      >
+        <strong>失效原因</strong>{{ invalidQuoteReason(quote.invalidReason) }}
+      </p>
       <button
         v-if="quote.canWithdraw"
         type="button"
-        class="inline-button"
+        :class="showRequest ? 'button-secondary' : 'inline-button'"
         :disabled="busy"
         @click="withdraw"
       >
@@ -99,3 +105,21 @@ async function withdraw() {
     </footer>
   </article>
 </template>
+
+<style scoped>
+/* 我的报价把失效说明与需求入口放在同一行，标签色与失效状态区分。 */
+.quote-invalidation-reason {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  max-width: 100%;
+  margin: 0 auto 0 0;
+  padding: 6px 10px;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #854d0e;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+</style>

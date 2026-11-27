@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { usePageActivation } from '@/utils/pageActivation'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import { useListQuery } from '@/composables/useListQuery'
 import PrivateImage from '@/components/PrivateImage.vue'
@@ -18,9 +18,10 @@ import { ApiError } from '@/utils/request'
 import type { ChatMessageVO, ConversationVO } from '@/types/customRequest'
 import '@/assets/styles/custom-request.css'
 import { useConfirmation } from '@/composables/useConfirmation'
+import { hasOrderReturn } from '@/utils/orderDetail'
 
 const confirm = useConfirmation()
-const route = useRoute(); const notifications = useNotificationsStore(); const auth = useAuthStore()
+const route = useRoute(); const router = useRouter(); const notifications = useNotificationsStore(); const auth = useAuthStore()
 const { page } = useListQuery()
 const conversation = ref<ConversationVO>(); const messages = ref<ChatMessageVO[]>([]); const hasOlder = ref(false)
 const loading = ref(false); const olderLoading = ref(false); const sending = ref(false); const uploading = ref(false); const uncertain = ref(false)
@@ -34,6 +35,8 @@ let readTimer: ReturnType<typeof setTimeout> | undefined; let desiredRead = '0';
 let attempt: { clientMessageKey: string; content: string; imageIds: string[]; referencedNodeId?: string } | undefined
 const id = () => String(route.params.id)
 const orderEnded = computed(() => ['COMPLETED', 'CANCELLED', 'REFUNDED'].includes(conversation.value?.orderStatus || ''))
+const canReturnToOrder = computed(() => !!(conversation.value?.orderId && hasOrderReturn(router, route, conversation.value.orderId)))
+function returnToOrder() { if (canReturnToOrder.value) router.back() }
 /** 引用只附加到原草稿，不替换正文，也不在跳转后自动发送消息。 */
 async function resolveReference() {
   const current = ++referenceRevision
@@ -160,6 +163,14 @@ usePageActivation(focused)
 </script>
 <template>
   <div class="conversation-current">
+    <button
+      v-if="canReturnToOrder"
+      type="button"
+      class="conversation-order-back button-secondary"
+      @click="returnToOrder"
+    >
+      <span aria-hidden="true">←</span> 返回订单
+    </button>
     <RouterLink
       :to="{ path: '/messages/conversations', query: page > 1 ? { page: String(page) } : undefined }"
       class="conversation-back"
