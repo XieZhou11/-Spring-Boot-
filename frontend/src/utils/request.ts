@@ -43,7 +43,7 @@ function responseError(result: ApiResult<unknown> | undefined, status: number, r
 
 /** 直连后端；跨域由后端白名单处理，Cookie 用于原生 HttpSession。 */
 const request = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:18080/api',
   timeout: 15_000,
   withCredentials: true,
 })

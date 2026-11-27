@@ -16,6 +16,6 @@ export default defineConfig({
     ],
   },
   // 固定端口对应后端 CORS 白名单；不配置开发代理。
-  server: { port: 5173, strictPort: true },
-  preview: { port: 4173, strictPort: true },
+  server: { host: '127.0.0.1', port: 15173, strictPort: true },
+  preview: { host: '127.0.0.1', port: 15173, strictPort: true },
 })

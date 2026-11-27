@@ -6,42 +6,50 @@ spring:
       max-request-size: 6MB
   application:
     name: handcraft-platform
-  # 非敏感配置入库；敏感凭据由同目录、被 Git 忽略的 application-local.yml 导入。
+  # IDE 运行可导入本地私有配置，演示启动脚本使用独立的 app.private.properties。
   config:
     import: optional:classpath:application-local.yml
   datasource:
-    url: jdbc:mysql://localhost:3306/handcraft_trade_platform?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
-    username: root
-    password: '123456'
+    url: jdbc:mysql://127.0.0.1:3306/handcraft_trade_platform_test?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    # 演示运行账号仅访问演示库，密码由本机演示配置提供。
+    username: craftflow_demo_app
     hikari:
       # 使用固定偏移，不依赖数据库服务器是否安装命名时区表。
       connection-init-sql: SET time_zone = '+08:00'
   flyway:
     locations: classpath:db/migration
+    # 迁移账号与应用账号分开，目标固定为演示库。
+    user: craftflow_demo_migrate
+    schemas: handcraft_trade_platform_test
+    default-schema: handcraft_trade_platform_test
+    create-schemas: false
     # 拒绝自动接管已有表的数据库，也不允许通过 clean 清空数据库。
     baseline-on-migrate: false
     clean-disabled: true
   jackson:
     time-zone: Asia/Shanghai
   mail:
-    # 平台只需一个发件账号，可同时向 QQ 与 163 邮箱发送验证码；账号与授权码从本地配置读取。
-    host: smtp.qq.com
-    port: 465
+    # 验证码发往本机演示邮件接收器。
+    host: 127.0.0.1
+    port: 19025
     default-encoding: UTF-8
     properties:
-      mail.smtp.auth: true
-      mail.smtp.ssl.enable: true
+      mail.smtp.auth: false
+      mail.smtp.ssl.enable: false
       mail.smtp.connectiontimeout: 3000
       mail.smtp.timeout: 3000
       mail.smtp.writetimeout: 3000
 
 server:
-  port: 8080
+  # 演示后端只接受本机访问。
+  address: 127.0.0.1
+  port: 18080
   servlet:
     session:
       # 空闲超时不缩短七天登录期；绝对截止时刻另由认证过滤器校验。
       timeout: 7d
       cookie:
+        name: HANDCRAFT_DEMO_SESSION
         max-age: 7d
         http-only: true
         # 本地联调前后端须统一使用 localhost 或统一使用 127.0.0.1。
@@ -54,14 +62,14 @@ mybatis-plus:
 
 app:
   # 收款账号加密密钥、验证码 HMAC 密钥等敏感值只从本地配置读取；已有密文后密钥不可丢失或更换。
-  # 北京地域私有 OSS；endpoint/region/bucket 可入库，访问密钥只从本地配置读取。
+  # 演示图片由本机对象服务提供，签名使用演示凭据。
   oss:
-    endpoint: https://oss-cn-beijing.aliyuncs.com
+    endpoint: http://127.0.0.1:19090
     region: cn-beijing
-    bucket: handcraft-trade-platform
+    bucket: craftflow-demo-local
   cors:
     # 精确列出可携带 Session Cookie 的前端来源，不使用通配符。
-    allowed-origins: http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173
+    allowed-origins: http://127.0.0.1:15173
 
 # 业务关键节点输出到控制台，INFO 记录过程和结果；不输出 SQL 参数或 SMTP 协议正文。
 logging:

@@ -143,7 +143,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
   function open() {
     if (!userId || socket?.readyState === WebSocket.CONNECTING || socket?.readyState === WebSocket.OPEN) return
     const expected = generation
-    const endpoint = new URL(import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api', location.origin)
+    const endpoint = new URL(import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:18080/api', location.origin)
     endpoint.protocol = endpoint.protocol === 'https:' ? 'wss:' : 'ws:'
     endpoint.pathname = `${endpoint.pathname.replace(/\/$/, '')}/ws`
     const current = new WebSocket(endpoint)
