@@ -57,7 +57,7 @@
 - JDK 21、Maven Wrapper 3.9.15；前端 Node 24.22.2、npm 11.19.1。低于 Node 24.22.2 的版本不满足当前工程要求，需先切换工具链。
 - 精确依赖在 `backend/pom.xml`、`frontend/package.json` 和生成的锁文件中维护。基础数据源及联调配置已完成，业务集成与外部服务按后续任务实现。
 - 框架检查、MySQL 8.4 迁移/失败补偿及浏览器跨域联调已验证；账号及认证页面结果见 [T-001 测试记录](docs/testing/T-001-backend-auth.md)、[T-002 测试记录](docs/testing/T-002-frontend-auth.md)，个人中心及本轮回归结果见 [T-003 测试记录](docs/testing/T-003-personal-center.md)。当前工作树未包含 CI 文件，未执行远端 CI。
-- 个人资料、上传文件、日志和构建产物不进入版本库；用户已指定后端配置及开发数据库凭据统一在 `application.yml` 中显式填写，不再使用 local 配置或样例文件。
+- 后端非敏感配置及已授权的开发数据库连接信息在 `application.yml` 中显式填写。OSS、SMTP 和业务密钥保存在 Git 忽略的 `application-local.yml`。个人资料、上传文件、日志和构建产物均在本机维护。
 
 ## 安装与检查
 
@@ -81,3 +81,5 @@ macOS/Linux 使用 `sh ./mvnw -B -ntp verify`。启动使用 `./mvnw.cmd spring-
 接口组织约定见 [设计说明](docs/design/README.md)，测试结果的记录方式见 [测试说明](docs/testing/README.md)。
 
 需求与原型位置、同步副本及历史资料说明见 [文档中心](docs/README.md)。
+
+需要演示时使用 `codex/demo` 对应的独立启动脚本。开关机、启动检查、版本更新和演示数据保存位置见 [本机演示环境](docs/development/local-demo.md)。
