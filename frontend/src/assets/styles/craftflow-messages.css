@@ -236,7 +236,7 @@
   font: 600 12px/1.4 var(--craft-font);
 }
 .craft-messages .chat-day-divider::before, .craft-messages .chat-day-divider::after { height: 1px; flex: 1; background: var(--craft-border); content: ""; }
-.craft-messages .chat-group-time { margin: 2px 0 6px 4px; color: var(--craft-muted); font-size: 11px; }
+.craft-messages .chat-group-time { display: block; margin: 2px 0 6px 4px; color: var(--craft-muted); font-size: 11px; }
 /* 头像 + 气泡的行结构：自己在右，对方在左。 */
 .craft-messages .chat-message { display: flex; align-items: flex-end; gap: 9px; width: 100%; max-width: 86%; margin: 0 0 10px; }
 .craft-messages .chat-message.mine { margin-left: auto; flex-direction: row-reverse; }
@@ -306,17 +306,18 @@
 .craft-messages .chat-image-button:hover:not(:disabled) { background: #fafafa; color: var(--craft-ink); }
 .craft-messages .chat-image-button:disabled { opacity: .55; cursor: not-allowed; }
 .craft-messages .chat-image-button-face::before { display: inline-block; width: 14px; height: 11px; margin-right: 5px; border: 1.5px solid currentColor; border-radius: 2px; content: ""; }
-.craft-messages .visually-hidden-file { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .craft-messages .chat-compose .private-image-picker.compact .request-images { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
-.craft-messages .chat-compose .private-image-picker.compact .request-images .work-image { width: 64px; aspect-ratio: 1; min-height: 0; }
-.craft-messages .chat-compose .private-image-picker.compact .request-images img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
-.craft-messages .chat-compose .private-image-picker.compact .request-images .work-image-placeholder { display: none; }
-.craft-messages .chat-compose .private-image-picker.compact .request-images .inline-button { display: none; }
+.craft-messages .chat-compose .private-image-picker.compact .request-images .work-image { width: 64px; height: auto; aspect-ratio: 1; min-height: 0; border-radius: 6px; }
+.craft-messages .chat-compose .private-image-picker.compact .request-images img { width: 100%; height: 100%; object-fit: cover; }
+/* 读取失败时给错误和重试留空间，附件仍可单独移除。 */
+.craft-messages .chat-compose .private-image-picker.compact .request-images .work-image:has(.work-image-placeholder) { width: 96px; aspect-ratio: auto; }
+.craft-messages .chat-compose .private-image-picker.compact .request-images .work-image-placeholder { height: auto; min-height: 64px; padding: 4px; text-align: center; overflow-wrap: anywhere; }
+.craft-messages .chat-compose .private-image-picker.compact .request-images > div > .inline-button { display: block; margin-inline: auto; }
 .craft-messages .chat-compose input[type="file"] { padding: 3px; max-width: 100%; border: 0; border-radius: 5px; background: transparent; font-size: 12px; font-weight: 400; }
 .craft-messages .chat-compose input[type="file"]::file-selector-button { margin-right: 6px; padding: 4px 6px; border: 1px solid var(--craft-border); border-radius: 5px; background: #f4f4f5; color: var(--craft-ink); font: inherit; cursor: pointer; }
 .craft-messages .chat-compose .request-images:empty { display: none; }
 .craft-messages .chat-send-button { margin-left: auto; border-radius: 999px; background: #f59e0b; border-color: #f59e0b; color: #231a06; }
-.craft-messages .chat-send-button:hover:not(:disabled) { background: #d97706; border-color: #d97706; color: #fff; }
+.craft-messages .chat-send-button:hover:not(:disabled) { background: #d97706; border-color: #d97706; }
 .craft-messages .chat-send-button .app-icon { width: 15px; height: 15px; }
 
 /* 通知和举报使用同宽的列表面板、标题栏与状态区。 */

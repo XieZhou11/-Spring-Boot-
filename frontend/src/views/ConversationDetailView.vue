@@ -7,6 +7,7 @@ import ChatAvatar from '@/components/ChatAvatar.vue'
 import { useListQuery } from '@/composables/useListQuery'
 import PrivateImage from '@/components/PrivateImage.vue'
 import PrivateImagePicker from '@/components/PrivateImagePicker.vue'
+import { getProfile } from '@/api/account'
 import { getConversation, getMessages, readConversation, sendMessage } from '@/api/customRequest'
 import { getOrder } from '@/api/quote'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -19,11 +20,13 @@ import type { ChatMessageVO, ConversationVO } from '@/types/customRequest'
 import '@/assets/styles/custom-request.css'
 import { useConfirmation } from '@/composables/useConfirmation'
 import { hasOrderReturn } from '@/utils/orderDetail'
+import { imageRenewalDelay } from '@/utils/imageExpiry'
 
 const confirm = useConfirmation()
 const route = useRoute(); const router = useRouter(); const notifications = useNotificationsStore(); const auth = useAuthStore()
 const { page } = useListQuery()
 const conversation = ref<ConversationVO>(); const messages = ref<ChatMessageVO[]>([]); const hasOlder = ref(false)
+const ownAvatarUrl = ref(''); const otherAvatarUrl = ref('')
 const loading = ref(false); const olderLoading = ref(false); const sending = ref(false); const uploading = ref(false); const uncertain = ref(false)
 const content = ref(''); const imageIds = ref<string[]>([]); const error = ref(''); const loadError = ref(''); const readError = ref(''); const transcript = ref<HTMLElement>()
 const referencedNode = ref<{ id: string; nodeCode: string }>(); const referenceLoading = ref(false); const referenceError = ref('')
@@ -37,6 +40,53 @@ const id = () => String(route.params.id)
 const orderEnded = computed(() => ['COMPLETED', 'CANCELLED', 'REFUNDED'].includes(conversation.value?.orderStatus || ''))
 const canReturnToOrder = computed(() => !!(conversation.value?.orderId && hasOrderReturn(router, route, conversation.value.orderId)))
 function returnToOrder() { if (canReturnToOrder.value) router.back() }
+/** 同一会话的本人消息共用一个签名。离开时取消续签，忽略尚未返回的个人资料。 */
+watch(() => {
+  const userId = auth.session?.userId
+  return userId && messages.value.some(message => message.senderId === userId) ? userId : undefined
+}, (userId, _previous, onCleanup) => {
+  ownAvatarUrl.value = ''
+  if (!userId) return
+  let active = true
+  let timer: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => { active = false; clearTimeout(timer) })
+
+  async function refreshOwnAvatar() {
+    try {
+      const profile = await getProfile()
+      if (!active) return
+      ownAvatarUrl.value = profile.avatarUrl || ''
+      const delay = imageRenewalDelay(profile.avatarExpiresAt)
+      if (ownAvatarUrl.value && delay !== undefined) timer = setTimeout(() => void refreshOwnAvatar(), delay)
+    } catch { if (active) ownAvatarUrl.value = '' }
+  }
+  void refreshOwnAvatar()
+})
+
+/** 续签只读取会话详情里的头像字段，避免重新补拉消息或覆盖实时交易状态。 */
+watch(conversation, (detail, _previous, onCleanup) => {
+  otherAvatarUrl.value = detail?.otherAvatarUrl || ''
+  if (!detail) return
+  const conversationId = detail.id
+  let active = true
+  let timer: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => { active = false; clearTimeout(timer) })
+
+  function schedule(expiresAt: string | null) {
+    const delay = imageRenewalDelay(expiresAt)
+    if (otherAvatarUrl.value && delay !== undefined) timer = setTimeout(() => void refreshOtherAvatar(), delay)
+  }
+  async function refreshOtherAvatar() {
+    try {
+      const result = await getConversation(conversationId)
+      if (!active) return
+      otherAvatarUrl.value = result.otherAvatarUrl || ''
+      schedule(result.otherAvatarExpiresAt)
+    } catch { if (active) otherAvatarUrl.value = '' }
+  }
+  schedule(detail.otherAvatarExpiresAt)
+})
+
 /** 交易卡片：订单会话优先展示订单快照，其次需求状态；两者都没有时不渲染。 */
 const tradeCard = computed(() => {
   const current = conversation.value
@@ -46,12 +96,11 @@ const tradeCard = computed(() => {
       kind: 'order' as const,
       title: current.orderTitle || '关联订单',
       amount: current.orderAmount,
-      status: current.orderStatus,
       statusText: orderStatus[current.orderStatus || ''] || current.orderStatus || '',
       coverImageId: current.orderCoverImageId,
       orderId: current.orderId,
       pendingPay: current.orderStatus === 'PENDING_PAY',
-      action: current.orderStatus === 'PENDING_PAY' ? '去支付' : '查看订单',
+      action: current.canPayOrder ? '去支付' : '查看订单',
     }
   }
   if (current.requestId && (current.requestTitle || current.requestStatus)) {
@@ -59,7 +108,6 @@ const tradeCard = computed(() => {
       kind: 'request' as const,
       title: current.requestTitle || '关联需求',
       amount: null,
-      status: current.requestStatus,
       statusText: requestStatus[current.requestStatus || ''] || current.requestStatus || '',
       coverImageId: null,
       requestId: current.requestId,
@@ -68,28 +116,36 @@ const tradeCard = computed(() => {
   }
   return null
 })
-/** 聊天时间分组：同一分钟内的连续消息只显示一次时间，跨天插入日期分隔。 */
+const chatTimeZone = 'Asia/Shanghai'
+const chatDay = new Intl.DateTimeFormat('zh-CN', { timeZone: chatTimeZone, year: 'numeric', month: 'numeric', day: 'numeric' })
+const chatDateLabel = new Intl.DateTimeFormat('zh-CN', { timeZone: chatTimeZone, month: 'numeric', day: 'numeric' })
+const chatTime = new Intl.DateTimeFormat('zh-CN', { timeZone: chatTimeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+/** 日期分隔和时间标签统一按上海时区，连续消息在同一分钟内只显示一次时间。 */
 const messageGroups = computed(() => {
-  const groups: Array<{ key: string; time: string; timestamp: number; dayKey: string; dayLabel: string; messages: ChatMessageVO[] }> = []
+  const groups: Array<{ key: string; minute: number; time: string; dayLabel: string; messages: ChatMessageVO[] }> = []
+  const now = Date.now()
+  const today = chatDay.format(now)
+  const yesterday = chatDay.format(now - 86_400_000)
+  const minuteRuns = new Map<number, number>()
+  let previousDay = ''
   for (const message of messages.value) {
     const date = new Date(message.createdAt)
-    const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
-    const minuteKey = `${dayKey}-${Math.floor(date.getTime() / 60000)}`
+    const minute = Math.floor(date.getTime() / 60_000)
     const existing = groups.at(-1)
-    if (!existing || existing.key !== minuteKey) {
-      const today = new Date(); today.setHours(0, 0, 0, 0)
-      const dayStart = new Date(date); dayStart.setHours(0, 0, 0, 0)
-      const dayLabel = dayStart.getTime() === today.getTime() ? '今天'
-        : dayStart.getTime() === today.getTime() - 86_400_000 ? '昨天'
-          : new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric' }).format(date)
-      groups.push({ key: minuteKey, time: new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false }).format(date), timestamp: date.getTime(), dayKey, dayLabel, messages: [message] })
+    if (existing?.minute === minute) {
+      existing.messages.push(message)
+      continue
     }
-    else if (existing.dayKey !== dayKey) { groups.push({ ...existing, key: minuteKey, messages: [message] }) }
-    else existing.messages.push(message)
+    const day = chatDay.format(date)
+    const dayLabel = day === previousDay ? '' : day === today ? '今天' : day === yesterday ? '昨天' : chatDateLabel.format(date)
+    // 向上补历史时，同一分钟的前置消息应复用已有分组和未变更的气泡。
+    const run = minuteRuns.get(minute) || 0
+    minuteRuns.set(minute, run + 1)
+    groups.push({ key: `${minute}-${run}`, minute, time: chatTime.format(date), dayLabel, messages: [message] })
+    previousDay = day
   }
   return groups
 })
-function showDayDivider(index: number) { return index === 0 || messageGroups.value[index - 1].dayKey !== messageGroups.value[index].dayKey }
 /** 引用只附加到原草稿，不替换正文，也不在跳转后自动发送消息。 */
 async function resolveReference() {
   const current = ++referenceRevision
@@ -353,19 +409,22 @@ usePageActivation(focused)
         >
           {{ loading ? '正在读取消息…' : '暂无消息' }}
         </p><template
-          v-for="(group, groupIndex) in messageGroups"
+          v-for="group in messageGroups"
           :key="group.key"
         >
           <div
-            v-if="showDayDivider(groupIndex)"
+            v-if="group.dayLabel"
             class="chat-day-divider"
             role="separator"
           >
             {{ group.dayLabel }}
           </div>
-          <div class="chat-group-time">
+          <time
+            class="chat-group-time"
+            :datetime="group.messages[0]!.createdAt"
+          >
             {{ group.time }}
-          </div>
+          </time>
           <article
             v-for="message in group.messages"
             :key="message.id"
@@ -375,8 +434,8 @@ usePageActivation(focused)
           >
             <ChatAvatar
               class="chat-message-avatar"
-              :conversation="conversation"
-              :mine="message.senderId === auth.session?.userId"
+              :url="message.senderId === auth.session?.userId ? ownAvatarUrl : otherAvatarUrl"
+              :nickname="message.senderId === auth.session?.userId ? auth.session?.nickname : conversation.otherNickname"
               :label="message.senderId === auth.session?.userId ? '我的头像' : `${conversation.otherNickname}的头像`"
             />
             <div class="chat-message-body">

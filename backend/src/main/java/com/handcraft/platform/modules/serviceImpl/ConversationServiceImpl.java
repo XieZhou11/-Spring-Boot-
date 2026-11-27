@@ -109,11 +109,27 @@ public class ConversationServiceImpl implements ConversationService {
     public ConversationVO read(Long userId,Long id,Long seq){return BusinessLog.run(LOGGER,"会话已读游标推进",userId,()->{
         policy.user(userId);policy.lockUsers(userId);var c=conversations.lock(id);participant(userId,c);if(seq==null||seq<0||seq>c.getLastMessageSeq())throw invalid("已读序号不能超过已有消息");boolean buyer=userId.equals(c.getBuyerId());long current=buyer?c.getBuyerReadSeq():c.getCreatorReadSeq();if(seq>current){if(buyer)c.setBuyerReadSeq(seq);else c.setCreatorReadSeq(seq);c.setUpdatedAt(policy.now());conversations.update(c);afterCommit(()->{both(c,Map.of("type","CHAT_READ","conversationId",id.toString(),"userId",userId.toString(),"readSeq",seq.toString()));publishUnread(userId);});}return view(c,userId);
     });}
-    private ConversationVO view(Conversation c,Long userId){var r=c.getRequestId()==null?null:requests.find(c.getRequestId());var order=c.getOrderId()==null?null:conversations.order(c.getOrderId());boolean buyer=userId.equals(c.getBuyerId());Long otherId=buyer?c.getCreatorId():c.getBuyerId();var other=users.findById(otherId);long seq=buyer?c.getBuyerReadSeq():c.getCreatorReadSeq();String disabled=disabled(c);
+    private ConversationVO view(Conversation c,Long userId){
+        var r=c.getRequestId()==null?null:requests.find(c.getRequestId());
+        var order=c.getOrderId()==null?null:conversations.order(c.getOrderId());
+        boolean buyer=userId.equals(c.getBuyerId());
+        Long otherId=buyer?c.getCreatorId():c.getBuyerId();
+        var other=users.findById(otherId);
+        long seq=buyer?c.getBuyerReadSeq():c.getCreatorReadSeq();
+        String disabled=disabled(c);
         // 头像和成交快照仅用于展示；签名失败不阻断会话读取，前端按昵称首字兜底。
         var avatar=other==null?null:avatars.view(other.getId(),other.getAvatarFileId());
         String cover=orderCoverImageId(order);
-        return new ConversationVO(c.getId().toString(),text(c.getRequestId()),text(c.getOrderId()),r==null?null:r.getTitle(),policy.effectiveStatus(r),otherId.toString(),other==null?"已注销用户":other.getNickname(),avatar==null?null:avatar.url(),avatar==null?null:avatar.expiresAt(),conversations.unreadIn(c.getId(),userId,seq),time(c.getLastMessageAt()),c.getLastMessageSeq().toString(),Long.toString(seq),disabled==null,disabled,time(c.getArchivedAt()),c.getArchiveReason(),order==null?null:order.getTitleSnapshot(),orderStatus(order),order==null?null:order.getTotalAmount().setScale(2).toPlainString(),cover);}
+        String status=orderStatus(order);
+        // 进入会话前已校验交易身份。付款入口与订单详情使用相同的买家及有效状态条件。
+        boolean canPayOrder=order!=null&&userId.equals(order.getBuyerId())&&"PENDING_PAY".equals(status);
+        return new ConversationVO(c.getId().toString(),text(c.getRequestId()),text(c.getOrderId()),
+                r==null?null:r.getTitle(),policy.effectiveStatus(r),otherId.toString(),other==null?"已注销用户":other.getNickname(),
+                avatar==null?null:avatar.url(),avatar==null?null:avatar.expiresAt(),conversations.unreadIn(c.getId(),userId,seq),
+                time(c.getLastMessageAt()),c.getLastMessageSeq().toString(),Long.toString(seq),disabled==null,disabled,
+                time(c.getArchivedAt()),c.getArchiveReason(),order==null?null:order.getTitleSnapshot(),status,
+                order==null?null:order.getTotalAmount().setScale(2).toPlainString(),cover,canPayOrder);
+    }
     /** 现货订单成交主图来自不可变方案快照；定制订单无独立封面，返回 null。 */
     private String orderCoverImageId(TradeOrder order){if(order==null||!"STOCK".equals(order.getOrderType())||order.getAgreementSnapshot()==null)return null;try{var imageIds=json.readValue(order.getAgreementSnapshot(),new TypeReference<Map<String,Object>>(){}).get("mainImageIds");if(imageIds instanceof List<?> list&&!list.isEmpty()&&list.getFirst() instanceof String id)return id;}catch(RuntimeException ignored){}return null;}
     private String orderStatus(TradeOrder order){if(order==null)return null;return "PENDING_PAY".equals(order.getStatus())&&order.getPayDeadlineAt()!=null&&!policy.now().isBefore(order.getPayDeadlineAt())?"CANCELLED":order.getStatus();}

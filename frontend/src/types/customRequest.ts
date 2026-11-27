@@ -83,6 +83,8 @@ export interface ConversationVO {
   orderTitle: string | null
   /** 关联订单当前状态，无订单时为空。 */
   orderStatus: string | null
+  /** 本人是该待付款订单的买家，可进入订单付款。 */
+  canPayOrder: boolean
   /** 关联订单成交金额（十进制字符串），无订单时为空。 */
   orderAmount: string | null
   /** 现货订单成交主图编号，无订单或定制订单为空。 */

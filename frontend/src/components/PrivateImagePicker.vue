@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { nextTick, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import PrivateImage from './PrivateImage.vue'
 import { uploadPrivateImage } from '@/api/customRequest'
 import { uploadOrderImage, uploadQuoteImage } from '@/api/quote'
 const props = defineProps<{ modelValue: string[]; label: string; max: number; conversationId?: string; orderId?: string; scope?: 'quote' | 'progress' | 'refund'; disabled?: boolean; compact?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [ids: string[]]; uploading: [value: boolean] }>()
 const error = ref(''); const busy = ref(false); const fileInput = ref<HTMLInputElement>()
+const uploadDisabled = computed(() => props.disabled || busy.value || props.modelValue.length >= props.max)
 /** 逐张真实上传，失败保留已完成的图片和表单；服务端再次解码并校验归属。 */
 async function upload(event: Event) {
   const input = event.target as HTMLInputElement
@@ -44,35 +45,35 @@ async function upload(event: Event) {
       accept="image/jpeg,image/png,image/webp"
       multiple
       :aria-label="label"
-      :disabled="disabled || busy || modelValue.length >= max"
+      :disabled="uploadDisabled"
       @change="upload"
     ></label>
-    <!-- 聊天条形态：上传收敛为一个图标按钮，规则与原表单一致。 -->
-    <button
-      v-else
-      type="button"
-      class="chat-image-button"
-      :aria-label="`${label}上传`"
-      :disabled="disabled || busy || modelValue.length >= max"
-      @click="fileInput?.click()"
-    >
+    <!-- 聊天条只保留一个可聚焦的上传按钮，原生文件输入负责打开选择器。 -->
+    <template v-else>
+      <button
+        type="button"
+        class="chat-image-button"
+        :aria-label="`${label}上传`"
+        :aria-busy="busy"
+        :disabled="uploadDisabled"
+        @click="fileInput?.click()"
+      >
+        <span
+          class="chat-image-button-face"
+          aria-hidden="true"
+        >{{ busy ? '上传中…' : '图片' }}</span>
+      </button>
       <input
         ref="fileInput"
         type="file"
         accept="image/jpeg,image/png,image/webp"
         multiple
-        class="visually-hidden-file"
-        tabindex="-1"
+        hidden
         :aria-label="label"
+        :disabled="uploadDisabled"
         @change="upload"
       >
-      <span
-        class="chat-image-button-face"
-        aria-hidden="true"
-      >
-        图片
-      </span>
-    </button>
+    </template>
     <small
       v-if="!compact"
       class="field-help"

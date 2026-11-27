@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import type { Request } from '@playwright/test'
 import { test, expect } from './fixtures'
 import { anotherCreator, api, image, mutate, origin, prepareCreator, register } from './custom-request-support'
 
@@ -201,22 +202,22 @@ test('报价撤回重报、地址定标未知响应重试、订单取消与历�
     await expect(page.getByText('修改后的个人地址', { exact: false })).toHaveCount(0)
     await creator.goto(`/orders/${orderId}/details/address`)
     await expect(creator.getByText('手作测试路一号', { exact: false })).toHaveCount(0)
+    await page.getByRole('button', { name: '返回订单', exact: true }).click()
+    await expect(page).toHaveURL(`/orders/${orderId}`)
     // 取消前取得的旧订单响应，即使最后返回也不能恢复待付款状态。
-    let releaseOldOrder = () => {}; let capturedOldOrder = () => {}; let holdOrder = true
+    let releaseOldOrder = () => {}; let capturedOldOrder: (request: Request) => void = () => {}; let holdOrder = true
     const oldOrderGate = new Promise<void>(resolve => { releaseOldOrder = resolve })
-    const oldOrderCaptured = new Promise<void>(resolve => { capturedOldOrder = resolve })
+    const oldOrderCaptured = new Promise<Request>(resolve => { capturedOldOrder = resolve })
     await page.route(`**/api/orders/${orderId}`, async route => {
       if (!holdOrder) { await route.continue(); return }
       holdOrder = false
       const response = await route.fetch()
       expect((await response.json()).data.status).toBe('PENDING_PAY')
-      capturedOldOrder(); await oldOrderGate; await route.fulfill({ response })
+      capturedOldOrder(route.request()); await oldOrderGate; await route.fulfill({ response })
     })
     // 0acaac8 后订单详情不再提供常驻“刷新订单”按钮，用应用内更新事件触发一次受控读取。
     await page.evaluate(() => window.dispatchEvent(new Event('order-updated')))
-    await oldOrderCaptured
-    await page.getByRole('button', { name: '返回订单', exact: true }).click()
-    await expect(page).toHaveURL(`/orders/${orderId}`)
+    const oldOrderRequest = await oldOrderCaptured
     let releaseCancellation = () => {}
     const cancellationGate = new Promise<void>(resolve => { releaseCancellation = resolve })
     await page.route(`**/api/orders/${orderId}/cancellation`, async route => { await cancellationGate; await route.continue() })
@@ -227,7 +228,7 @@ test('报价撤回重报、地址定标未知响应重试、订单取消与历�
     await expect(page).toHaveURL(`/orders/${orderId}`)
     releaseCancellation()
     await expect(detailStatus).toHaveText('已取消')
-    const oldOrderReturned = page.waitForResponse(response => response.url().endsWith(`/api/orders/${orderId}`))
+    const oldOrderReturned = page.waitForResponse(response => response.request() === oldOrderRequest)
     releaseOldOrder(); await oldOrderReturned
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
     await expect(detailStatus).toHaveText('已取消')

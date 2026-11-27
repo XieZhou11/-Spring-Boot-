@@ -1,6 +1,5 @@
 package com.handcraft.platform.modules.vo;
-import java.util.List;
-import java.time.*;
+import java.time.OffsetDateTime;
 /**
  * @param id 会话编号
  * @param requestId 需求编号
@@ -23,5 +22,10 @@ import java.time.*;
  * @param orderStatus 关联订单的当前有效状态，待付款达到截止时显示已取消但不由GET写库
  * @param orderAmount 关联订单成交金额快照（十进制字符串），无订单为空
  * @param orderCoverImageId 关联现货订单的成交主图编号，无订单或定制订单为空
+ * @param canPayOrder 当前用户是否为仍处于有效待付款状态的关联订单买家
  */
-public record ConversationVO(String id,String requestId,String orderId,String requestTitle,String requestStatus,String otherUserId,String otherNickname,String otherAvatarUrl,OffsetDateTime otherAvatarExpiresAt,long unreadCount,OffsetDateTime lastMessageAt,String lastMessageSeq,String readSeq,boolean canSend,String sendDisabledReason,OffsetDateTime archivedAt,String archiveReason,String orderTitle,String orderStatus,String orderAmount,String orderCoverImageId) {}
+public record ConversationVO(String id,String requestId,String orderId,String requestTitle,String requestStatus,
+        String otherUserId,String otherNickname,String otherAvatarUrl,OffsetDateTime otherAvatarExpiresAt,
+        long unreadCount,OffsetDateTime lastMessageAt,String lastMessageSeq,String readSeq,boolean canSend,
+        String sendDisabledReason,OffsetDateTime archivedAt,String archiveReason,String orderTitle,String orderStatus,
+        String orderAmount,String orderCoverImageId,boolean canPayOrder) {}

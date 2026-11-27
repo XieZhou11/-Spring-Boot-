@@ -330,8 +330,15 @@ test('单人定向邀约从报价走到定标，原会话保留且作品入口�
     await page.getByRole('link', { name: '进入订单沟通', exact: true }).click()
     await expect(page).toHaveURL(`/messages/conversations/${conversationId}`)
     await expect(page.getByRole('log')).toContainText(originalMessage)
-    await expect(page.getByRole('region', { name: '关联订单信息' }).getByRole('link', { name: /去支付|查看订单/ })).toHaveAttribute('href', `/orders/${orderId}`)
+    const buyerCard = page.getByRole('region', { name: '关联订单信息' })
+    await expect(buyerCard).toContainText('待付款')
+    await expect(buyerCard).toContainText('180.00')
+    await expect(buyerCard.getByRole('link', { name: '去支付', exact: true })).toHaveAttribute('href', `/orders/${orderId}`)
     await page.screenshot({ path: testInfo.outputPath('directed-order-conversation.png'), fullPage: true })
+    await creator.goto(`/messages/conversations/${conversationId}`)
+    const creatorCard = creator.getByRole('region', { name: '关联订单信息' })
+    await expect(creatorCard.getByRole('link', { name: '查看订单', exact: true })).toHaveAttribute('href', `/orders/${orderId}`)
+    await expect(creatorCard.getByRole('link', { name: '去支付', exact: true })).toHaveCount(0)
 
     const csrf = (await (await creator.request.get(`${api}/csrf`)).json()).data
     const uploaded = await creator.request.post(`${api}/work-images`, { headers: { [csrf.headerName]: csrf.token }, multipart: { file: { name: 'work.png', mimeType: 'image/png', buffer: image } } })

@@ -16,6 +16,8 @@
 | PC Web 前端重做 | CraftFlow 已完成全站联验和新版切换，前后台保留既有书签入口 | [前端重做开发指南](design/frontend-rebuild-guide.md) · [T-027](development/tasks/T-027-craftflow-cutover.md) · [联验记录](testing/T-027-craftflow-cutover.md) |
 | CraftFlow 前端后续修复 | 22 项前端修复和 11 项回归检查见 T-033 | [问题清单](<development/CraftFlow 前端后续问题清单.md>) · [T-033](development/tasks/T-033-craftflow-frontend-followup.md) · [测试记录](testing/T-033-craftflow-frontend-followup.md) |
 | 演示页面交互与订单导航 | 修复品类筛选抖动，拆分订单资料页并恢复订单会话来路 | [T-034](development/tasks/T-034-craftflow-demo-ui-feedback.md) · [测试记录](testing/T-034-craftflow-demo-ui-feedback.md) |
+| 交易会话界面 | 会话内按分钟分组，展示头像、交易卡片与紧凑附件操作 | [T-035](development/tasks/T-035-conversation-chat-ui.md) · [测试记录](testing/T-035-conversation-chat-ui.md) |
+| 本机演示环境 | `codex/demo` 固定演示源码版本，本机启动脚本加载专用数据库、图片和邮件配置 | [演示启动与更新](development/local-demo.md) |
 | AI 协作约定 | 已建立 | [AGENTS.md](../AGENTS.md)，规定任务、实现与验证方式 |
 | 后端专项审查修复 | 五批均已按顺序通过验收，订单日期、交易通知和资金看板见 T-032 | [实施计划](development/backend-audit-implementation-plan.md) · [T-028](development/tasks/T-028-stock-refund-recovery.md) · [T-029](development/tasks/T-029-stock-snapshot-evidence.md) · [T-030](development/tasks/T-030-category-continuity-quote-deadline.md) · [T-031](development/tasks/T-031-comment-lock-image-validation.md) · [T-032](development/tasks/T-032-trade-dates-notifications-dashboard.md) · [暂缓的举报问题](development/tasks/T-020-content-report-governance.md#待理解和解决的举报问题) |
 | 技术选型 | 用户已确认采用；账号本地业务集成已验证，QQ/163 公网收件及找回密码补充验收已由用户于 2026-11-23 手动验证通过（依据用户反馈），其他业务能力按任务验证 | [ADR-001](design/decisions/ADR-001-technology-stack.md) |

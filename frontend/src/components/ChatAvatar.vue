@@ -1,38 +1,15 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { getProfile } from '@/api/account'
-import { useAuthStore } from '@/stores/auth'
-import { imageRenewalDelay } from '@/utils/imageExpiry'
-import type { ConversationVO } from '@/types/customRequest'
+import { computed, ref, watch } from 'vue'
 
-/** 聊天身份头像：本人头像取个人资料短时签名，对方头像取会话 VO；签名到期自动重读。 */
+/** 头像签名由会话页统一取得，加载失败时显示昵称首字。 */
 const props = defineProps<{
-  conversation: ConversationVO
-  mine: boolean
+  url?: string | null
+  nickname?: string
   label: string
 }>()
-const auth = useAuthStore()
-const mineUrl = ref(''); const mineBroken = ref(false); const otherBroken = ref(false)
-let mineRevision = 0; let mineTimer: ReturnType<typeof setTimeout> | undefined
-
-async function refreshMine() {
-  const current = ++mineRevision; mineBroken.value = false
-  if (!auth.session) { mineUrl.value = ''; return }
-  try {
-    const profile = await getProfile()
-    if (current !== mineRevision) return
-    mineUrl.value = profile.avatarUrl || ''
-    const delay = imageRenewalDelay(profile.avatarExpiresAt)
-    clearTimeout(mineTimer)
-    if (delay !== undefined && profile.avatarUrl) mineTimer = setTimeout(() => void refreshMine(), delay)
-  } catch { if (current === mineRevision) mineUrl.value = '' }
-}
-if (props.mine) void refreshMine()
-
-const otherUrl = computed(() => (props.conversation.otherAvatarUrl && !otherBroken.value) ? props.conversation.otherAvatarUrl : '')
-const url = computed(() => props.mine ? mineUrl.value : otherUrl.value)
-const broken = computed(() => props.mine ? mineBroken.value : otherBroken.value)
-const initial = computed(() => (props.mine ? auth.session?.nickname : props.conversation.otherNickname || '客')?.trim().charAt(0) || '客')
+const broken = ref(false)
+const initial = computed(() => Array.from(props.nickname?.trim() || '')[0] || '客')
+watch(() => props.url, () => { broken.value = false })
 </script>
 <template>
   <img
@@ -41,11 +18,12 @@ const initial = computed(() => (props.mine ? auth.session?.nickname : props.conv
     :src="url"
     :alt="label"
     referrerpolicy="no-referrer"
-    @error="mine ? (mineBroken = true) : (otherBroken = true)"
+    @error="broken = true"
   >
   <span
     v-else
     class="chat-avatar chat-avatar-fallback"
-    aria-hidden="true"
+    role="img"
+    :aria-label="label"
   >{{ initial }}</span>
 </template>

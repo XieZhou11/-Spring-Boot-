@@ -1,5 +1,7 @@
 # 测试结果记录
 
+交易会话的时间分组、头像、附件及待付款入口复测见 [T-035 测试记录](T-035-conversation-chat-ui.md)。
+
 演示页面的订单资料拆页、会话返回、作品筛选和创作者工作台验收见 [T-034 测试记录](T-034-craftflow-demo-ui-feedback.md)。
 
 CraftFlow 前端审查后的 22 项修复和 11 项回归证据见 [T-033 测试记录](T-033-craftflow-frontend-followup.md)。
