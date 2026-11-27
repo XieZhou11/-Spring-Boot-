@@ -3,9 +3,9 @@ import { nextTick, ref } from 'vue'
 import PrivateImage from './PrivateImage.vue'
 import { uploadPrivateImage } from '@/api/customRequest'
 import { uploadOrderImage, uploadQuoteImage } from '@/api/quote'
-const props = defineProps<{ modelValue: string[]; label: string; max: number; conversationId?: string; orderId?: string; scope?: 'quote' | 'progress' | 'refund'; disabled?: boolean }>()
+const props = defineProps<{ modelValue: string[]; label: string; max: number; conversationId?: string; orderId?: string; scope?: 'quote' | 'progress' | 'refund'; disabled?: boolean; compact?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [ids: string[]]; uploading: [value: boolean] }>()
-const error = ref(''); const busy = ref(false)
+const error = ref(''); const busy = ref(false); const fileInput = ref<HTMLInputElement>()
 /** 逐张真实上传，失败保留已完成的图片和表单；服务端再次解码并校验归属。 */
 async function upload(event: Event) {
   const input = event.target as HTMLInputElement
@@ -32,8 +32,14 @@ async function upload(event: Event) {
 }
 </script>
 <template>
-  <div class="private-image-picker">
-    <label class="work-field">{{ label }}<input
+  <div
+    class="private-image-picker"
+    :class="{ compact }"
+  >
+    <label
+      v-if="!compact"
+      class="work-field"
+    >{{ label }}<input
       type="file"
       accept="image/jpeg,image/png,image/webp"
       multiple
@@ -41,7 +47,36 @@ async function upload(event: Event) {
       :disabled="disabled || busy || modelValue.length >= max"
       @change="upload"
     ></label>
-    <small class="field-help">最多 {{ max }} 张，单张不超过 5MB。{{ busy ? '正在上传…' : '' }}</small>
+    <!-- 聊天条形态：上传收敛为一个图标按钮，规则与原表单一致。 -->
+    <button
+      v-else
+      type="button"
+      class="chat-image-button"
+      :aria-label="`${label}上传`"
+      :disabled="disabled || busy || modelValue.length >= max"
+      @click="fileInput?.click()"
+    >
+      <input
+        ref="fileInput"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        class="visually-hidden-file"
+        tabindex="-1"
+        :aria-label="label"
+        @change="upload"
+      >
+      <span
+        class="chat-image-button-face"
+        aria-hidden="true"
+      >
+        图片
+      </span>
+    </button>
+    <small
+      v-if="!compact"
+      class="field-help"
+    >最多 {{ max }} 张，单张不超过 5MB。{{ busy ? '正在上传…' : '' }}</small>
     <p
       v-if="error"
       class="field-error"

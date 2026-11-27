@@ -83,6 +83,10 @@ export interface ConversationVO {
   orderTitle: string | null
   /** 关联订单当前状态，无订单时为空。 */
   orderStatus: string | null
+  /** 关联订单成交金额（十进制字符串），无订单时为空。 */
+  orderAmount: string | null
+  /** 现货订单成交主图编号，无订单或定制订单为空。 */
+  orderCoverImageId: string | null
   /** 需求标题，无需求时为空。 */
   requestTitle: string | null
   /** 需求状态，无需求时为空。 */
@@ -91,6 +95,10 @@ export interface ConversationVO {
   otherUserId: string
   /** 对方昵称。 */
   otherNickname: string
+  /** 对方头像短时访问地址，无头像或存储不可用时为空。 */
+  otherAvatarUrl: string | null
+  /** 对方头像地址失效时间，到期前重读会话续签。 */
+  otherAvatarExpiresAt: string | null
   /** 未读条数。 */
   unreadCount: number
   /** 最近消息时间。 */

@@ -216,7 +216,7 @@ test('五节点图文制作、跳过打样、补充、发货更正到买家收�
     expect(request.status).toBe('IN_TRADE')
     await page.getByRole('link', { name: '进入订单沟通', exact: true }).click()
     await page.getByLabel('沟通内容', { exact: true }).fill('收到作品，补充保留此次交付确认。')
-    const orderLink = page.getByRole('link', { name: /^关联订单/ })
+    const orderLink = page.getByRole('region', { name: '关联订单信息' }).getByRole('link', { name: /去支付|查看订单/ })
     await expect(orderLink).toHaveAttribute('href', `/orders/${order.id}`)
     await orderLink.click()
     await page.getByRole('dialog', { name: '离开会话？' }).getByRole('button', { name: '确认离开', exact: true }).click()
@@ -224,7 +224,7 @@ test('五节点图文制作、跳过打样、补充、发货更正到买家收�
     await expect(page.getByLabel('沟通内容', { exact: true })).toHaveValue('收到作品，补充保留此次交付确认。')
     await expect(page.getByRole('button', { name: '移除引用', exact: true })).toBeVisible()
     const sent = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`/conversations/${order.conversationId}/messages`))
-    await page.getByRole('button', { name: '发送消息', exact: true }).click()
+    await page.getByRole('button', { name: '发送', exact: true }).click()
     const chatResponse = await sent
     expect(chatResponse.status()).toBe(201)
     expect((await chatResponse.json()).data.referencedNodeId).toBe(completed.progressNodes[4].id)

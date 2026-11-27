@@ -196,7 +196,7 @@ test.describe('真实订单普通售后', () => {
       await expect(chat.getByRole('img', { name: '会话凭证 1', exact: true })).toBeVisible()
       await expect.poll(() => chat.getByRole('img', { name: '会话凭证 1', exact: true }).evaluate((node: HTMLImageElement) => node.naturalWidth)).toBeGreaterThan(0)
       await expect(admin.getByLabel('沟通内容', { exact: true })).toHaveCount(0)
-      await expect(admin.getByRole('button', { name: '发送消息', exact: true })).toHaveCount(0)
+      await expect(admin.getByRole('button', { name: '发送', exact: true })).toHaveCount(0)
       expect(await cursors()).toEqual(beforeRead)
       expect((await (await creator.request.get(`${api}/me/conversations/unread-count`)).json()).data.count).toBe(unreadBefore)
       const signed = await admin.request.get(`${api}/admin/refund-applications/${current.id}/images/${chatImage}`)

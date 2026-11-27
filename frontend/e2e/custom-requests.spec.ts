@@ -181,7 +181,7 @@ test('公开咨询图文、多端推送与丢响应重试，关闭后历史保�
     await expect(creator).toHaveURL(/\/messages\/conversations\/\d+$/)
     const conversationId = creator.url().split('/').at(-1)!
     await creator.getByLabel('沟通内容', { exact: true }).fill('你好，可以手工雕刻名字，请问希望哪种字体？')
-    await creator.getByRole('button', { name: '发送消息', exact: true }).click()
+    await creator.getByRole('button', { name: '发送', exact: true }).click()
     await expect(creator.locator('.chat-message')).toHaveCount(1)
     await page.goto('/messages/conversations')
     await page.getByRole('link', { name: /山间器物/ }).click()
@@ -205,7 +205,7 @@ test('公开咨询图文、多端推送与丢响应重试，关闭后历史保�
       await route.abort('failed')
     })
     await page.getByLabel('沟通内容', { exact: true }).fill('想要简洁的手写体，可以先给我看一下参考吗？')
-    await page.getByRole('button', { name: '发送消息', exact: true }).click()
+    await page.getByRole('button', { name: '发送', exact: true }).click()
     await expect(page.getByRole('button', { name: '重试确认发送', exact: true })).toBeVisible()
     await page.unroute(`**/api/conversations/${conversationId}/messages`)
     await page.getByRole('button', { name: '重试确认发送', exact: true }).click()
@@ -213,7 +213,7 @@ test('公开咨询图文、多端推送与丢响应重试，关闭后历史保�
     await expect(creator.getByRole('log')).toContainText('简洁的手写体', { timeout: 3000 })
     await page.context().setOffline(true)
     await creator.getByLabel('沟通内容', { exact: true }).fill('离线期间补充：我会先准备两款字体供你选择。')
-    await creator.getByRole('button', { name: '发送消息', exact: true }).click()
+    await creator.getByRole('button', { name: '发送', exact: true }).click()
     await expect(creator.locator('.chat-message')).toHaveCount(3)
     await page.context().setOffline(false)
     await page.bringToFront()
@@ -223,7 +223,7 @@ test('公开咨询图文、多端推送与丢响应重试，关闭后历史保�
     await page.setViewportSize({ width: 390, height: 360 })
     await page.evaluate(() => window.scrollTo(0, 0))
     await creator.getByLabel('沟通内容', { exact: true }).fill('屏幕外的新消息：请确认书签末端是否需要打孔。')
-    await creator.getByRole('button', { name: '发送消息', exact: true }).click()
+    await creator.getByRole('button', { name: '发送', exact: true }).click()
     await expect(page.getByRole('log')).toContainText('屏幕外的新消息')
     await expect.poll(async () => (await (await page.request.get(`${api}/me/conversations/unread-count`)).json()).data.count).toBeGreaterThan(0)
     await page.locator('.chat-message').filter({ hasText: '屏幕外的新消息' }).scrollIntoViewIfNeeded()
@@ -238,7 +238,7 @@ test('公开咨询图文、多端推送与丢响应重试，关闭后历史保�
     await expect(creator.getByRole('img', { name: '消息图片 1', exact: true })).toBeVisible()
     // 上传后仍是发送者的临时内容，只有持久化到消息后收件方才可读取。
     expect((await page.request.get(`${api}/conversation-images/${imageId}`)).status()).toBe(404)
-    await creator.getByRole('button', { name: '发送消息', exact: true }).click()
+    await creator.getByRole('button', { name: '发送', exact: true }).click()
     await expect(page.getByRole('log').getByRole('img', { name: '消息图片 1', exact: true })).toBeVisible({ timeout: 3000 })
     expect((await page.request.get(`${api}/conversation-images/${imageId}`)).status()).toBe(200)
     await page.screenshot({ path: testInfo.outputPath('request-chat-1440.png'), fullPage: true })
@@ -295,7 +295,7 @@ test('单人定向邀约从报价走到定标，原会话保留且作品入口�
     expect((await outsider.request.get(`${api}/conversations/${conversationId}`)).status()).toBe(404)
     const originalMessage = '可以先确认刻字位置和字体。'
     await creator.getByLabel('沟通内容', { exact: true }).fill(originalMessage)
-    await creator.getByRole('button', { name: '发送消息', exact: true }).click()
+    await creator.getByRole('button', { name: '发送', exact: true }).click()
     await expect(creator.getByRole('log')).toContainText(originalMessage)
 
     await creator.goto(`/requests/${requestId}#quotes`)
@@ -330,7 +330,7 @@ test('单人定向邀约从报价走到定标，原会话保留且作品入口�
     await page.getByRole('link', { name: '进入订单沟通', exact: true }).click()
     await expect(page).toHaveURL(`/messages/conversations/${conversationId}`)
     await expect(page.getByRole('log')).toContainText(originalMessage)
-    await expect(page.getByRole('link', { name: /关联订单/ })).toHaveAttribute('href', `/orders/${orderId}`)
+    await expect(page.getByRole('region', { name: '关联订单信息' }).getByRole('link', { name: /去支付|查看订单/ })).toHaveAttribute('href', `/orders/${orderId}`)
     await page.screenshot({ path: testInfo.outputPath('directed-order-conversation.png'), fullPage: true })
 
     const csrf = (await (await creator.request.get(`${api}/csrf`)).json()).data

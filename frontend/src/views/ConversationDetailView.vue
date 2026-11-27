@@ -3,6 +3,7 @@ import { usePageActivation } from '@/utils/pageActivation'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
+import ChatAvatar from '@/components/ChatAvatar.vue'
 import { useListQuery } from '@/composables/useListQuery'
 import PrivateImage from '@/components/PrivateImage.vue'
 import PrivateImagePicker from '@/components/PrivateImagePicker.vue'
@@ -10,7 +11,6 @@ import { getConversation, getMessages, readConversation, sendMessage } from '@/a
 import { getOrder } from '@/api/quote'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
-import { formatTime } from '@/utils/creator'
 import { requestStatus } from '@/utils/customRequest'
 import { orderStatus, progressNodeName } from '@/utils/quote'
 import { readConversationDraft, saveConversationDraft } from '@/utils/conversationDraft'
@@ -34,6 +34,59 @@ let readTimer: ReturnType<typeof setTimeout> | undefined; let desiredRead = '0';
 let attempt: { clientMessageKey: string; content: string; imageIds: string[]; referencedNodeId?: string } | undefined
 const id = () => String(route.params.id)
 const orderEnded = computed(() => ['COMPLETED', 'CANCELLED', 'REFUNDED'].includes(conversation.value?.orderStatus || ''))
+/** 交易卡片：订单会话优先展示订单快照，其次需求状态；两者都没有时不渲染。 */
+const tradeCard = computed(() => {
+  const current = conversation.value
+  if (!current) return null
+  if (current.orderId && (current.orderTitle || current.orderStatus)) {
+    return {
+      kind: 'order' as const,
+      title: current.orderTitle || '关联订单',
+      amount: current.orderAmount,
+      status: current.orderStatus,
+      statusText: orderStatus[current.orderStatus || ''] || current.orderStatus || '',
+      coverImageId: current.orderCoverImageId,
+      orderId: current.orderId,
+      pendingPay: current.orderStatus === 'PENDING_PAY',
+      action: current.orderStatus === 'PENDING_PAY' ? '去支付' : '查看订单',
+    }
+  }
+  if (current.requestId && (current.requestTitle || current.requestStatus)) {
+    return {
+      kind: 'request' as const,
+      title: current.requestTitle || '关联需求',
+      amount: null,
+      status: current.requestStatus,
+      statusText: requestStatus[current.requestStatus || ''] || current.requestStatus || '',
+      coverImageId: null,
+      requestId: current.requestId,
+      action: '查看需求',
+    }
+  }
+  return null
+})
+/** 聊天时间分组：同一分钟内的连续消息只显示一次时间，跨天插入日期分隔。 */
+const messageGroups = computed(() => {
+  const groups: Array<{ key: string; time: string; timestamp: number; dayKey: string; dayLabel: string; messages: ChatMessageVO[] }> = []
+  for (const message of messages.value) {
+    const date = new Date(message.createdAt)
+    const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+    const minuteKey = `${dayKey}-${Math.floor(date.getTime() / 60000)}`
+    const existing = groups.at(-1)
+    if (!existing || existing.key !== minuteKey) {
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      const dayStart = new Date(date); dayStart.setHours(0, 0, 0, 0)
+      const dayLabel = dayStart.getTime() === today.getTime() ? '今天'
+        : dayStart.getTime() === today.getTime() - 86_400_000 ? '昨天'
+          : new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric' }).format(date)
+      groups.push({ key: minuteKey, time: new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false }).format(date), timestamp: date.getTime(), dayKey, dayLabel, messages: [message] })
+    }
+    else if (existing.dayKey !== dayKey) { groups.push({ ...existing, key: minuteKey, messages: [message] }) }
+    else existing.messages.push(message)
+  }
+  return groups
+})
+function showDayDivider(index: number) { return index === 0 || messageGroups.value[index - 1].dayKey !== messageGroups.value[index].dayKey }
 /** 引用只附加到原草稿，不替换正文，也不在跳转后自动发送消息。 */
 async function resolveReference() {
   const current = ++referenceRevision
@@ -167,26 +220,6 @@ usePageActivation(focused)
     <header class="conversation-header">
       <div>
         <h2>{{ conversation?.otherNickname || '交易会话' }}</h2>
-        <p
-          v-if="conversation?.orderId"
-          class="conversation-reference"
-        >
-          <RouterLink :to="`/orders/${conversation.orderId}`">关联订单 · {{ conversation.orderTitle || '查看订单' }} <span aria-hidden="true">↗</span></RouterLink>
-          <span
-            v-if="conversation.orderStatus"
-            class="conversation-status"
-          >{{ orderStatus[conversation.orderStatus] || conversation.orderStatus }}</span>
-        </p>
-        <p
-          v-if="conversation?.requestId"
-          class="conversation-reference"
-        >
-          <RouterLink :to="`/requests/${conversation.requestId}`">关联需求 · {{ conversation.requestTitle || '查看需求' }} <span aria-hidden="true">↗</span></RouterLink>
-          <span
-            v-if="conversation.requestStatus && !conversation.orderId"
-            class="conversation-status"
-          >{{ requestStatus[conversation.requestStatus] || conversation.requestStatus }}</span>
-        </p>
       </div>
       <div class="conversation-tools">
         <button
@@ -207,6 +240,41 @@ usePageActivation(focused)
         </button>
       </div>
     </header>
+    <!-- 交易上下文常驻卡片：买家进入会话即可看到成交对象、金额和当前状态。 -->
+    <section
+      v-if="tradeCard"
+      class="conversation-trade-card"
+      :aria-label="tradeCard.kind === 'order' ? '关联订单信息' : '关联需求信息'"
+    >
+      <PrivateImage
+        v-if="tradeCard.coverImageId"
+        :image-id="tradeCard.coverImageId"
+        scope="stock"
+        :order-id="tradeCard.orderId"
+        :label="`${tradeCard.title}封面`"
+        class="trade-card-cover"
+      />
+      <div class="trade-card-main">
+        <RouterLink
+          class="trade-card-title"
+          :to="tradeCard.kind === 'order' ? `/orders/${tradeCard.orderId}` : `/requests/${tradeCard.requestId}`"
+        >{{ tradeCard.title }}</RouterLink>
+        <div class="trade-card-meta">
+          <span
+            class="trade-card-status"
+            :class="{ 'is-pay': tradeCard.pendingPay }"
+          >{{ tradeCard.statusText }}</span>
+          <span
+            v-if="tradeCard.amount"
+            class="trade-card-amount"
+          >¥ {{ tradeCard.amount }}</span>
+        </div>
+      </div>
+      <RouterLink
+        class="button-primary trade-card-action"
+        :to="tradeCard.kind === 'order' ? `/orders/${tradeCard.orderId}` : `/requests/${tradeCard.requestId}`"
+      >{{ tradeCard.action }} <AppIcon name="arrow" /></RouterLink>
+    </section>
     <p
       v-if="error || loadError"
       class="form-alert"
@@ -273,40 +341,59 @@ usePageActivation(focused)
           class="chat-empty"
         >
           {{ loading ? '正在读取消息…' : '暂无消息' }}
-        </p><article
-          v-for="message in messages"
-          :key="message.id"
-          :data-seq="message.seqNo"
-          class="chat-message"
-          :class="{ mine: message.senderId === auth.session?.userId }"
+        </p><template
+          v-for="(group, groupIndex) in messageGroups"
+          :key="group.key"
         >
-          <header>
-            <strong>{{ message.senderId === auth.session?.userId ? '我' : conversation.otherNickname }}</strong>
-            <time :datetime="message.createdAt">{{ formatTime(message.createdAt) }}</time>
-          </header>
-          <div class="chat-bubble">
-            <RouterLink
-              v-if="message.referencedNodeId && conversation.orderId"
-              class="progress-reference"
-              :to="`/orders/${conversation.orderId}#progress-${message.referencedNodeId}`"
-            >引用进度：{{ progressNodeName[message.referencedNodeCode || ''] || '制作节点' }} ↗</RouterLink>
-            <p v-if="message.content">
-              {{ message.content }}
-            </p>
-            <div
-              v-if="message.imageIds.length"
-              class="request-images"
-            >
-              <PrivateImage
-                v-for="(imageId, index) in message.imageIds"
-                :key="imageId"
-                :image-id="imageId"
-                scope="chat"
-                :label="`消息图片 ${index + 1}`"
-              />
-            </div>
+          <div
+            v-if="showDayDivider(groupIndex)"
+            class="chat-day-divider"
+            role="separator"
+          >
+            {{ group.dayLabel }}
           </div>
-        </article>
+          <div class="chat-group-time">
+            {{ group.time }}
+          </div>
+          <article
+            v-for="message in group.messages"
+            :key="message.id"
+            :data-seq="message.seqNo"
+            class="chat-message"
+            :class="{ mine: message.senderId === auth.session?.userId }"
+          >
+            <ChatAvatar
+              class="chat-message-avatar"
+              :conversation="conversation"
+              :mine="message.senderId === auth.session?.userId"
+              :label="message.senderId === auth.session?.userId ? '我的头像' : `${conversation.otherNickname}的头像`"
+            />
+            <div class="chat-message-body">
+              <div class="chat-bubble">
+                <RouterLink
+                  v-if="message.referencedNodeId && conversation.orderId"
+                  class="progress-reference"
+                  :to="`/orders/${conversation.orderId}#progress-${message.referencedNodeId}`"
+                >引用进度：{{ progressNodeName[message.referencedNodeCode || ''] || '制作节点' }} ↗</RouterLink>
+                <p v-if="message.content">
+                  {{ message.content }}
+                </p>
+                <div
+                  v-if="message.imageIds.length"
+                  class="request-images"
+                >
+                  <PrivateImage
+                    v-for="(imageId, index) in message.imageIds"
+                    :key="imageId"
+                    :image-id="imageId"
+                    scope="chat"
+                    :label="`消息图片 ${index + 1}`"
+                  />
+                </div>
+              </div>
+            </div>
+          </article>
+        </template>
       </div>
       <form
         v-if="conversation.canSend || uncertain"
@@ -350,36 +437,36 @@ usePageActivation(focused)
             移除引用
           </button>
         </div>
-        <label class="work-field">
-          沟通内容
+        <label class="chat-input-field">
+          <span class="visually-hidden">沟通内容</span>
           <textarea
             v-model="content"
             rows="2"
             maxlength="500"
             :disabled="sending || uncertain"
             placeholder="输入消息…"
+            aria-label="沟通内容"
           />
         </label>
-        <div class="chat-compose-actions">
+        <div class="chat-compose-toolbar">
           <PrivateImagePicker
             v-model="imageIds"
             label="消息图片"
+            compact
             :max="3"
             :conversation-id="conversation.id"
             :disabled="sending || uncertain || !conversation.canSend"
             @uploading="uploading = $event"
           />
-          <div class="chat-send">
-            <span class="field-help">{{ content.length }} / 500</span>
-            <button
-              type="submit"
-              class="button-primary"
-              :disabled="sending || uploading || referenceLoading || !!referenceError"
-            >
-              {{ sending ? '正在发送…' : uncertain ? '重试确认发送' : '发送消息' }}
-              <AppIcon name="arrow" />
-            </button>
-          </div>
+          <span class="field-help">{{ content.length }} / 500</span>
+          <button
+            type="submit"
+            class="button-primary chat-send-button"
+            :disabled="sending || uploading || referenceLoading || !!referenceError"
+          >
+            {{ sending ? '正在发送…' : uncertain ? '重试确认发送' : '发送' }}
+            <AppIcon name="arrow" />
+          </button>
         </div>
       </form>
     </div>
