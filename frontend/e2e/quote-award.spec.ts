@@ -4,6 +4,9 @@ import { anotherCreator, api, image, mutate, origin, prepareCreator, register } 
 
 test.use({ storageMode: 'receiver', actionTimeout: 15_000 })
 
+/** 订单状态由左侧选中列表项展示，与 0acaac8 的订单详情双栏结构一致。 */
+const selectedStatus = (page: import('@playwright/test').Page) => page.locator('.craftflow-order-item a[aria-current="page"] [data-status]')
+
 test('已选报价到期时定标返回冲突，刷新后仍能选择另一份有效报价', async ({ page: buyer, browser, mailbox }) => {
   test.setTimeout(180_000)
   const contexts = await Promise.all(Array.from({ length: 3 }, () => browser.newContext({ baseURL: origin })))
@@ -177,20 +180,26 @@ test('报价撤回重报、地址定标未知响应重试、订单取消与历�
     await expect(page.getByLabel('选择收货地址', { exact: true })).toBeDisabled()
     await page.getByRole('button', { name: '重试确认定标结果', exact: true }).click()
     await expect(page).toHaveURL(/\/orders\/\d+$/)
-    const detailStatus = page.locator('.work-section-heading .work-status')
+    const detailStatus = selectedStatus(page)
     await expect(detailStatus).toHaveText('待付款')
+    // 订单资料已拆分为独立分区页，地址与方案图不在概览直接可见。
+    await page.getByRole('navigation', { name: '订单资料' }).getByRole('link', { name: '收货地址快照', exact: true }).click()
+    await expect(page).toHaveURL(/\/orders\/\d+\/details\/address$/)
     await expect(page.getByText('手作测试路一号', { exact: false })).toBeVisible()
+    const orderId = page.url().match(/\/orders\/(\d+)/)![1]!
+    await page.goto(`/orders/${orderId}/details/agreement`)
     await expect(page.getByRole('img', { name: '方案效果图 1', exact: true })).toBeVisible()
+    await page.goto(`/orders/${orderId}`)
     await page.screenshot({ path: testInfo.outputPath('order-detail.png'), fullPage: true })
-    const orderId = page.url().split('/').at(-1)!
     const orders = (await (await page.request.get(`${api}/me/orders`)).json()).data
     expect(orders.total).toBe(1)
     const addressId = (await address.json()).data.id
     expect((await mutate(page, `/me/addresses/${addressId}`, { recipientName: '修改后的收件人', phone: '13800138000', province: '北京市', city: '市辖区', district: '东城区', detailAddress: '修改后的个人地址', isDefault: true }, 'put')).status()).toBe(200)
     await page.reload()
+    await page.getByRole('navigation', { name: '订单资料' }).getByRole('link', { name: '收货地址快照', exact: true }).click()
     await expect(page.getByText('手作测试路一号', { exact: false })).toBeVisible()
     await expect(page.getByText('修改后的个人地址', { exact: false })).toHaveCount(0)
-    await creator.goto(`/orders/${orderId}`)
+    await creator.goto(`/orders/${orderId}/details/address`)
     await expect(creator.getByText('手作测试路一号', { exact: false })).toHaveCount(0)
     // 取消前取得的旧订单响应，即使最后返回也不能恢复待付款状态。
     let releaseOldOrder = () => {}; let capturedOldOrder = () => {}; let holdOrder = true
@@ -203,8 +212,11 @@ test('报价撤回重报、地址定标未知响应重试、订单取消与历�
       expect((await response.json()).data.status).toBe('PENDING_PAY')
       capturedOldOrder(); await oldOrderGate; await route.fulfill({ response })
     })
-    await page.getByRole('button', { name: '刷新订单', exact: true }).click()
+    // 0acaac8 后订单详情不再提供常驻“刷新订单”按钮，用应用内更新事件触发一次受控读取。
+    await page.evaluate(() => window.dispatchEvent(new Event('order-updated')))
     await oldOrderCaptured
+    await page.getByRole('button', { name: '返回订单', exact: true }).click()
+    await expect(page).toHaveURL(`/orders/${orderId}`)
     let releaseCancellation = () => {}
     const cancellationGate = new Promise<void>(resolve => { releaseCancellation = resolve })
     await page.route(`**/api/orders/${orderId}/cancellation`, async route => { await cancellationGate; await route.continue() })

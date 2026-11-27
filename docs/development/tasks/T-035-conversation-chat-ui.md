@@ -57,4 +57,4 @@
 
 ## 交接
 
-改动已提交并合并至 `codex/custom-requests-conversations`（合并解决与 `0acaac8` 的三处重叠：`ConversationDetailView.vue` 保留其订单返回逻辑、`craftflow-messages.css` 合并双方规则、E2E 同步两者的选择器调整）。遗留：已读回执未做（需对方已读序号的后端语义，待需求级确认）。
+改动已提交并合并至 `codex/custom-requests-conversations`（合并解决与 `0acaac8` 的三处重叠：`ConversationDetailView.vue` 保留其订单返回逻辑、`craftflow-messages.css` 合并双方规则、E2E 同步两者的选择器调整）。合并后复验：`src` lint、类型检查与构建通过；`custom-requests` 2 项、`chat-reliability` 3 项、`order-fulfillment` 2 项、`quote-award` 全部 4 项 E2E 通过。复验时顺带修复 `0acaac8` 遗留的 `quote-award.spec.ts` 三处选择器（状态徽标迁至左栏列表项、地址/方案图移入分区页、常驻“刷新订单”按钮移除后改用应用内事件）。遗留：已读回执未做（需对方已读序号的后端语义，待需求级确认）。
