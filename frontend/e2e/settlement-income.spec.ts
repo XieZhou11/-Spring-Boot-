@@ -256,7 +256,7 @@ test('定向订单取消后双方可从关闭通知回到原需求和会话', as
       await expect(participant.getByLabel('沟通内容', { exact: true })).toBeEnabled()
     }
     await buyer.getByLabel('沟通内容', { exact: true }).fill('定向订单取消后继续核对方案。')
-    await buyer.getByRole('button', { name: '发送消息', exact: true }).click()
+    await buyer.getByRole('button', { name: '发送', exact: true }).click()
     await expect(creator.getByRole('log')).toContainText('定向订单取消后继续核对方案。')
   } finally {
     await adminContext.close()
