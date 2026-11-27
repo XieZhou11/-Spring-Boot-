@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { usePageActivation } from '@/utils/pageActivation'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter, type RouteLocationResolved } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import ChatAvatar from '@/components/ChatAvatar.vue'
+import HistoryBackLink from '@/components/HistoryBackLink.vue'
 import { useListQuery } from '@/composables/useListQuery'
+import { useHistoryReturn } from '@/composables/useHistoryReturn'
 import PrivateImage from '@/components/PrivateImage.vue'
 import PrivateImagePicker from '@/components/PrivateImagePicker.vue'
 import { getProfile } from '@/api/account'
@@ -25,6 +27,7 @@ import { imageRenewalDelay } from '@/utils/imageExpiry'
 const confirm = useConfirmation()
 const route = useRoute(); const router = useRouter(); const notifications = useNotificationsStore(); const auth = useAuthStore()
 const { page } = useListQuery()
+const { source } = useHistoryReturn()
 const conversation = ref<ConversationVO>(); const messages = ref<ChatMessageVO[]>([]); const hasOlder = ref(false)
 const ownAvatarUrl = ref(''); const otherAvatarUrl = ref('')
 const loading = ref(false); const olderLoading = ref(false); const sending = ref(false); const uploading = ref(false); const uncertain = ref(false)
@@ -40,6 +43,13 @@ const id = () => String(route.params.id)
 const orderEnded = computed(() => ['COMPLETED', 'CANCELLED', 'REFUNDED'].includes(conversation.value?.orderStatus || ''))
 const canReturnToOrder = computed(() => !!(conversation.value?.orderId && hasOrderReturn(router, route, conversation.value.orderId)))
 function returnToOrder() { if (canReturnToOrder.value) router.back() }
+const conversationList = computed(() => ({ path: '/messages/conversations', query: page.value > 1 ? { page: String(page.value) } : undefined }))
+/** 仅同一需求的实际来路可作为会话的上一级。 */
+function acceptsRequestDetail(location: RouteLocationResolved) {
+  return location.name === 'custom-request-detail' && location.params.id === conversation.value?.requestId
+}
+function acceptsConversationList(location: RouteLocationResolved) { return location.path === conversationList.value.path }
+const requestSource = computed(() => source(acceptsRequestDetail))
 /** 同一会话的本人消息共用一个签名。离开时取消续签，忽略尚未返回的个人资料。 */
 watch(() => {
   const userId = auth.session?.userId
@@ -280,10 +290,23 @@ usePageActivation(focused)
     >
       <span aria-hidden="true">←</span> 返回订单
     </button>
-    <RouterLink
-      :to="{ path: '/messages/conversations', query: page > 1 ? { page: String(page) } : undefined }"
+    <HistoryBackLink
+      v-if="requestSource && !canReturnToOrder"
+      :fallback="requestSource.fullPath"
+      :accept="acceptsRequestDetail"
+      class="conversation-back is-primary-return"
+    >
+      <span aria-hidden="true">←</span> 返回需求详情
+    </HistoryBackLink>
+    <HistoryBackLink
+      v-else
+      :fallback="conversationList"
+      :accept="acceptsConversationList"
       class="conversation-back"
-    >← 返回会话列表</RouterLink>
+      :class="{ 'is-primary-return': !canReturnToOrder }"
+    >
+      <span aria-hidden="true">←</span> 返回会话列表
+    </HistoryBackLink>
     <header class="conversation-header">
       <div>
         <h2>{{ conversation?.otherNickname || '交易会话' }}</h2>

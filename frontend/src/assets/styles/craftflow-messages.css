@@ -176,6 +176,14 @@
 .craft-messages .conversation-tools { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }
 .craft-messages .conversation-reconnect { display: none; }
 .craft-messages .conversation-back { display: none; }
+.craft-messages .conversation-back.is-primary-return {
+  display: block;
+  padding: 12px 20px 3px;
+  background: var(--craft-surface);
+  color: #713f12;
+  font-size: 13px;
+  font-weight: 650;
+}
 .craft-messages .conversation-order-back { margin: 12px 20px 0; }
 /* 交易上下文卡片：封面、标题、金额与状态一行呈现，向闲鱼交易对话头部靠拢。 */
 .craft-messages .conversation-trade-card {
@@ -294,18 +302,30 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 32px;
-  padding: 4px 10px;
+  box-sizing: border-box;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border: 1px solid var(--craft-border);
-  border-radius: 999px;
+  border-radius: 8px;
   background: var(--craft-surface);
   color: var(--craft-muted);
-  font: 600 12px/1.4 var(--craft-font);
   cursor: pointer;
 }
 .craft-messages .chat-image-button:hover:not(:disabled) { background: #fafafa; color: var(--craft-ink); }
 .craft-messages .chat-image-button:disabled { opacity: .55; cursor: not-allowed; }
-.craft-messages .chat-image-button-face::before { display: inline-block; width: 14px; height: 11px; margin-right: 5px; border: 1.5px solid currentColor; border-radius: 2px; content: ""; }
+.craft-messages .chat-image-button[aria-busy="true"] { color: var(--craft-ink); opacity: 1; cursor: progress; }
+.craft-messages .chat-image-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--craft-border);
+  border-top-color: currentColor;
+  border-radius: 50%;
+}
+@keyframes craftflow-chat-image-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: no-preference) {
+  .craft-messages .chat-image-spinner { animation: craftflow-chat-image-spin .75s linear infinite; }
+}
 .craft-messages .chat-compose .private-image-picker.compact .request-images { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
 .craft-messages .chat-compose .private-image-picker.compact .request-images .work-image { width: 64px; height: auto; aspect-ratio: 1; min-height: 0; border-radius: 6px; }
 .craft-messages .chat-compose .private-image-picker.compact .request-images img { width: 100%; height: 100%; object-fit: cover; }
@@ -386,7 +406,7 @@
   .craft-messages .conversation-list-heading, .craft-messages .conversation-header { padding: 12px 14px; }
   .craft-messages .conversation-header { flex-direction: column; gap: 8px; }
   .craft-messages .conversation-reconnect { display: inline-block; }
-  .craft-messages .conversation-back {
+  .craft-messages .conversation-back, .craft-messages .conversation-back.is-primary-return {
     display: block;
     padding: 12px 14px 3px;
     background: var(--craft-surface);
@@ -398,6 +418,7 @@
   .craft-messages .chat-message { max-width: 100%; }
   .craft-messages .chat-avatar { width: 32px; height: 32px; flex-basis: 32px; }
   .craft-messages .chat-compose { padding: 12px 14px; }
+  .craft-messages .chat-image-button { width: 44px; height: 44px; }
   .craft-messages .conversation-trade-card { flex-wrap: wrap; padding: 10px 14px; }
   .craft-messages .conversation-trade-card .trade-card-main { flex: 1 1 160px; }
   .craft-messages .notification-toolbar, .craft-messages .notification-card { padding: 12px 14px; }

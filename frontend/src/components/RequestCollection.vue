@@ -12,6 +12,7 @@ import type { CategoryVO } from '@/types/creator'
 import type { CustomRequestVO } from '@/types/customRequest'
 import { requestBudget, requestListPaths, requestStatus } from '@/utils/customRequest'
 import { formatTime } from '@/utils/creator'
+import { useHistoryReturn } from '@/composables/useHistoryReturn'
 import '@/assets/styles/craftflow-demand.css'
 
 const props = defineProps<{
@@ -21,6 +22,7 @@ const props = defineProps<{
   refreshVersion?: number
 }>()
 const router = useRouter()
+const { entry } = useHistoryReturn()
 const auth = useAuthStore()
 const notifications = useNotificationsStore()
 const listRoute = computed(() => router.resolve(props.location))
@@ -30,7 +32,10 @@ const rows = ref<CustomRequestVO[]>([])
 const categories = ref<CategoryVO[]>([])
 const total = ref(0)
 const loading = ref(false)
+const loadedLocation = ref('')
 const error = ref('')
+const historyReady = computed(() => loadedLocation.value === listRoute.value.fullPath)
+defineExpose({ historyReady })
 const hallKeys = ['categoryId', 'minBudget', 'maxBudget', 'publishedAfter', 'publishedBefore', 'allCategories'] as const
 const filters = reactive({ categoryId: '', minBudget: '', maxBudget: '', publishedAfter: '', publishedBefore: '', allCategories: '', status: '' })
 const queryKeys = computed(() => props.scope === 'hall' ? hallKeys : ['status'] as const)
@@ -62,6 +67,7 @@ let revision = 0
 async function load() {
   if (!auth.session) return
   const current = ++revision
+  const location = listRoute.value.fullPath
   loading.value = true
   error.value = ''
   const params: Record<string, string | number> = { ...applied.value, page: page.value }
@@ -79,7 +85,7 @@ async function load() {
     total.value = 0
     error.value = failure instanceof Error ? failure.message : '需求读取失败'
   } finally {
-    if (current === revision) loading.value = false
+    if (current === revision) { loadedLocation.value = location; loading.value = false }
   }
 }
 
@@ -92,7 +98,7 @@ function goToList(values: Record<string, string>, next: number) {
 }
 
 function openRequest(row: CustomRequestVO) {
-  return { name: 'custom-request-detail', params: { id: row.id }, query: { returnTo: listRoute.value.fullPath } }
+  return entry({ name: 'custom-request-detail', params: { id: row.id }, query: { returnTo: listRoute.value.fullPath } })
 }
 
 function createRequestLink() {
@@ -101,6 +107,7 @@ function createRequestLink() {
 }
 
 watch([() => props.scope, () => listRoute.value.fullPath], () => {
+  loadedLocation.value = ''
   for (const key of [...hallKeys, 'status'] as const) filters[key] = applied.value[key] || ''
   rows.value = []
   total.value = 0
@@ -108,6 +115,7 @@ watch([() => props.scope, () => listRoute.value.fullPath], () => {
 }, { immediate: true })
 watch(() => auth.session?.userId, () => {
   revision++
+  loadedLocation.value = ''
   rows.value = []
   total.value = 0
   loading.value = false
@@ -141,6 +149,7 @@ useActivationRead(() => JSON.stringify([auth.session?.userId, props.scope, appli
     class="cf-request-collection"
     :class="{ 'cf-request-rail': isBuyer }"
     :aria-label="title"
+    :data-history-ready="historyReady && !selectedId ? listRoute.fullPath : undefined"
   >
     <header class="cf-request-list-heading">
       <component :is="selectedId ? 'h2' : 'h1'">
@@ -275,6 +284,7 @@ useActivationRead(() => JSON.stringify([auth.session?.userId, props.scope, appli
           :to="openRequest(row)"
           :aria-label="row.title || '未命名草稿'"
           :aria-current="selectedId === row.id ? 'page' : undefined"
+          :data-history-focus="`request-${row.id}`"
         >
           <span class="cf-request-tags">
             <span
@@ -311,7 +321,12 @@ useActivationRead(() => JSON.stringify([auth.session?.userId, props.scope, appli
             >{{ row.visibility === 'DIRECTED' ? '定向邀约' : '公开需求' }}</span>
             <span class="cf-request-category">{{ row.categoryPath.join(' / ') }}</span>
           </header>
-          <h2><RouterLink :to="openRequest(row)">{{ row.title || '未命名草稿' }}</RouterLink></h2>
+          <h2>
+            <RouterLink
+              :to="openRequest(row)"
+              :data-history-focus="`request-${row.id}`"
+            >{{ row.title || '未命名草稿' }}</RouterLink>
+          </h2>
           <p
             v-if="row.description"
             class="cf-request-excerpt"
@@ -328,6 +343,7 @@ useActivationRead(() => JSON.stringify([auth.session?.userId, props.scope, appli
               class="button-secondary"
               :to="openRequest(row)"
               :aria-label="`查看需求详情：${row.title}`"
+              :data-history-focus="`request-details-${row.id}`"
             >查看详情</RouterLink>
           </footer>
         </article>

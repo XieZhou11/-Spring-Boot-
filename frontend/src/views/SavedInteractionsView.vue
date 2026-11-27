@@ -4,17 +4,21 @@ import { useRoute } from 'vue-router'
 import AccountLayout from '@/layouts/AccountLayout.vue'
 import WorkImage from '@/components/WorkImage.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
+import { useHistoryReturn } from '@/composables/useHistoryReturn'
+import { useListQuery } from '@/composables/useListQuery'
 import { useAuthStore } from '@/stores/auth'
 import { getFavorites, getFollowing, setReaction, setFollow } from '@/api/interaction'
 import type { FavoriteWork, FollowedCreator } from '@/types/interaction'
 import { imageRenewalDelay } from '@/utils/imageExpiry'
 const route = useRoute()
 const auth = useAuthStore()
-const favoritesMode = computed(() => route.path.endsWith('/favorites'))
+const { entry } = useHistoryReturn()
+const listPath = computed(() => route.matched.at(-1)?.path)
+const favoritesMode = computed(() => listPath.value === '/account/favorites')
 const allowed = computed(() => !!auth.session && !auth.session.roles.includes('ADMIN'))
 const favorites = ref<FavoriteWork[]>([])
 const following = ref<FollowedCreator[]>([])
-const page = ref(1)
+const { page, changePage, replaceLastPage } = useListQuery()
 const total = ref(0)
 const loading = ref(false)
 const busy = ref(false)
@@ -22,7 +26,8 @@ const error = ref('')
 let revision = 0
 let readRevision = 0
 let timer: ReturnType<typeof setTimeout> | undefined
-async function load(next = page.value) {
+async function load() {
+  const next = page.value
   const context = revision
   const current = ++readRevision
   loading.value = true; error.value = ''; clearTimeout(timer)
@@ -31,11 +36,10 @@ async function load(next = page.value) {
     const result = favoritesMode.value ? await getFavorites(next) : await getFollowing(next)
     if (context !== revision || current !== readRevision) return
     // 其他标签取消关系后，刷新或续签应回到最后有效页，避免剩余列表失去入口。
-    const lastPage = Math.max(1, Math.ceil(result.total / result.size))
-    if (next > lastPage) { await load(lastPage); return }
+    if (replaceLastPage(result, next)) return
     if (favoritesMode.value) favorites.value = result.items as FavoriteWork[]
     else following.value = result.items as FollowedCreator[]
-    total.value = result.total; page.value = next
+    total.value = result.total
     // 列表端点重新核验失效项，避免仅续签图片而遗留失效标题。
     const expiries = favoritesMode.value
       ? favorites.value.map(work => work.coverImage?.expiresAt)
@@ -53,19 +57,22 @@ async function remove(id: string) {
   try {
     if (favoritesMode.value) await setReaction(id, 'favorite', false)
     else await setFollow(id, false)
-    if (current === revision) await load(page.value > 1 && (favoritesMode.value ? favorites.value.length : following.value.length) === 1 ? page.value - 1 : page.value)
+    if (current === revision) await load()
   } catch (failure) { if (current === revision) error.value = failure instanceof Error ? failure.message : '取消失败，可重试' }
   finally { if (current === revision) busy.value = false }
 }
 // 同账号凭证刷新不重置分页及写操作状态，切换账号或列表时仍撤下旧数据。
-watch([() => route.path, () => auth.session?.userId, () => auth.session?.activeRole], () => {
+watch([listPath, page, () => auth.session?.userId, () => auth.session?.activeRole], () => {
   revision++; readRevision++; clearTimeout(timer); favorites.value = []; following.value = []; total.value = 0; busy.value = false
-  void load(1)
+  if (listPath.value === '/account/favorites' || listPath.value === '/account/following') void load()
 }, { immediate: true })
 onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
 </script>
 <template>
-  <AccountLayout :title="favoritesMode ? '收藏作品' : '关注创作者'">
+  <AccountLayout
+    :title="favoritesMode ? '收藏作品' : '关注创作者'"
+    :data-history-ready="!loading ? route.fullPath : undefined"
+  >
     <p
       v-if="!allowed"
       class="form-alert"
@@ -125,12 +132,18 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
               />
               <RouterLink
                 class="saved-cover-link"
-                :to="`/works/${item.workId}`"
+                :to="entry(`/works/${item.workId}`)"
                 :aria-label="'查看' + item.title"
+                :data-history-focus="`favorite-cover-${item.workId}`"
               />
             </div>
             <div class="saved-card-copy">
-              <h2><RouterLink :to="`/works/${item.workId}`">{{ item.title }}</RouterLink></h2>
+              <h2>
+                <RouterLink
+                  :to="entry(`/works/${item.workId}`)"
+                  :data-history-focus="`favorite-title-${item.workId}`"
+                >{{ item.title }}</RouterLink>
+              </h2>
               <p v-if="item.creatorNickname">
                 {{ item.creatorNickname }}
               </p>
@@ -162,8 +175,9 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
         >
           <RouterLink
             v-if="item.available"
-            :to="`/creators/${item.creatorId}`"
+            :to="entry(`/creators/${item.creatorId}`)"
             class="followed-link"
+            :data-history-focus="`following-${item.creatorId}`"
           >
             <img
               v-if="item.avatarUrl"
@@ -203,7 +217,7 @@ onBeforeUnmount(() => { revision++; readRevision++; clearTimeout(timer) })
         :page="page"
         :total="total"
         :loading="loading || busy"
-        @change="load"
+        @change="changePage"
       />
     </template>
   </AccountLayout>

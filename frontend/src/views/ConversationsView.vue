@@ -5,6 +5,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import { useRoute } from 'vue-router'
 import WorkPagination from '@/components/WorkPagination.vue'
 import { useListQuery } from '@/composables/useListQuery'
+import { useHistoryReturn } from '@/composables/useHistoryReturn'
 import { getConversations } from '@/api/customRequest'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -13,6 +14,7 @@ import { formatTime } from '@/utils/creator'
 import { orderStatus } from '@/utils/quote'
 import type { ConversationVO } from '@/types/customRequest'
 const route = useRoute()
+const { entry } = useHistoryReturn()
 const auth = useAuthStore()
 const notifications = useNotificationsStore()
 const rows = ref<ConversationVO[]>([])
@@ -20,6 +22,7 @@ const { page, changePage, replaceLastPage } = useListQuery()
 const total = ref(0)
 const error = ref('')
 const loading = ref(false)
+const loadedPage = ref<number>()
 let revision = 0
 let pending = false
 let disposed = false
@@ -36,12 +39,19 @@ async function load() {
     total.value = result.total
   }
   catch (failure) { if (current === revision) error.value = failure instanceof Error ? failure.message : '会话读取失败' }
-  finally { if (current === revision) { loading.value = false; if (pending) { pending = false; void load() } } }
+  finally {
+    if (current === revision) {
+      loadedPage.value = next
+      loading.value = false
+      if (pending) { pending = false; void load() }
+    }
+  }
 }
 function focus() { void load(); void notifications.refreshChatUnread(); if (!notifications.connected) void notifications.reconnect() }
 function manualRefresh() { void load(); void notifications.refreshChatUnread() }
 watch(() => notifications.chatRevision, () => void load())
 watch(page, () => {
+  loadedPage.value = undefined
   rows.value = []
   total.value = 0
   void load()
@@ -49,6 +59,7 @@ watch(page, () => {
 watch(() => auth.session?.userId, () => {
   revision++
   pending = false
+  loadedPage.value = undefined
   rows.value = []
   total.value = 0
   error.value = ''
@@ -69,6 +80,7 @@ function businessStatus(row: ConversationVO) {
     <div
       class="message-workspace"
       :class="{ 'has-selection': !!route.params.id }"
+      :data-history-ready="!route.params.id && loadedPage === page ? route.fullPath : undefined"
     >
       <aside
         class="conversation-list"
@@ -127,11 +139,13 @@ function businessStatus(row: ConversationVO) {
         <div
           v-if="rows.length"
           class="conversation-rows"
+          data-history-scroll="conversation-list"
         >
           <RouterLink
             v-for="row in rows"
             :key="row.id"
-            :to="{ path: `/messages/conversations/${row.id}`, query: page > 1 ? { page: String(page) } : undefined }"
+            :to="entry({ path: `/messages/conversations/${row.id}`, query: page > 1 ? { page: String(page) } : undefined })"
+            :data-history-focus="`conversation-${row.id}`"
             class="conversation-row"
             active-class="selected"
           >

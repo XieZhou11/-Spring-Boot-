@@ -6,6 +6,8 @@ CraftFlow 前端后续修复按清单中的复现步骤、通过标准与回归�
 
 ## 当前记录
 
+[T-036 历史返回与聊天相册入口](tasks/T-036-contextual-navigation-chat-icon.md) 覆盖详情回退、列表上下文恢复和聊天选图图标。 [测试记录](../testing/T-036-contextual-navigation-chat-icon.md)
+
 [T-035 交易会话界面](tasks/T-035-conversation-chat-ui.md) 涵盖头像续签、时间分组、交易卡片与聊天附件操作。 [测试记录](../testing/T-035-conversation-chat-ui.md)
 
 [T-034 演示页面交互与订单导航](tasks/T-034-craftflow-demo-ui-feedback.md) 涵盖筛选、独立订单资料页、会话返回及创作者工作台。 [测试记录](../testing/T-034-craftflow-demo-ui-feedback.md)

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
+import HistoryBackLink from '@/components/HistoryBackLink.vue'
 import ApplicationMaterials from '@/components/ApplicationMaterials.vue'
 import AccountField from '@/components/AccountField.vue'
 import { getApplication, reviewApplication } from '@/api/creator'
@@ -125,7 +126,12 @@ onBeforeUnmount(() => revision++)
 <template>
   <div>
     <header class="review-detail-heading">
-      <h2>当前审核对象</h2><RouterLink :to="{ path: '/admin/creator-applications', query: route.query }">返回队列</RouterLink>
+      <h2>当前审核对象</h2><HistoryBackLink
+        :fallback="{ path: '/admin/creator-applications', query: route.query }"
+        :accept="source => source.path === '/admin/creator-applications'"
+      >
+        返回队列
+      </HistoryBackLink>
     </header>
     <div class="detail-toolbar">
       <button

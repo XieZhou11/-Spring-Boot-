@@ -6,6 +6,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import AdminDateRange from '@/components/AdminDateRange.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
+import { useHistoryReturn } from '@/composables/useHistoryReturn'
 import { getAdminRefunds } from '@/api/refund'
 import type { AdminRefundQueueVO } from '@/types/refund'
 import { refundReasons, refundStatuses } from '@/utils/refund'
@@ -17,12 +18,14 @@ import '@/assets/styles/quote.css'
 import '@/assets/styles/refund.css'
 const route = useRoute()
 const router = useRouter()
+const { entry } = useHistoryReturn()
 const auth = useAuthStore()
 const notifications = useNotificationsStore()
 const rows = ref<AdminRefundQueueVO[]>([])
 const total = ref(0)
 const loading = ref(false)
 const error = ref('')
+const queryKeys = ['status', 'applicationType', 'orderNo', 'createdFrom', 'createdTo', 'minAmount', 'maxAmount', 'page'] as const
 function readQuery(key: string) {
   const value = route.query[key]
   return typeof value === 'string' ? value : ''
@@ -107,7 +110,8 @@ async function load() {
   }
 }
 function refresh() { void load() }
-watch([() => route.query, () => auth.session?.userId, () => auth.session?.roles.includes('ADMIN')], () => {
+// 队列和详情共享筛选。只在条件或身份变化时丢弃旧列表和筛选草稿。
+watch([...queryKeys.map(key => () => route.query[key]), () => auth.session?.userId, () => auth.session?.roles.includes('ADMIN')], () => {
   revision++
   rows.value = []
   total.value = 0
@@ -132,6 +136,8 @@ useActivationRead(() => JSON.stringify([auth.session?.userId, filters.value, pag
         class="review-queue"
         aria-label="售后申请队列"
         :aria-busy="loading"
+        :data-history-view="!route.params.id ? route.fullPath : undefined"
+        :data-history-ready="!route.params.id && !loading ? route.fullPath : undefined"
       >
         <header class="review-queue-heading">
           <h2>售后申请</h2><span>{{ total }} 条记录</span>
@@ -203,6 +209,7 @@ useActivationRead(() => JSON.stringify([auth.session?.userId, filters.value, pag
         <div
           v-if="rows.length"
           class="managed-work-list"
+          data-history-scroll="admin-refunds-queue"
         >
           <article
             v-for="item in rows"
@@ -219,7 +226,8 @@ useActivationRead(() => JSON.stringify([auth.session?.userId, filters.value, pag
               <strong>¥ {{ item.totalAmount }}</strong><RouterLink
                 class="text-link"
                 :aria-current="route.params.id === item.id ? 'true' : undefined"
-                :to="{ path: `/admin/refunds/${item.id}`, query: route.query }"
+                :to="entry({ path: `/admin/refunds/${item.id}`, query: route.query })"
+                :data-history-focus="`admin-refund-${item.id}`"
               >{{ item.status === 'WAIT_ADMIN' ? '查证与裁定' : '查看记录' }} ↗</RouterLink>
             </div>
           </article>

@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { safeRedirect } from '@/utils/auth'
 import { scrollBehavior } from './scroll'
+import { activateHistoryView, saveHistoryView } from './historyView'
 import { invalidPathResource, routeFeedback } from './routeFeedback'
 import { clearCreatorDestination, creatorDestination, rememberCreatorDestination } from './creatorDestination'
 import { isOrderDetailSection, orderDetailLabels } from '@/utils/orderDetail'
@@ -141,12 +142,15 @@ const router = createRouter({
 
 /** 业务页每次导航核验服务端身份，保留原目标的路径、查询及锚点。 */
 let latestTarget: RouteLocationNormalized | undefined
-router.beforeEach(async (to) => {
+router.beforeEach(async (to, from) => {
   if (to.name === 'order-detail' && to.hash === '#publication-consent' && !invalidPathResource(to)) {
     return { name: 'order-detail-section', params: { id: to.params.id, section: 'publication' }, query: to.query, replace: true }
   }
   latestTarget = to
   const auth = useAuthStore()
+  if (to.fullPath !== from.fullPath) {
+    saveHistoryView(router, from.fullPath, auth.session?.userId ?? null, auth.session?.activeRole ?? null)
+  }
   try {
     await auth.restoreSession(Boolean(to.meta.requiresAuth))
   } catch {
@@ -184,6 +188,7 @@ router.afterEach((to, _from, failure) => {
   if (failure) return
   routeFeedback.value = undefined
   const auth = useAuthStore()
+  activateHistoryView(router.options.history.state, to.fullPath, auth.session?.userId ?? null, auth.session?.activeRole ?? null)
   if (creatorDestination(router, auth.session?.userId) === to.fullPath) clearCreatorDestination()
   const title = to.name === 'order-detail-section' && isOrderDetailSection(to.params.section)
     ? orderDetailLabels[to.params.section]

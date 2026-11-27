@@ -1,4 +1,6 @@
 import type { RouterScrollBehavior } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { historyView, restoreHistoryView, savedHistoryView } from './historyView'
 
 let cancelPendingScroll: (() => void) | undefined
 
@@ -65,6 +67,17 @@ export const scrollBehavior: RouterScrollBehavior = async (to, from, savedPositi
       return false
     }
     return { top: 0, left: 0 }
+  }
+  if (savedPosition) {
+    const state = window.history.state
+    const auth = useAuthStore()
+    const snapshot = savedHistoryView(state ?? {}, to.fullPath, auth.session?.userId ?? null, auth.session?.activeRole ?? null)
+    if (snapshot) {
+      const root = await waitForScrollTarget(() => historyView(to.fullPath) ?? null, 'data-history-ready')
+      if (window.history.state?.current !== to.fullPath || window.history.state?.position !== state.position) return false
+      if (root) restoreHistoryView(root, snapshot)
+      return savedPosition
+    }
   }
   if (to.hash && to.name === 'custom-request-detail') return false
   if (isOrderDetail(from.name) && to.path.startsWith('/messages/conversations/') && !savedPosition) return { top: 0, left: 0 }

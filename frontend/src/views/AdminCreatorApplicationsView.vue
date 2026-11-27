@@ -3,12 +3,14 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 import { isNavigationFailure, useRoute, useRouter, type LocationQuery } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import AdminLayout from '@/layouts/AdminLayout.vue'
+import { useHistoryReturn } from '@/composables/useHistoryReturn'
 import { getApplications } from '@/api/creator'
 import type { ApplicationStatus, ApplicationSummaryVO } from '@/types/creator'
 import { applicationStatusLabels, formatTime } from '@/utils/creator'
 
 const route = useRoute()
 const router = useRouter()
+const { entry } = useHistoryReturn()
 const status = ref<ApplicationStatus>('PENDING')
 const rows = ref<ApplicationSummaryVO[]>([])
 const loading = ref(false)
@@ -41,8 +43,9 @@ function syncFilters(query: LocationQuery) {
   status.value = ['PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN'].includes(String(query.status)) ? query.status as ApplicationStatus : 'PENDING'
   page.value = Math.max(1, Number(query.page) || 1)
 }
-watch(() => route.query, query => {
-  syncFilters(query)
+// 仅在筛选或页码变化时重读，避免切换材料时卸载队列表格。
+watch([() => route.query.status, () => route.query.page], () => {
+  syncFilters(route.query)
   void load()
 }, { immediate: true })
 onBeforeUnmount(() => revision++)
@@ -60,6 +63,7 @@ onBeforeUnmount(() => revision++)
         class="review-queue"
         aria-label="入驻审核队列"
         :aria-busy="loading"
+        :data-history-ready="!route.params.id && !loading ? route.fullPath : undefined"
       >
         <header class="review-queue-heading">
           <h2>入驻申请</h2><span>{{ total }} 份申请</span>
@@ -98,6 +102,7 @@ onBeforeUnmount(() => revision++)
           </div><div
             v-else
             class="review-table-wrap"
+            data-history-scroll="admin-creators-queue"
           >
             <table class="review-table">
               <thead>
@@ -127,7 +132,8 @@ onBeforeUnmount(() => revision++)
                     <RouterLink
                       class="text-link"
                       :aria-current="route.params.id === row.id ? 'true' : undefined"
-                      :to="{ path: `/admin/creator-applications/${row.id}`, query: route.query }"
+                      :to="entry({ path: `/admin/creator-applications/${row.id}`, query: route.query })"
+                      :data-history-focus="`admin-creator-${row.id}`"
                     >查看材料 ↗</RouterLink>
                   </td>
                 </tr>

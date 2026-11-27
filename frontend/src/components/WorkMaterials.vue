@@ -6,7 +6,9 @@ import { priceLabel } from '@/utils/work'
 import { getCreator } from '@/api/work'
 import { useAuthStore } from '@/stores/auth'
 import { imageRenewalDelay } from '@/utils/imageExpiry'
+import { useHistoryReturn } from '@/composables/useHistoryReturn'
 const auth = useAuthStore()
+const { entry } = useHistoryReturn()
 const props = defineProps<{ work: WorkVO; presentation?: 'public' }>()
 // 缩略图切换只影响当前展示，不改变持久化图片顺序。
 const selected = ref(0)
@@ -99,8 +101,9 @@ onBeforeUnmount(() => { avatarRevision++; clearTimeout(avatarTimer) })
       >发起同类定制 ↗</RouterLink>
       <slot name="interaction-actions" />
       <RouterLink
-        :to="`/creators/${work.creatorId}`"
+        :to="entry(`/creators/${work.creatorId}`)"
         class="work-creator-link"
+        :data-history-focus="`work-creator-${work.id}`"
       ><img
         v-if="avatar"
         :src="avatar"

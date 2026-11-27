@@ -159,3 +159,34 @@ test('选满三张消息图片后仍可重试预览并移除附件', async ({ pa
   await expect(thirdImage).toHaveCount(0)
   await expect(upload).toBeEnabled()
 })
+
+for (const viewport of [{ width: 1440, size: 40 }, { width: 390, size: 44 }]) {
+  test('聊天相册图标支持鼠标和键盘选图 ' + viewport.width, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: 900 })
+    await mockChat(page)
+    await page.goto('/messages/conversations/71')
+
+    const composer = page.locator('.chat-compose')
+    const album = composer.getByRole('button', { name: '消息图片上传', exact: true })
+    await expect(album).toHaveText('')
+    await expect(album).toHaveAttribute('title', '上传图片')
+    const image = album.locator('svg')
+    await expect(image).toBeVisible()
+    expect(await image.boundingBox()).toMatchObject({ width: 20, height: 20 })
+    expect(await album.boundingBox()).toMatchObject({ width: viewport.size, height: viewport.size })
+    await composer.screenshot({ path: testInfo.outputPath('chat-album-' + viewport.width + '.png') })
+
+    const openByMouse = page.waitForEvent('filechooser')
+    await album.click()
+    await (await openByMouse).setFiles([])
+    for (const key of ['Enter', 'Space']) {
+      await album.focus()
+      await expect(album).toBeFocused()
+      const openByKey = page.waitForEvent('filechooser')
+      await album.press(key)
+      expect((await openByKey).isMultiple()).toBe(true)
+      await (await openByKey).setFiles([])
+    }
+    await expect(composer.getByRole('img', { name: '消息图片 1' })).toHaveCount(0)
+  })
+}

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import type { RouteLocationResolved } from 'vue-router'
 import WorkLayout from '@/layouts/WorkLayout.vue'
 import CreatorFollow from '@/components/CreatorFollow.vue'
+import HistoryBackLink from '@/components/HistoryBackLink.vue'
 import WorkCard from '@/components/WorkCard.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
 import PrivateImage from '@/components/PrivateImage.vue'
@@ -12,6 +14,8 @@ import { reportCreatorProfile } from '@/api/report'
 import type { ReportInput } from '@/types/report'
 import ReportDialog from '@/components/ReportDialog.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useHistoryReturn } from '@/composables/useHistoryReturn'
+import { useListQuery } from '@/composables/useListQuery'
 import type { PageVO } from '@/types/creator'
 import type { CreatorPublicVO, WorkVO } from '@/types/work'
 import type { CreatorReviewVO, ReviewReportVO } from '@/types/review'
@@ -20,7 +24,23 @@ import { prepareOwnReportVerification } from '@/utils/report'
 import '@/assets/styles/craftflow-works.css'
 import { imageRenewalDelay } from '@/utils/imageExpiry'
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
+const { source } = useHistoryReturn()
+const { page: workPage, changePage: changeWorkPage } = useListQuery(undefined, 'workPage')
+const { page: reviewPage, changePage: changeReviewPage } = useListQuery(undefined, 'reviewPage')
+
+/** 访客可以从作品或关注列表直接返回，也可以从独立主页入口回到广场。 */
+function acceptsSource(previous: RouteLocationResolved) {
+  const record = previous.matched.at(-1)?.path
+  return previous.name === 'home' || record === '/account/following' || record === '/works/:id'
+}
+const backLabel = computed(() => {
+  const record = source(acceptsSource)?.matched.at(-1)?.path
+  if (record === '/account/following') return '返回关注创作者'
+  if (record === '/works/:id') return '返回作品详情'
+  return '返回作品广场'
+})
 const creator = ref<CreatorPublicVO>()
 const creatorLocation = computed(() => {
   if (!creator.value) return ''
@@ -32,7 +52,6 @@ const works = ref<WorkVO[]>([])
 const reviews = ref<PageVO<CreatorReviewVO>>()
 const reviewsLoading = ref(false)
 const reviewsError = ref('')
-const requestedReviewPage = ref(1)
 const reviewError = ref('')
 const reportingId = ref('')
 const relatedReports = ref<Record<string, ReviewReportVO[]>>({})
@@ -40,7 +59,6 @@ const evidenceText = ref<Record<string,string>>({})
 const evidenceImages = ref<Record<string,{id:string;url:string}[]>>({})
 const reportStatus = ref<Record<string,string>>({})
 const uploadingEvidence = ref<Record<string, boolean>>({})
-const page = ref(1)
 const total = ref(0)
 const error = ref('')
 const loading = ref(false)
@@ -48,16 +66,32 @@ let revision = 0
 let reviewsRevision = 0
 let reportRevision = 0
 let timer: ReturnType<typeof setTimeout> | undefined
+let pageReplacement = Promise.resolve()
+
+/** 两套有独立查询的分页可能同时缩短，依次替换无效页以保留另一个最新页码。 */
+function replaceInvalidPage(key: 'workPage' | 'reviewPage', requested: number, result: PageVO<unknown>) {
+  const last = Math.max(1, Math.ceil(result.total / result.size))
+  if (requested <= last) return false
+  const path = route.path
+  const rawPage = route.query[key]
+  const userId = auth.session?.userId
+  pageReplacement = pageReplacement.then(async () => {
+    if (route.path !== path || route.query[key] !== rawPage || auth.session?.userId !== userId) return
+    await router.replace({ path, query: { ...route.query, [key]: last > 1 ? String(last) : undefined }, hash: route.hash })
+  })
+  return true
+}
 /** 公开资料及作品独立查询，头像到期前重新从资料接口核验签名。 */
-async function load(next = page.value) {
+async function load() {
+  const next = workPage.value
   const current = ++revision
-  page.value = next
   loading.value = true
   error.value = ''
   clearTimeout(timer)
   try {
     const [profile, result] = await Promise.all([getCreator(String(route.params.id)), getWorks({ creatorId: String(route.params.id), page: next })])
     if (current !== revision) return
+    if (replaceInvalidPage('workPage', next, result)) return
     creator.value = profile; works.value = result.items; total.value = result.total
     const delay = imageRenewalDelay(profile.avatarExpiresAt)
     if (delay !== undefined) timer = setTimeout(() => void load(), delay)
@@ -65,19 +99,15 @@ async function load(next = page.value) {
   finally { if (current === revision) loading.value = false }
 }
 /** 评价使用独立分页，作品翻页和头像续签不重置当前评价页。 */
-async function loadReviews(next = requestedReviewPage.value) {
+async function loadReviews() {
+  const next = reviewPage.value
   const current = ++reviewsRevision
-  requestedReviewPage.value = next
   reviewsLoading.value = true
   reviewsError.value = ''
   try {
     const result = await getCreatorReviews(String(route.params.id), next)
     if (current !== reviewsRevision) return
-    const lastPage = Math.max(1, Math.ceil(result.total / result.size))
-    if (next > lastPage) {
-      void loadReviews(lastPage)
-      return
-    }
+    if (replaceInvalidPage('reviewPage', next, result)) return
     reviews.value = result
     if (reportingId.value && !result.items.some(review => review.id === reportingId.value)) openReviewReport('')
   } catch (failure) {
@@ -186,20 +216,31 @@ watch([() => route.params.id, () => auth.session?.userId, () => auth.session?.ac
   creator.value = undefined
   works.value = []
   reviews.value = undefined
-  void load(1)
-  void loadReviews(1)
+  void load()
+  void loadReviews()
 }, { immediate: true, flush: 'sync' })
+// 仅当前主页对页码变化发起读取，离开时由卸载处理作废旧响应。
+watch(workPage, () => {
+  if (route.matched.at(-1)?.path === '/creators/:id') void load()
+})
+watch(reviewPage, () => {
+  if (route.matched.at(-1)?.path === '/creators/:id') void loadReviews()
+})
 onBeforeUnmount(() => { revision++; reviewsRevision++; reportRevision++; clearTimeout(timer) })
 </script>
 <template>
   <WorkLayout
     class="cf-creator-public"
+    :data-history-ready="!loading && !reviewsLoading ? route.fullPath : undefined"
   >
     <nav aria-label="创作者主页导航">
-      <RouterLink
+      <HistoryBackLink
         class="cf-work-back"
-        :to="auth.session?.roles.includes('ADMIN') ? '/discover' : '/'"
-      >返回作品广场</RouterLink>
+        :fallback="auth.session?.roles.includes('ADMIN') ? '/discover' : '/'"
+        :accept="acceptsSource"
+      >
+        {{ backLabel }}
+      </HistoryBackLink>
     </nav><p
       v-if="error"
       class="form-alert"
@@ -283,10 +324,10 @@ onBeforeUnmount(() => { revision++; reviewsRevision++; reportRevision++; clearTi
           :work="work"
         />
       </div><WorkPagination
-        :page="page"
+        :page="workPage"
         :total="total"
         :loading="loading"
-        @change="load"
+        @change="changeWorkPage"
       />
       <section
         class="creator-reviews"
@@ -410,7 +451,7 @@ onBeforeUnmount(() => { revision++; reviewsRevision++; reportRevision++; clearTi
           :total="reviews.total"
           :loading="reviewsLoading"
           label="评价分页"
-          @change="loadReviews"
+          @change="changeReviewPage"
         />
       </section>
     </template><p

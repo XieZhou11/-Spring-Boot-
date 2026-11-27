@@ -5,6 +5,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import WorkImage from '@/components/WorkImage.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
+import { useHistoryReturn } from '@/composables/useHistoryReturn'
 import { getManagedWorks } from '@/api/work'
 import { workStatusLabels } from '@/utils/work'
 import { formatTime } from '@/utils/creator'
@@ -12,6 +13,7 @@ import type { WorkStatus, WorkVO } from '@/types/work'
 import '@/assets/styles/work.css'
 const route = useRoute()
 const router = useRouter()
+const { entry } = useHistoryReturn()
 const status = ref<WorkStatus | ''>('PENDING')
 const keyword = ref('')
 const page = ref(1)
@@ -39,8 +41,9 @@ function syncFilters(query: LocationQuery) {
   keyword.value = typeof query.keyword === 'string' ? query.keyword : ''
   page.value = Math.max(1, Number(query.page) || 1)
 }
-watch(() => route.query, query => {
-  syncFilters(query)
+// 切换同一队列的审核详情时保留列表节点、滚动位置和未提交的搜索词。
+watch([() => route.query.status, () => route.query.keyword, () => route.query.page], () => {
+  syncFilters(route.query)
   void load()
 }, { immediate: true })
 onBeforeUnmount(() => revision++)
@@ -57,6 +60,7 @@ onBeforeUnmount(() => revision++)
         class="review-queue"
         aria-label="作品审核队列"
         :aria-busy="loading"
+        :data-history-ready="!route.params.id && !loading ? route.fullPath : undefined"
       >
         <header class="review-queue-heading">
           <h2>作品队列</h2><span>{{ total }} 件作品</span>
@@ -119,6 +123,7 @@ onBeforeUnmount(() => revision++)
         </div><div
           v-else
           class="managed-work-list"
+          data-history-scroll="admin-works-queue"
         >
           <article
             v-for="work in rows"
@@ -144,7 +149,8 @@ onBeforeUnmount(() => revision++)
               >{{ workStatusLabels[work.reviewStatus] }}</span><h3>{{ work.title || `作品 ${work.id}` }}</h3><p>{{ work.creatorNickname }} · {{ work.categoryPath.join(' / ') }}</p><p>{{ formatTime(work.submittedAt || work.updatedAt) }}</p>
             </div><RouterLink
               class="text-link"
-              :to="{ path: `/admin/works/${work.id}`, query: route.query }"
+              :to="entry({ path: `/admin/works/${work.id}`, query: route.query })"
+              :data-history-focus="`admin-work-${work.id}`"
               :aria-current="route.params.id === work.id ? 'true' : undefined"
             >{{ work.reviewStatus === 'PENDING' ? '审核作品' : '查看材料' }} ↗</RouterLink>
           </article>

@@ -3,12 +3,10 @@ import { computed } from 'vue'
 import WorkImage from './WorkImage.vue'
 import type { WorkVO } from '@/types/work'
 import { priceLabel } from '@/utils/work'
-const props = defineProps<{ work: WorkVO; browsePath?: string }>()
-/** 广场的回跳来源保存在浏览器记录中，详情地址可单独访问。 */
-const detail = computed(() => ({
-  path: '/works/' + props.work.id,
-  state: props.browsePath ? { workBrowsePath: props.browsePath } : undefined,
-}))
+import { useHistoryReturn } from '@/composables/useHistoryReturn'
+const props = defineProps<{ work: WorkVO }>()
+const { entry } = useHistoryReturn()
+const detail = computed(() => entry(`/works/${props.work.id}`))
 /** 保留不可购买的原因，展示类作品不显示价格。 */
 const stockCaption = computed(() => {
   if (props.work.stockStatus === 'SOLD_OUT') return '现货已售出'
@@ -29,6 +27,7 @@ const stockCaption = computed(() => {
         :to="detail"
         class="work-card-cover-link"
         :aria-label="'查看' + work.title"
+        :data-history-focus="`work-cover-${work.id}`"
       />
       <span class="work-card-statuses">
         <span
@@ -53,7 +52,12 @@ const stockCaption = computed(() => {
       <p class="work-category">
         {{ work.categoryPath.join(' / ') }}
       </p>
-      <h3><RouterLink :to="detail">{{ work.title }}</RouterLink></h3>
+      <h3>
+        <RouterLink
+          :to="detail"
+          :data-history-focus="`work-title-${work.id}`"
+        >{{ work.title }}</RouterLink>
+      </h3>
       <p
         v-if="work.material"
         class="work-card-material"
@@ -61,8 +65,9 @@ const stockCaption = computed(() => {
         {{ work.material }}
       </p>
       <RouterLink
-        :to="'/creators/' + work.creatorId"
+        :to="entry(`/creators/${work.creatorId}`)"
         class="work-author"
+        :data-history-focus="`work-author-${work.id}`"
       >{{ work.creatorNickname }} <span aria-hidden="true">↗</span></RouterLink>
       <div class="work-card-bottom">
         <strong

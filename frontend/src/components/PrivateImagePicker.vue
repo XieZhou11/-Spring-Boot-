@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
+import AppIcon from './AppIcon.vue'
 import PrivateImage from './PrivateImage.vue'
 import { uploadPrivateImage } from '@/api/customRequest'
 import { uploadOrderImage, uploadQuoteImage } from '@/api/quote'
@@ -54,14 +55,20 @@ async function upload(event: Event) {
         type="button"
         class="chat-image-button"
         :aria-label="`${label}上传`"
+        :title="busy ? '正在上传图片' : '上传图片'"
         :aria-busy="busy"
         :disabled="uploadDisabled"
         @click="fileInput?.click()"
       >
         <span
-          class="chat-image-button-face"
+          v-if="busy"
+          class="chat-image-spinner"
           aria-hidden="true"
-        >{{ busy ? '上传中…' : '图片' }}</span>
+        />
+        <AppIcon
+          v-else
+          name="image"
+        />
       </button>
       <input
         ref="fileInput"

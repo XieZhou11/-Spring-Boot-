@@ -2,6 +2,7 @@
 import { useActivationRead } from '@/utils/pageActivation'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
+import HistoryBackLink from '@/components/HistoryBackLink.vue'
 import QuoteImages from '@/components/QuoteImages.vue'
 import { decideRefund, getAdminRefund, getAdminRefundMessages, getRefundEvidence } from '@/api/refund'
 import type { AdminRefundDetailVO, RefundDecisionDTO, RefundEvidenceVO } from '@/types/refund'
@@ -171,7 +172,12 @@ useActivationRead(() => JSON.stringify(context()), load)
           @click="load"
         >
           刷新查证材料
-        </button><RouterLink :to="{ path: '/admin/refunds', query: route.query }">返回队列</RouterLink>
+        </button><HistoryBackLink
+          :fallback="{ path: '/admin/refunds', query: route.query }"
+          :accept="source => source.path === '/admin/refunds'"
+        >
+          返回队列
+        </HistoryBackLink>
       </div>
     </header>
     <p

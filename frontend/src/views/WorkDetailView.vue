@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import type { RouteLocationResolved } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
+import HistoryBackLink from '@/components/HistoryBackLink.vue'
 import WorkLayout from '@/layouts/WorkLayout.vue'
 import WorkInteractions from '@/components/WorkInteractions.vue'
 import CreatorFollow from '@/components/CreatorFollow.vue'
@@ -9,18 +11,30 @@ import WorkMaterials from '@/components/WorkMaterials.vue'
 import StockPurchase from '@/components/StockPurchase.vue'
 import { getWork } from '@/api/work'
 import { useAuthStore } from '@/stores/auth'
+import { useHistoryReturn } from '@/composables/useHistoryReturn'
 import type { WorkVO } from '@/types/work'
 import '@/assets/styles/craftflow-works.css'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { source } = useHistoryReturn()
 const work = ref<WorkVO>()
 const error = ref('')
 const interactionActions = ref<HTMLElement | null>(null)
 let revision = 0
 
-/** 保留导航来源的已应用条件，独立链接使用当前身份的广场入口。 */
+/** 从收藏或创作者主页进入时显示实际来路，历史详情也兼容旧版广场筛选。 */
+function acceptsSource(previous: RouteLocationResolved) {
+  const record = previous.matched.at(-1)?.path
+  return previous.name === 'home' || record === '/account/favorites' || record === '/creators/:id'
+}
+const backLabel = computed(() => {
+  const record = source(acceptsSource)?.matched.at(-1)?.path
+  if (record === '/account/favorites') return '返回收藏作品'
+  if (record === '/creators/:id') return '返回创作者主页'
+  return '返回作品广场'
+})
 const browsePath = computed(() => {
   const { state } = router.options.history
   const source = state.current === route.fullPath ? state.workBrowsePath : null
@@ -45,14 +59,18 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('focus', load) })
 </script>
 <template>
   <WorkLayout>
-    <div class="cf-work-detail">
+    <div
+      class="cf-work-detail"
+      :data-history-ready="work || error ? route.fullPath : undefined"
+    >
       <nav aria-label="作品详情导航">
-        <RouterLink
+        <HistoryBackLink
           class="cf-work-back"
-          :to="browsePath"
+          :fallback="browsePath"
+          :accept="acceptsSource"
         >
-          <AppIcon name="arrow" />返回作品广场
-        </RouterLink>
+          <AppIcon name="arrow" />{{ backLabel }}
+        </HistoryBackLink>
       </nav>
       <p
         v-if="error"

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter, type RouteLocationResolved } from 'vue-router'
 import WorkLayout from '@/layouts/WorkLayout.vue'
 import QuoteImages from '@/components/QuoteImages.vue'
 import QuoteRecord from '@/components/QuoteRecord.vue'
 import WorkPagination from '@/components/WorkPagination.vue'
+import HistoryBackLink from '@/components/HistoryBackLink.vue'
 import { getAddresses } from '@/api/account'
 import { awardQuote, getQuoteComparison, getRequestQuotes } from '@/api/quote'
 import type { AddressVO } from '@/types/account'
@@ -36,9 +37,12 @@ const shortestDuration = computed(() => Math.min(...(comparison.value?.items.map
 const requestDetail = computed(() => ({
   name: 'custom-request-detail',
   params: { id: id() },
-  query: typeof route.query.returnTo === 'string' ? { returnTo: route.query.returnTo } : {},
+  query: { returnTo: buyerRequestListReturn(route.query.returnTo) },
   hash: '#quotes',
 }))
+function acceptsRequestDetail(location: RouteLocationResolved) {
+  return location.name === 'custom-request-detail' && location.params.id === id()
+}
 async function load() {
   const requestId = id()
   if (!requestId || busy.value || uncertain.value) return
@@ -134,7 +138,12 @@ onBeforeUnmount(() => { revision++; historyRevision++; addressRevision++; window
         class="work-breadcrumb"
         aria-label="面包屑"
       >
-        <RouterLink :to="requestDetail">需求详情</RouterLink><span aria-hidden="true">/</span><span aria-current="page">报价对比</span>
+        <HistoryBackLink
+          :fallback="requestDetail"
+          :accept="acceptsRequestDetail"
+        >
+          需求详情
+        </HistoryBackLink><span aria-hidden="true">/</span><span aria-current="page">报价对比</span>
       </nav>
       <header class="work-section-heading">
         <div>

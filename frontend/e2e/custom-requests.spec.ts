@@ -231,7 +231,9 @@ test('公开咨询图文、多端推送与丢响应重试，关闭后历史保�
     await expect.poll(async () => (await (await page.request.get(`${api}/me/conversations/unread-count`)).json()).data.count).toBe(0)
     await page.setViewportSize({ width: 1440, height: 1000 })
     const uploadResult = creator.waitForResponse(r => r.url().endsWith(`/conversations/${conversationId}/images`) && r.request().method() === 'POST')
-    await creator.getByLabel('消息图片', { exact: true }).setInputFiles({ name: 'sample.png', mimeType: 'image/png', buffer: image })
+    const fileChooser = creator.waitForEvent('filechooser')
+    await creator.getByRole('button', { name: '消息图片上传', exact: true }).click()
+    await (await fileChooser).setFiles({ name: 'sample.png', mimeType: 'image/png', buffer: image })
     const uploaded = await uploadResult
     expect(uploaded.status()).toBe(201)
     const imageId = (await uploaded.json()).data.id as string

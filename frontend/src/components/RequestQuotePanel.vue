@@ -11,8 +11,10 @@ import type { QuoteDTO, QuoteQuotaVO, QuoteVO } from '@/types/quote'
 import { ApiError } from '@/utils/request'
 import '@/assets/styles/quote.css'
 import { useConfirmation } from '@/composables/useConfirmation'
+import { useHistoryReturn } from '@/composables/useHistoryReturn'
 
 const confirm = useConfirmation()
+const { entry } = useHistoryReturn()
 const props = defineProps<{ request: CustomRequestVO; returnTo?: string }>()
 const emit = defineEmits<{ changed: [] }>()
 const auth = useAuthStore(); const creator = computed(() => !props.request.owned && auth.session?.roles.includes('CREATOR'))
@@ -79,7 +81,8 @@ onBeforeUnmount(() => { revision++; window.removeEventListener('beforeunload', b
       </div><RouterLink
         v-if="request.owned"
         class="button-primary"
-        :to="{ name: 'quote-comparison', params: { id: request.id }, query: returnTo ? { returnTo } : {} }"
+        :to="entry({ name: 'quote-comparison', params: { id: request.id }, query: returnTo ? { returnTo } : {} })"
+        data-history-focus="quote-comparison"
       >查看报价对比</RouterLink><span
         v-else-if="quota"
         class="muted"

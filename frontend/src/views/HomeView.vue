@@ -267,6 +267,7 @@ onBeforeUnmount(() => {
         aria-label="搜索结果"
         :aria-busy="loading"
         :data-scroll-route="!loading && !loadingCategories ? route.fullPath : undefined"
+        :data-history-ready="!loading && !loadingCategories ? route.fullPath : undefined"
       >
         <div
           v-if="error"
@@ -311,7 +312,6 @@ onBeforeUnmount(() => {
                 v-for="work in rows"
                 :key="work.id"
                 :work="work"
-                :browse-path="route.fullPath"
               />
             </div>
           </template>

@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { useActivationRead } from '@/utils/pageActivation'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, type RouteLocationResolved } from 'vue-router'
 import WorkLayout from '@/layouts/WorkLayout.vue'
 import CreatorLayout from '@/layouts/CreatorLayout.vue'
 import PrivateImage from '@/components/PrivateImage.vue'
 import RequestCollection from '@/components/RequestCollection.vue'
 import RequestQuotePanel from '@/components/RequestQuotePanel.vue'
+import HistoryBackLink from '@/components/HistoryBackLink.vue'
 import { closeRequest, copyRequest, deleteRequest, getCustomRequest, openConversation } from '@/api/customRequest'
 import type { CustomRequestVO } from '@/types/customRequest'
 import { parseRequestListReturn, requestBudget, requestListPaths, requestStatus } from '@/utils/customRequest'
@@ -19,13 +20,16 @@ import '@/assets/styles/custom-request.css'
 import '@/assets/styles/craftflow-demand.css'
 import '@/assets/styles/craftflow-publication.css'
 import { useConfirmation } from '@/composables/useConfirmation'
+import { useHistoryReturn } from '@/composables/useHistoryReturn'
 
 const confirm = useConfirmation()
 const route = useRoute(); const router = useRouter(); const value = ref<CustomRequestVO>()
+const { entry } = useHistoryReturn()
 const auth = useAuthStore(); const notifications = useNotificationsStore()
 const loading = ref(false); const busy = ref(false); const error = ref(''); let copyKey = crypto.randomUUID()
 const refreshVersion = ref(0)
 const quotes = ref<HTMLElement>()
+const requestCollection = ref<InstanceType<typeof RequestCollection>>()
 const source = computed(() => parseRequestListReturn(route.query.returnTo))
 const sourcePath = computed(() => source.value && router.resolve(source.value).path)
 const creator = computed(() => auth.session?.roles.includes('CREATOR'))
@@ -43,6 +47,8 @@ const returnTo = computed(() => {
 const returnPath = computed(() => router.resolve(returnTo.value).path)
 const creatorWorkspace = computed(() => returnPath.value !== requestListPaths.mine && creator.value)
 const buyerWorkspace = computed(() => value.value?.owned ?? (sourcePath.value === requestListPaths.mine))
+const historyReady = computed(() => (!!value.value || !!error.value) && (!buyerWorkspace.value || requestCollection.value?.historyReady))
+function acceptsRequestList(location: RouteLocationResolved) { return location.fullPath === returnTo.value }
 const returnLabel = computed(() => {
   if (returnPath.value === requestListPaths.mine) return '我的需求'
   if (returnPath.value === requestListPaths.hall) return '需求大厅'
@@ -92,7 +98,10 @@ async function act(action: 'close' | 'copy' | 'chat' | 'delete') {
       if (stillCurrent()) { value.value = result; refreshVersion.value++ }
     }
     if (action === 'copy') { const result = await copyRequest(requestId, copyKey); if (stillCurrent()) await router.push({ path: `/my-requests/${result.id}/edit`, query: editorQuery.value }) }
-    if (action === 'chat') { const result = await openConversation(requestId); if (stillCurrent()) await router.push(`/messages/conversations/${result.id}`) }
+    if (action === 'chat') {
+      const result = await openConversation(requestId)
+      if (stillCurrent()) await router.push(entry(`/messages/conversations/${result.id}`))
+    }
     if (action === 'delete') { await deleteRequest(requestId, version); if (stillCurrent()) await router.push(returnTo.value) }
   } catch (failure) { if (stillCurrent()) error.value = `${failure instanceof Error ? failure.message : '操作失败'}。请刷新核对最新状态。` }
   finally { busy.value = false; if (deferredRefresh) { deferredRefresh = false; void load() } }
@@ -118,9 +127,14 @@ useActivationRead(() => JSON.stringify([auth.session?.userId, currentRequestId()
   <component
     :is="creatorWorkspace ? CreatorLayout : WorkLayout"
   >
-    <div :class="{ 'cf-request-workspace has-request': buyerWorkspace }">
+    <div
+      :class="{ 'cf-request-workspace has-request': buyerWorkspace }"
+      :data-history-view="route.fullPath"
+      :data-history-ready="historyReady ? route.fullPath : undefined"
+    >
       <RequestCollection
         v-if="buyerWorkspace"
+        ref="requestCollection"
         scope="mine"
         :location="returnTo"
         :selected-id="currentRequestId()"
@@ -134,7 +148,12 @@ useActivationRead(() => JSON.stringify([auth.session?.userId, currentRequestId()
           class="cf-request-breadcrumb"
           aria-label="需求导航"
         >
-          <RouterLink :to="returnTo">{{ returnLabel }}</RouterLink>
+          <HistoryBackLink
+            :fallback="returnTo"
+            :accept="acceptsRequestList"
+          >
+            {{ returnLabel }}
+          </HistoryBackLink>
           <span aria-hidden="true">/</span>
           <span>需求详情</span>
         </nav>
@@ -254,7 +273,8 @@ useActivationRead(() => JSON.stringify([auth.session?.userId, currentRequestId()
               <button
                 v-if="value.canConsult"
                 class="button-primary"
-                :disabled="busy"
+                :aria-disabled="busy"
+                data-history-focus="request-chat"
                 @click="act('chat')"
               >
                 进入需求沟通

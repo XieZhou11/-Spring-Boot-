@@ -3,6 +3,7 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import WorkMaterials from '@/components/WorkMaterials.vue'
 import WorkHistory from '@/components/WorkHistory.vue'
+import HistoryBackLink from '@/components/HistoryBackLink.vue'
 import { getManagedWork, offlineWork, reviewWork } from '@/api/work'
 import type { WorkVO } from '@/types/work'
 import { workStatusLabels } from '@/utils/work'
@@ -60,7 +61,12 @@ onBeforeUnmount(() => revision++)
 <template>
   <div>
     <header class="review-detail-heading">
-      <h2>当前审核对象</h2><RouterLink :to="{ path: '/admin/works', query: route.query }">返回队列</RouterLink>
+      <h2>当前审核对象</h2><HistoryBackLink
+        :fallback="{ path: '/admin/works', query: route.query }"
+        :accept="source => source.path === '/admin/works'"
+      >
+        返回队列
+      </HistoryBackLink>
     </header><p
       v-if="error"
       class="form-alert"

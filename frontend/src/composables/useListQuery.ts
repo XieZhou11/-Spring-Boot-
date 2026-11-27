@@ -2,11 +2,11 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 /** 从分页链接恢复已应用条件，限制接口可接收的页码和状态。 */
-export function useListQuery<T extends string = string>(statuses?: Readonly<Record<T, string>>) {
+export function useListQuery<T extends string = string>(statuses?: Readonly<Record<T, string>>, pageKey = 'page') {
   const route = useRoute()
   const router = useRouter()
   const page = computed(() => {
-    const raw = route.query.page
+    const raw = route.query[pageKey]
     const value = typeof raw === 'string' && /^\d+$/.test(raw) ? Number(raw) : 1
     return value > 1 && value <= 1_000_000 ? value : 1
   })
@@ -16,7 +16,7 @@ export function useListQuery<T extends string = string>(statuses?: Readonly<Reco
   })
 
   function target(next: number, filter: T | '') {
-    const query = { ...route.query, page: next > 1 ? String(next) : undefined }
+    const query = { ...route.query, [pageKey]: next > 1 ? String(next) : undefined }
     return {
       path: route.path,
       hash: route.hash,
