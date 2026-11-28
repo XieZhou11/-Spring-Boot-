@@ -122,42 +122,83 @@ for (const scenario of [
   })
 }
 
-test('选满三张消息图片后仍可重试预览并移除附件', async ({ page }) => {
+const selectedImages = ['first.png', 'second.png', 'third.png'].map(name => ({
+  name, mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBTsAAAAASUVORK5CYII=', 'base64'),
+}))
+
+type SendBody = { clientMessageKey: string; content: string; imageIds: string[]; referencedNodeId?: string }
+
+async function mockImageSend(page: Page, mode?: 'unknown' | 'upload-error') {
   await mockChat(page)
   const imageUrl = '/test-chat-avatars/attachment.svg'
   const expiresAt = new Date(Date.now() + 300_000).toISOString()
-  let uploaded = 0
-  let secondImageReads = 0
-  await page.route(`${api}/csrf`, route => route.fulfill({ json: { code: 0, data: { headerName: 'X-CSRF-TOKEN', token: 'test-token' } } }))
-  await page.route(`${api}/conversations/71/images`, route => route.fulfill({
-    json: { code: 0, data: { id: String(++uploaded), url: imageUrl, expiresAt } },
-  }))
-  // 第二张图片的首次签名读取失败，用户仍可重试或删除该附件。
-  await page.route(`${api}/conversation-images/*`, route => {
-    const id = new URL(route.request().url()).pathname.split('/').at(-1)
-    if (id === '2' && secondImageReads++ === 0) {
-      return route.fulfill({ status: 503, json: { code: 503, message: '签名暂不可用', data: null } })
+  let uploads = 0
+  const sent: SendBody[] = []
+  await page.route(api + '/csrf', route => route.fulfill({ json: { code: 0, data: { headerName: 'X-CSRF-TOKEN', token: 'test-token' } } }))
+  await page.route(api + '/conversations/71/images', route => {
+    uploads++
+    if (mode === 'upload-error' && uploads === 2) {
+      return route.fulfill({ status: 503, json: { code: 503, message: '图片服务暂不可用', data: null } })
     }
+    return route.fulfill({ json: { code: 0, data: { id: String(uploads), url: imageUrl, expiresAt } } })
+  })
+  await page.route(api + '/conversation-images/*', route => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-1)
     return route.fulfill({ json: { code: 0, data: { id, url: imageUrl, expiresAt } } })
   })
+  await page.route(api + '/conversations/71/messages', route => {
+    if (route.request().method() !== 'POST') return route.fallback()
+    const body = route.request().postDataJSON() as SendBody
+    sent.push(body)
+    if (mode === 'unknown' && sent.length === 1) return route.abort('failed')
+    return route.fulfill({ json: { code: 0, data: {
+      ...body, content: null, senderId: '11', conversationId: '71', id: '5', seqNo: '5',
+      createdAt: messages[3]!.createdAt, referencedNodeId: null, referencedNodeCode: null,
+    } } })
+  })
   await page.goto('/messages/conversations/71')
+  return { sent, uploaded: () => uploads }
+}
 
+test('相册选三张图后直接发为一条消息，保留文字草稿', async ({ page }) => {
+  const { sent } = await mockImageSend(page)
   const composer = page.locator('.chat-compose')
-  const upload = composer.getByRole('button', { name: '消息图片上传', exact: true })
-  await upload.focus()
-  const fileChooser = page.waitForEvent('filechooser')
-  await upload.press('Enter')
-  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBTsAAAAASUVORK5CYII=', 'base64')
-  await (await fileChooser).setFiles(['first.png', 'second.png', 'third.png'].map(name => ({ name, mimeType: 'image/png', buffer: png })))
+  const draft = composer.getByRole('textbox', { name: '沟通内容' })
+  await draft.fill('还没有准备好发送的文字')
+  const chooser = page.waitForEvent('filechooser')
+  await composer.getByRole('button', { name: '消息图片上传', exact: true }).click()
+  await (await chooser).setFiles(selectedImages)
+  await expect(page.getByRole('log').getByRole('img', { name: '消息图片 3', exact: true })).toBeVisible()
+  expect(sent).toEqual([{ clientMessageKey: expect.any(String), content: '', imageIds: ['1', '2', '3'] }])
+  await expect(composer.getByRole('img')).toHaveCount(0)
+  await expect(draft).toHaveValue('还没有准备好发送的文字')
+})
 
-  const thirdImage = composer.getByRole('img', { name: '消息图片 3', exact: true })
-  await expect(thirdImage).toBeVisible()
-  await expect(upload).toBeDisabled()
-  await composer.getByRole('button', { name: '重新读取图片', exact: true }).click()
-  await expect(composer.getByRole('img', { name: '消息图片 2', exact: true })).toBeVisible()
-  await composer.getByRole('button', { name: '移除消息图片3', exact: true }).click()
-  await expect(thirdImage).toHaveCount(0)
-  await expect(upload).toBeEnabled()
+test('选图直发结果未知时用原请求重试且不重复上传', async ({ page }) => {
+  const { sent, uploaded } = await mockImageSend(page, 'unknown')
+  const composer = page.locator('.chat-compose')
+  const draft = composer.getByRole('textbox', { name: '沟通内容' })
+  await draft.fill('重试后保留这段话')
+  await composer.getByLabel('消息图片', { exact: true }).setInputFiles(selectedImages.slice(0, 1))
+  await composer.getByRole('button', { name: '重试确认发送', exact: true }).click()
+  await expect(page.getByRole('log').getByRole('img', { name: '消息图片 1', exact: true })).toBeVisible()
+  expect(sent).toHaveLength(2)
+  expect(sent[0]).toEqual(sent[1])
+  expect(uploaded()).toBe(1)
+  await expect(draft).toHaveValue('重试后保留这段话')
+})
+
+test('同批图片上传失败时不给对方发送部分图片，可重新选择', async ({ page }) => {
+  const { sent } = await mockImageSend(page, 'upload-error')
+  const composer = page.locator('.chat-compose')
+  const input = composer.getByLabel('消息图片', { exact: true })
+  await input.setInputFiles(selectedImages)
+  await expect(composer.getByRole('alert')).toContainText('图片服务暂不可用')
+  expect(sent).toHaveLength(0)
+  await expect(composer.getByRole('img')).toHaveCount(0)
+  await input.setInputFiles(selectedImages.slice(0, 1))
+  await expect(page.getByRole('log').getByRole('img', { name: '消息图片 1', exact: true })).toBeVisible()
+  expect(sent).toHaveLength(1)
 })
 
 for (const viewport of [{ width: 1440, size: 40 }, { width: 390, size: 44 }]) {

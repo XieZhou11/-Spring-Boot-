@@ -292,12 +292,14 @@
   color: var(--craft-ink);
   font: 400 14px/1.55 var(--craft-font);
   resize: none;
+  /* 只隐藏输入框的滚动条外观，长文仍可通过滚轮和光标滚动。 */
+  overflow-y: auto;
+  scrollbar-width: none;
 }
+.craft-messages .chat-compose textarea::-webkit-scrollbar { display: none; }
 .craft-messages .chat-compose textarea:focus-visible { outline-offset: 0; }
 .craft-messages .chat-compose :is(.field-help, .field-error) { font-size: 12px; }
 .craft-messages .chat-compose-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 9px; }
-.craft-messages .chat-compose .private-image-picker { max-width: min(100%, 420px); }
-.craft-messages .chat-compose .private-image-picker.compact { max-width: none; }
 .craft-messages .chat-image-button {
   display: inline-flex;
   align-items: center;
@@ -326,16 +328,6 @@
 @media (prefers-reduced-motion: no-preference) {
   .craft-messages .chat-image-spinner { animation: craftflow-chat-image-spin .75s linear infinite; }
 }
-.craft-messages .chat-compose .private-image-picker.compact .request-images { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
-.craft-messages .chat-compose .private-image-picker.compact .request-images .work-image { width: 64px; height: auto; aspect-ratio: 1; min-height: 0; border-radius: 6px; }
-.craft-messages .chat-compose .private-image-picker.compact .request-images img { width: 100%; height: 100%; object-fit: cover; }
-/* 读取失败时给错误和重试留空间，附件仍可单独移除。 */
-.craft-messages .chat-compose .private-image-picker.compact .request-images .work-image:has(.work-image-placeholder) { width: 96px; aspect-ratio: auto; }
-.craft-messages .chat-compose .private-image-picker.compact .request-images .work-image-placeholder { height: auto; min-height: 64px; padding: 4px; text-align: center; overflow-wrap: anywhere; }
-.craft-messages .chat-compose .private-image-picker.compact .request-images > div > .inline-button { display: block; margin-inline: auto; }
-.craft-messages .chat-compose input[type="file"] { padding: 3px; max-width: 100%; border: 0; border-radius: 5px; background: transparent; font-size: 12px; font-weight: 400; }
-.craft-messages .chat-compose input[type="file"]::file-selector-button { margin-right: 6px; padding: 4px 6px; border: 1px solid var(--craft-border); border-radius: 5px; background: #f4f4f5; color: var(--craft-ink); font: inherit; cursor: pointer; }
-.craft-messages .chat-compose .request-images:empty { display: none; }
 .craft-messages .chat-send-button { margin-left: auto; border-radius: 999px; background: #f59e0b; border-color: #f59e0b; color: #231a06; }
 .craft-messages .chat-send-button:hover:not(:disabled) { background: #d97706; border-color: #d97706; }
 .craft-messages .chat-send-button .app-icon { width: 15px; height: 15px; }

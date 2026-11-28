@@ -234,6 +234,14 @@ test('五节点图文制作、跳过打样、补充、发货更正到买家收�
     await page.locator('.order-progress > li[data-node-code="SHIPPING"]').getByRole('link', { name: '讨论此进度 ↗', exact: true }).click()
     await expect(page.getByLabel('沟通内容', { exact: true })).toHaveValue('收到作品，补充保留此次交付确认。')
     await expect(page.getByRole('button', { name: '移除引用', exact: true })).toBeVisible()
+    const photoSent = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`/conversations/${order.conversationId}/messages`))
+    await page.getByLabel('消息图片', { exact: true }).setInputFiles({ name: 'delivery.png', mimeType: 'image/png', buffer: image })
+    const photoResponse = await photoSent
+    expect(photoResponse.status()).toBe(201)
+    expect((await photoResponse.json()).data).toMatchObject({ content: null, referencedNodeId: null, imageIds: [expect.any(String)] })
+    await expect(page.getByRole('log').getByRole('img', { name: '消息图片 1', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: '移除引用', exact: true })).toBeVisible()
+    await expect(page.getByLabel('沟通内容', { exact: true })).toHaveValue('收到作品，补充保留此次交付确认。')
     const sent = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`/conversations/${order.conversationId}/messages`))
     await page.getByRole('button', { name: '发送', exact: true }).click()
     const chatResponse = await sent

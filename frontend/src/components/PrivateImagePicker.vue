@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
-import AppIcon from './AppIcon.vue'
 import PrivateImage from './PrivateImage.vue'
 import { uploadPrivateImage } from '@/api/customRequest'
 import { uploadOrderImage, uploadQuoteImage } from '@/api/quote'
-const props = defineProps<{ modelValue: string[]; label: string; max: number; conversationId?: string; orderId?: string; scope?: 'quote' | 'progress' | 'refund'; disabled?: boolean; compact?: boolean }>()
+const props = defineProps<{ modelValue: string[]; label: string; max: number; orderId?: string; scope?: 'quote' | 'progress' | 'refund'; disabled?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [ids: string[]]; uploading: [value: boolean] }>()
-const error = ref(''); const busy = ref(false); const fileInput = ref<HTMLInputElement>()
+const error = ref(''); const busy = ref(false)
 const uploadDisabled = computed(() => props.disabled || busy.value || props.modelValue.length >= props.max)
 /** 逐张真实上传，失败保留已完成的图片和表单；服务端再次解码并校验归属。 */
 async function upload(event: Event) {
@@ -24,7 +23,7 @@ async function upload(event: Event) {
       }
       const result = props.scope === 'progress' || props.scope === 'refund'
         ? await uploadOrderImage(props.orderId!, file, props.scope)
-        : props.scope === 'quote' ? await uploadQuoteImage(file) : await uploadPrivateImage(file, props.conversationId)
+        : props.scope === 'quote' ? await uploadQuoteImage(file) : await uploadPrivateImage(file)
       emit('update:modelValue', [...props.modelValue, result.id])
       // 父级v-model更新后再开始下一张，避免多选覆盖前一张。
       await nextTick()
@@ -34,14 +33,8 @@ async function upload(event: Event) {
 }
 </script>
 <template>
-  <div
-    class="private-image-picker"
-    :class="{ compact }"
-  >
-    <label
-      v-if="!compact"
-      class="work-field"
-    >{{ label }}<input
+  <div class="private-image-picker">
+    <label class="work-field">{{ label }}<input
       type="file"
       accept="image/jpeg,image/png,image/webp"
       multiple
@@ -49,42 +42,7 @@ async function upload(event: Event) {
       :disabled="uploadDisabled"
       @change="upload"
     ></label>
-    <!-- 聊天条只保留一个可聚焦的上传按钮，原生文件输入负责打开选择器。 -->
-    <template v-else>
-      <button
-        type="button"
-        class="chat-image-button"
-        :aria-label="`${label}上传`"
-        :title="busy ? '正在上传图片' : '上传图片'"
-        :aria-busy="busy"
-        :disabled="uploadDisabled"
-        @click="fileInput?.click()"
-      >
-        <span
-          v-if="busy"
-          class="chat-image-spinner"
-          aria-hidden="true"
-        />
-        <AppIcon
-          v-else
-          name="image"
-        />
-      </button>
-      <input
-        ref="fileInput"
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        multiple
-        hidden
-        :aria-label="label"
-        :disabled="uploadDisabled"
-        @change="upload"
-      >
-    </template>
-    <small
-      v-if="!compact"
-      class="field-help"
-    >最多 {{ max }} 张，单张不超过 5MB。{{ busy ? '正在上传…' : '' }}</small>
+    <small class="field-help">最多 {{ max }} 张，单张不超过 5MB。{{ busy ? '正在上传…' : '' }}</small>
     <p
       v-if="error"
       class="field-error"
@@ -99,7 +57,7 @@ async function upload(event: Event) {
       >
         <PrivateImage
           :image-id="id"
-          :scope="scope || (conversationId ? 'chat' : 'request')"
+          :scope="scope || 'request'"
           :label="`${label} ${index + 1}`"
         /><button
           type="button"

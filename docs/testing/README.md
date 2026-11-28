@@ -1,5 +1,7 @@
 # 测试结果记录
 
+聊天输入、选图直发和发送重试见 [T-037 测试记录](T-037-chat-composer-send.md)。
+
 详情历史返回、列表状态恢复和桌面及窄屏聊天选图见 [T-036 测试记录](T-036-contextual-navigation-chat-icon.md)。
 
 交易会话的时间分组、头像、附件及待付款入口复测见 [T-035 测试记录](T-035-conversation-chat-ui.md)。

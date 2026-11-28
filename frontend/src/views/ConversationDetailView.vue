@@ -8,15 +8,14 @@ import HistoryBackLink from '@/components/HistoryBackLink.vue'
 import { useListQuery } from '@/composables/useListQuery'
 import { useHistoryReturn } from '@/composables/useHistoryReturn'
 import PrivateImage from '@/components/PrivateImage.vue'
-import PrivateImagePicker from '@/components/PrivateImagePicker.vue'
 import { getProfile } from '@/api/account'
-import { getConversation, getMessages, readConversation, sendMessage } from '@/api/customRequest'
+import { getConversation, getMessages, readConversation, sendMessage, uploadPrivateImage } from '@/api/customRequest'
 import { getOrder } from '@/api/quote'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
 import { requestStatus } from '@/utils/customRequest'
 import { orderStatus, progressNodeName } from '@/utils/quote'
-import { readConversationDraft, saveConversationDraft } from '@/utils/conversationDraft'
+import { readConversationDraft, saveConversationDraft, type ConversationAttempt } from '@/utils/conversationDraft'
 import { ApiError } from '@/utils/request'
 import type { ChatMessageVO, ConversationVO } from '@/types/customRequest'
 import '@/assets/styles/custom-request.css'
@@ -31,14 +30,17 @@ const { source } = useHistoryReturn()
 const conversation = ref<ConversationVO>(); const messages = ref<ChatMessageVO[]>([]); const hasOlder = ref(false)
 const ownAvatarUrl = ref(''); const otherAvatarUrl = ref('')
 const loading = ref(false); const olderLoading = ref(false); const sending = ref(false); const uploading = ref(false); const uncertain = ref(false)
-const content = ref(''); const imageIds = ref<string[]>([]); const error = ref(''); const loadError = ref(''); const readError = ref(''); const transcript = ref<HTMLElement>()
+const content = ref(''); const error = ref(''); const loadError = ref(''); const readError = ref(''); const transcript = ref<HTMLElement>()
+const imageInput = ref<HTMLInputElement>()
 const referencedNode = ref<{ id: string; nodeCode: string }>(); const referenceLoading = ref(false); const referenceError = ref('')
 let referenceRevision = 0; let restoredReferenceId: string | undefined; let activeDraftId = ''; let activeDraftUserId = ''
 let generation = 0; let refreshing = false; let refreshAgain = false; let disposed = false; let observer: IntersectionObserver | undefined
 // HTTP已补齐游标独立于乐观合并的发送结果，避免自己的较新消息跳过断线缺口。
 let syncCursor: string | undefined
 let readTimer: ReturnType<typeof setTimeout> | undefined; let desiredRead = '0'; let acknowledgedRead = '0'; let readingGeneration: number | undefined
-let attempt: { clientMessageKey: string; content: string; imageIds: string[]; referencedNodeId?: string } | undefined
+const attempt = ref<ConversationAttempt>()
+const pendingImages = computed(() => attempt.value?.kind === 'images')
+const imageDisabled = computed(() => sending.value || uploading.value || uncertain.value || pendingImages.value || !conversation.value?.canSend)
 const id = () => String(route.params.id)
 const orderEnded = computed(() => ['COMPLETED', 'CANCELLED', 'REFUNDED'].includes(conversation.value?.orderStatus || ''))
 const canReturnToOrder = computed(() => !!(conversation.value?.orderId && hasOrderReturn(router, route, conversation.value.orderId)))
@@ -159,7 +161,10 @@ const messageGroups = computed(() => {
 /** 引用只附加到原草稿，不替换正文，也不在跳转后自动发送消息。 */
 async function resolveReference() {
   const current = ++referenceRevision
-  const requested = uncertain.value ? attempt?.referencedNodeId : typeof route.query.progressNodeId === 'string' ? route.query.progressNodeId : restoredReferenceId
+  const requested = uncertain.value && attempt.value?.kind === 'text'
+    ? attempt.value.body.referencedNodeId
+    : typeof route.query.progressNodeId === 'string' ? route.query.progressNodeId : restoredReferenceId
+  restoredReferenceId = requested
   referencedNode.value = undefined; referenceError.value = ''; referenceLoading.value = false
   if (!requested || !conversation.value?.orderId) return
   referenceLoading.value = true
@@ -167,13 +172,20 @@ async function resolveReference() {
     const detail = await getOrder(conversation.value.orderId)
     if (current !== referenceRevision) return
     const node = detail.progressNodes.find(value => value.id === requested)
-    if (!node) { referenceError.value = '所引用的进度不属于当前订单，未附加引用。'; return }
+    if (!node) { restoredReferenceId = undefined; referenceError.value = '所引用的进度不属于当前订单，未附加引用。'; return }
     referencedNode.value = { id: node.id, nodeCode: node.nodeCode }
   } catch (failure) { if (current === referenceRevision) referenceError.value = failure instanceof Error ? failure.message : '节点引用读取失败，请重试' }
   finally { if (current === referenceRevision) referenceLoading.value = false }
 }
 function keepDraft() {
-  if (activeDraftUserId && activeDraftUserId === auth.session?.userId && activeDraftId) saveConversationDraft(activeDraftUserId, activeDraftId, { content: content.value, imageIds: [...imageIds.value], referencedNodeId: referencedNode.value?.id, attempt: attempt ? { ...attempt, imageIds: [...attempt.imageIds] } : undefined, uncertain: uncertain.value })
+  if (!activeDraftUserId || activeDraftUserId !== auth.session?.userId || !activeDraftId) return
+  const currentAttempt = attempt.value
+  saveConversationDraft(activeDraftUserId, activeDraftId, {
+    content: content.value,
+    referencedNodeId: referencedNode.value?.id ?? restoredReferenceId,
+    attempt: currentAttempt ? { kind: currentAttempt.kind, body: { ...currentAttempt.body, imageIds: [...currentAttempt.body.imageIds] } } : undefined,
+    uncertain: uncertain.value,
+  })
 }
 /** 唯一编号去重，字符串大整数比较避免序号精度丢失。 */
 function merge(items: ChatMessageVO[]) { const map = new Map(messages.value.map(message => [message.id, message])); for (const message of items) map.set(message.id, message); messages.value = [...map.values()].sort((a, b) => BigInt(a.seqNo) < BigInt(b.seqNo) ? -1 : 1) }
@@ -232,27 +244,88 @@ async function older() {
   finally { olderLoading.value = false }
 }
 async function send() {
-  if (sending.value || uploading.value || referenceLoading.value || referenceError.value || (!conversation.value?.canSend && !uncertain.value)) return
-  error.value = ''
-  if (!uncertain.value) {
-    const body = { content: content.value.trim(), imageIds: [...imageIds.value], ...(referencedNode.value ? { referencedNodeId: referencedNode.value.id } : {}) }
-    if ((!body.content && !body.imageIds.length) || body.content.length > 500) { error.value = '请输入 1—500 字文字，或上传图片'; return }
-    if (!attempt || attempt.content !== body.content || JSON.stringify(attempt.imageIds) !== JSON.stringify(body.imageIds) || attempt.referencedNodeId !== body.referencedNodeId) attempt = { ...body, clientMessageKey: crypto.randomUUID() }
+  if (sending.value || uploading.value || (!conversation.value?.canSend && !uncertain.value)) return
+  if (uncertain.value || pendingImages.value) {
+    if (attempt.value) await deliver(attempt.value)
+    return
   }
-  if (!attempt) return
-  sending.value = true; const current = generation
+  if (referenceLoading.value || referenceError.value) return
+  const text = content.value.trim()
+  if (!text || text.length > 500) { error.value = '请输入 1—500 字文字，或上传图片'; return }
+  const referencedNodeId = referencedNode.value?.id
+  const previous = attempt.value?.body
+  if (!previous || previous.content !== text || previous.referencedNodeId !== referencedNodeId) {
+    attempt.value = { kind: 'text', body: { content: text, imageIds: [], referencedNodeId, clientMessageKey: crypto.randomUUID() } }
+  }
+  if (attempt.value) await deliver(attempt.value)
+}
+
+/** 一次选择发为一条纯图片消息。全部上传成功后才提交，文字草稿保持独立。 */
+async function sendImages(event: Event) {
+  const input = event.currentTarget as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  input.value = ''
+  if (!files.length || imageDisabled.value) return
+  error.value = ''
+  if (files.length > 3) { error.value = '最多上传 3 张图片'; return }
+  if (files.some(file => file.size > 5 * 1024 * 1024)) { error.value = '每张图片不能超过 5MB'; return }
+
+  const current = generation
+  const conversationId = id()
+  const imageIds: string[] = []
+  uploading.value = true
   try {
-    const result = await sendMessage(id(), attempt)
+    for (const file of files) {
+      const image = await uploadPrivateImage(file, conversationId)
+      if (current !== generation) return
+      imageIds.push(image.id)
+    }
+  } catch (failure) {
+    if (current === generation) error.value = `${failure instanceof Error ? failure.message : '图片上传失败'}。请重新选择图片。`
+    return
+  } finally {
+    if (current === generation) uploading.value = false
+  }
+  attempt.value = { kind: 'images', body: { content: '', imageIds, clientMessageKey: crypto.randomUUID() } }
+  await deliver(attempt.value)
+}
+
+function discardPendingImages() {
+  attempt.value = undefined
+  error.value = ''
+  keepDraft()
+}
+
+/** 文字和图片走同一发送入口，重试严格复用原消息与幂等键。 */
+async function deliver(message: ConversationAttempt) {
+  error.value = ''
+  sending.value = true
+  const current = generation
+  try {
+    const result = await sendMessage(id(), message.body)
     if (current !== generation) return
-    merge([result]); content.value = ''; imageIds.value = []; attempt = undefined; uncertain.value = false; referencedNode.value = undefined; restoredReferenceId = undefined; keepDraft()
+    merge([result])
+    if (message.kind === 'text') {
+      content.value = ''
+      referencedNode.value = undefined
+      restoredReferenceId = undefined
+    }
+    attempt.value = undefined
+    uncertain.value = false
     await observe(true); void refresh()
   } catch (failure) {
     if (current !== generation) return
     uncertain.value = !(failure instanceof ApiError) || !failure.status || failure.status >= 500
-    error.value = `${failure instanceof Error ? failure.message : '发送失败'}${uncertain.value ? '。发送结果未知，请重试确认；同一条消息不会重复发送。' : '。输入已保留。'}`
+    const recovery = message.kind === 'images' ? '。图片可重试发送。' : '。输入已保留。'
+    error.value = `${failure instanceof Error ? failure.message : '发送失败'}${uncertain.value ? '。发送结果未知，请重试确认；同一条消息不会重复发送。' : recovery}`
     if (failure instanceof ApiError && failure.retryAfter) error.value += ` 请在 ${failure.retryAfter} 秒后重试。`
     if (!uncertain.value) void refresh()
-  } finally { sending.value = false; keepDraft() }
+  } finally {
+    if (current === generation) {
+      sending.value = false
+      keepDraft()
+    }
+  }
 }
 function focused() { if (document.visibilityState === 'visible') { void refresh(); void observe(false); if (!notifications.connected) void notifications.reconnect() } }
 watch(() => notifications.chatUpdate, update => {
@@ -261,17 +334,36 @@ watch(() => notifications.chatUpdate, update => {
 watch([() => route.params.id, () => auth.session?.userId], () => {
   if (!route.path.startsWith('/messages/conversations/')) return
   activeDraftId = id(); activeDraftUserId = auth.session?.userId || ''
-  generation++; referenceRevision++; observer?.disconnect(); clearTimeout(readTimer); syncCursor = undefined; messages.value = []; conversation.value = undefined; content.value = ''; imageIds.value = []; uploading.value = false; error.value = ''; loadError.value = ''; readError.value = ''; referencedNode.value = undefined; referenceError.value = ''; referenceLoading.value = false; attempt = undefined; uncertain.value = false; desiredRead = '0'; acknowledgedRead = '0'
+  generation++; referenceRevision++; observer?.disconnect(); clearTimeout(readTimer); syncCursor = undefined; messages.value = []; conversation.value = undefined; content.value = ''; uploading.value = false; sending.value = false; error.value = ''; loadError.value = ''; readError.value = ''; referencedNode.value = undefined; referenceError.value = ''; referenceLoading.value = false; attempt.value = undefined; uncertain.value = false; desiredRead = '0'; acknowledgedRead = '0'
   const draft = auth.session?.userId ? readConversationDraft(auth.session.userId, id()) : undefined
-  if (draft) { content.value = draft.content; imageIds.value = [...draft.imageIds]; attempt = draft.attempt; uncertain.value = draft.uncertain; restoredReferenceId = draft.referencedNodeId }
+  if (draft) { content.value = draft.content; attempt.value = draft.attempt; uncertain.value = draft.uncertain; restoredReferenceId = draft.referencedNodeId }
   else restoredReferenceId = undefined
   if (activeDraftUserId) void refresh(true)
 }, { immediate: true })
 watch(() => route.query.progressNodeId, () => { if (conversation.value) void resolveReference() })
+let lastCompositionEnd = Number.NEGATIVE_INFINITY
+function rememberCompositionEnd() { lastCompositionEnd = performance.now() }
+
+/** 组字期间保留原生选词，组字完成后的伴随回车只拦截一次。 */
+async function handleComposerEnter(event: KeyboardEvent) {
+  if (event.defaultPrevented || event.shiftKey || event.isComposing || event.keyCode === 229) return
+  event.preventDefault()
+  if (performance.now() - lastCompositionEnd < 50) {
+    lastCompositionEnd = Number.NEGATIVE_INFINITY
+    return
+  }
+  if (event.repeat) return
+  const field = event.currentTarget as HTMLTextAreaElement
+  await send()
+  await nextTick()
+  // 发送期间禁用输入框会丢失焦点，用户未转向其他控件时恢复连续输入。
+  if (field.isConnected && document.activeElement === document.body) field.focus({ preventScroll: true })
+}
+
 async function canLeave() {
   if (!auth.session) return true
   if (sending.value || uploading.value) return false
-  const allowed = !(content.value || imageIds.value.length || uncertain.value) || await confirm({ title: '离开会话？', message: '还有未发送或结果未确认的消息。草稿将在本次使用期间保留。', confirmLabel: '确认离开' })
+  const allowed = !(content.value || pendingImages.value || uncertain.value) || await confirm({ title: '离开会话？', message: '还有未发送或结果未确认的消息。草稿将在本次使用期间保留。', confirmLabel: '确认离开' })
   if (allowed) keepDraft()
   return allowed
 }
@@ -366,11 +458,11 @@ usePageActivation(focused)
       >{{ tradeCard.action }} <AppIcon name="arrow" /></RouterLink>
     </section>
     <p
-      v-if="error || loadError"
+      v-if="loadError"
       class="form-alert"
       role="alert"
     >
-      {{ error || loadError }}
+      {{ loadError }}
     </p>
     <p
       v-if="readError"
@@ -489,10 +581,17 @@ usePageActivation(focused)
         </template>
       </div>
       <form
-        v-if="conversation.canSend || uncertain"
+        v-if="conversation.canSend || pendingImages || uncertain"
         class="chat-compose"
         @submit.prevent="send"
       >
+        <p
+          v-if="error"
+          class="form-alert"
+          role="alert"
+        >
+          {{ error }}
+        </p>
         <p
           v-if="referenceLoading"
           class="field-help"
@@ -536,28 +635,59 @@ usePageActivation(focused)
             v-model="content"
             rows="2"
             maxlength="500"
-            :disabled="sending || uncertain"
+            :disabled="sending || uncertain || pendingImages"
             placeholder="输入消息…"
             aria-label="沟通内容"
+            enterkeyhint="send"
+            @compositionend="rememberCompositionEnd"
+            @keydown.enter="handleComposerEnter"
           />
         </label>
         <div class="chat-compose-toolbar">
-          <PrivateImagePicker
-            v-model="imageIds"
-            label="消息图片"
-            compact
-            :max="3"
-            :conversation-id="conversation.id"
-            :disabled="sending || uncertain || !conversation.canSend"
-            @uploading="uploading = $event"
-          />
+          <button
+            type="button"
+            class="chat-image-button"
+            aria-label="消息图片上传"
+            :title="uploading ? '正在上传图片' : '上传图片'"
+            :aria-busy="uploading"
+            :disabled="imageDisabled"
+            @click="imageInput?.click()"
+          >
+            <span
+              v-if="uploading"
+              class="chat-image-spinner"
+              aria-hidden="true"
+            />
+            <AppIcon
+              v-else
+              name="image"
+            />
+          </button>
+          <input
+            ref="imageInput"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            hidden
+            aria-label="消息图片"
+            :disabled="imageDisabled"
+            @change="sendImages"
+          >
           <span class="field-help">{{ content.length }} / 500</span>
+          <button
+            v-if="pendingImages && !uncertain && !sending"
+            type="button"
+            class="inline-button"
+            @click="discardPendingImages"
+          >
+            放弃本次图片
+          </button>
           <button
             type="submit"
             class="button-primary chat-send-button"
-            :disabled="sending || uploading || referenceLoading || !!referenceError"
+            :disabled="sending || uploading || (!uncertain && (!conversation.canSend || (!pendingImages && (referenceLoading || !!referenceError))))"
           >
-            {{ sending ? '正在发送…' : uncertain ? '重试确认发送' : '发送' }}
+            {{ sending ? '正在发送…' : uncertain ? '重试确认发送' : pendingImages ? '重试发送图片' : '发送' }}
             <AppIcon name="arrow" />
           </button>
         </div>

@@ -156,7 +156,7 @@ test('买家保存不完整草稿、恢复、发布、关闭复制，普通买�
   } finally { await adminContext.close(); await creatorContext.close() }
 })
 
-test('公开咨询图文、多端推送与丢响应重试，关闭后历史保留', async ({ page, browser, mailbox }, testInfo) => {
+test('公开咨询选图直发、多端推送与丢响应重试，关闭后历史保留', async ({ page, browser, mailbox }, testInfo) => {
   test.setTimeout(240_000)
   const adminContext = await browser.newContext({ baseURL: origin })
   const creatorContext = await browser.newContext({ baseURL: origin })
@@ -230,19 +230,42 @@ test('公开咨询图文、多端推送与丢响应重试，关闭后历史保�
     await expect(page.locator('.chat-message').filter({ hasText: '屏幕外的新消息' })).toBeInViewport()
     await expect.poll(async () => (await (await page.request.get(`${api}/me/conversations/unread-count`)).json()).data.count).toBe(0)
     await page.setViewportSize({ width: 1440, height: 1000 })
+    const composer = creator.getByLabel('沟通内容', { exact: true })
+    const textDraft = '这段文字请等我核对后再发。'
+    await composer.fill(textDraft)
+    const messagesPath = `**/api/conversations/${conversationId}/messages`
+    let imageStatusBeforeSend: number | undefined
+    await creator.route(messagesPath, async route => {
+      if (route.request().method() === 'POST') {
+        // 图片上传与消息落库之间，收件人仍无权查询暂存图片。
+        const { imageIds } = route.request().postDataJSON() as { imageIds: string[] }
+        if (imageIds[0]) imageStatusBeforeSend = (await page.request.get(`${api}/conversation-images/${imageIds[0]}`)).status()
+      }
+      await route.continue()
+    })
     const uploadResult = creator.waitForResponse(r => r.url().endsWith(`/conversations/${conversationId}/images`) && r.request().method() === 'POST')
+    const imageMessageResult = creator.waitForResponse(r => r.url().endsWith(`/conversations/${conversationId}/messages`) && r.request().method() === 'POST')
     const fileChooser = creator.waitForEvent('filechooser')
     await creator.getByRole('button', { name: '消息图片上传', exact: true }).click()
     await (await fileChooser).setFiles({ name: 'sample.png', mimeType: 'image/png', buffer: image })
     const uploaded = await uploadResult
     expect(uploaded.status()).toBe(201)
     const imageId = (await uploaded.json()).data.id as string
-    await expect(creator.getByRole('img', { name: '消息图片 1', exact: true })).toBeVisible()
-    // 上传后仍是发送者的临时内容，只有持久化到消息后收件方才可读取。
-    expect((await page.request.get(`${api}/conversation-images/${imageId}`)).status()).toBe(404)
-    await creator.getByRole('button', { name: '发送', exact: true }).click()
-    await expect(page.getByRole('log').getByRole('img', { name: '消息图片 1', exact: true })).toBeVisible({ timeout: 3000 })
+    const imageMessage = await imageMessageResult
+    expect(imageMessage.status()).toBe(201)
+    expect((await imageMessage.json()).data).toMatchObject({ content: null, imageIds: [imageId] })
+    expect(imageStatusBeforeSend).toBe(404)
+    await creator.unroute(messagesPath)
+    await expect(creator.getByRole('log').getByRole('img', { name: '消息图片 1', exact: true })).toBeVisible()
+    const receivedImage = page.getByRole('log').getByRole('img', { name: '消息图片 1', exact: true })
+    await expect(receivedImage).toBeVisible({ timeout: 3000 })
+    await expect.poll(() => receivedImage.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
     expect((await page.request.get(`${api}/conversation-images/${imageId}`)).status()).toBe(200)
+    await expect(composer).toHaveValue(textDraft)
+    await expect(page.getByRole('log')).not.toContainText(textDraft)
+    await composer.press('Enter')
+    await expect(page.getByRole('log')).toContainText(textDraft)
+    await expect(receivedImage).toHaveCount(1)
     await page.screenshot({ path: testInfo.outputPath('request-chat-1440.png'), fullPage: true })
     for (const width of [1440, 390]) { await page.setViewportSize({ width, height: 1000 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true) }
     await page.screenshot({ path: testInfo.outputPath('request-chat-390.png'), fullPage: true })

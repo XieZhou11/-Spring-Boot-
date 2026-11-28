@@ -168,7 +168,9 @@ CraftFlow 第 3 批重做买家需求双栏、定向邀约、大厅、报价工�
 
 消息中心并列展示系统通知与 `/messages/conversations` 需求沟通，分别统计未读，页首显示两者总数，超过99显示99+。`/messages/conversations/:id` 支持文字、最多3张私有图片、历史分页、只读归档、未知发送结果的幂等重试；复用唯一 `/api/ws` 连接，断线后HTTP按游标补拉。已读只推进到当前可见区域实际展示的消息，后台标签页和屏幕外消息保留未读。
 
-点击聊天输入区的相册图标选择图片。选图后可预览或移除附件，点击「发送」提交。详情页面从有效站内来路打开时，页面返回与浏览器后退恢复原页面的筛选、分页和浏览位置。 [T-036](../docs/development/tasks/T-036-contextual-navigation-chat-icon.md)
+聊天输入框按 Enter 发送文字，Shift+Enter 换行。通过相册选择最多三张图片后，上传完成会自动发送一条图片消息，输入框中的文字和进度引用留待下一次发送。 [T-037](../docs/development/tasks/T-037-chat-composer-send.md)
+
+详情页面从有效站内来路打开时，页面返回与浏览器后退恢复原页面的筛选、分页和浏览位置。 [T-036](../docs/development/tasks/T-036-contextual-navigation-chat-icon.md)
 
 [T-010 聊天可靠性优化](../docs/development/tasks/T-010-chat-reliability.md)增加应用心跳：连接建立即发送 PING，收到 PONG 后20秒再次发送，10秒未回应则主动释放旧连接，按1/2/4/8/16秒最多自动重试5次；连接持续至少30秒且再次收到有效 PONG 才恢复重试额度。退出或切换账号时清理旧计时器。首次未读查询独立于实时握手，连接失败时仍显示已保存消息的未读数，重连成功再核对遗漏。聊天事件在100毫秒内合并，详情只补拉当前会话，列表合并在途刷新；重新激活页面和手动刷新仍查询持久化未读。专项复测：`npm run test:e2e -- e2e/chat-reliability.spec.ts`，实际结果见 [T-010 测试记录](../docs/testing/T-010-chat-reliability.md)。
 
